@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+/* ── Battle animations ────────────────────────────────────── */
+
+@keyframes attack-right {
+  0%   { transform: translateX(0)    scale(1);    }
+  35%  { transform: translateX(88px) scale(1.08); }
+  55%  { transform: translateX(88px) scale(1.08); }
+  100% { transform: translateX(0)    scale(1);    }
+}
+
+@keyframes attack-left {
+  0%   { transform: translateX(0)     scale(1);    }
+  35%  { transform: translateX(-88px) scale(1.08); }
+  55%  { transform: translateX(-88px) scale(1.08); }
+  100% { transform: translateX(0)     scale(1);    }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-10px); }
+  35%      { transform: translateX(9px); }
+  55%      { transform: translateX(-6px); }
+  75%      { transform: translateX(5px); }
+}
+
+@keyframes flash-hit {
+  0%, 100% { filter: brightness(1); }
+  35%, 55% { filter: brightness(4) saturate(0.3); }
+}
+
+.anim-attack-right {
+  animation-name: attack-right;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.anim-attack-left {
+  animation-name: attack-left;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.anim-shake {
+  animation-name: shake;
+  animation-timing-function: ease-in-out;
+}
+
+.anim-flash {
+  animation-name: flash-hit;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes fill-bar {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+.anim-fill-bar {
+  animation-name: fill-bar;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
