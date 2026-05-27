@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: add .dark to <html> */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Battle arena backgrounds (theme-aware) ──────────────── */
+.arena-bg {
+  background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 45%, #bbf7d0 100%);
+}
+.dark .arena-bg {
+  background: linear-gradient(180deg, #0f0c1a 0%, #1a1040 40%, #0d2010 100%);
+}
+
+.arena-ground {
+  background: linear-gradient(0deg, #16a34a 0%, #4ade80 60%, transparent 100%);
+}
+.dark .arena-ground {
+  background: linear-gradient(0deg, #1a3a0a 0%, #0d2010 60%, transparent 100%);
+}
+
+.arena-ground-line {
+  background-color: #86efac40;
+}
+.dark .arena-ground-line {
+  background-color: #166534;
+}
+
 /* ── Battle animations ────────────────────────────────────── */
 
 @keyframes attack-right {
@@ -29,31 +54,15 @@
   35%, 55% { filter: brightness(4) saturate(0.3); }
 }
 
-.anim-attack-right {
-  animation-name: attack-right;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.anim-attack-left {
-  animation-name: attack-left;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.anim-shake {
-  animation-name: shake;
-  animation-timing-function: ease-in-out;
-}
-
-.anim-flash {
-  animation-name: flash-hit;
-  animation-timing-function: ease-in-out;
-}
+.anim-attack-right { animation-name: attack-right; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+.anim-attack-left  { animation-name: attack-left;  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+.anim-shake        { animation-name: shake;        animation-timing-function: ease-in-out; }
+.anim-flash        { animation-name: flash-hit;    animation-timing-function: ease-in-out; }
 
 @keyframes fill-bar {
   from { width: 0%; }
   to   { width: 100%; }
 }
-
 .anim-fill-bar {
   animation-name: fill-bar;
   animation-timing-function: linear;
