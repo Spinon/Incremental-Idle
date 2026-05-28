@@ -35,7 +35,7 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses): DerivedSta
   const eq = equip
   return {
     // Combat — small scaling + equipment
-    atk:           BASE.atk          + fa.forca        * 1    + (eq?.atk          ?? 0),
+    atk:           BASE.atk          + fa.forca        * 1.5  + (eq?.atk          ?? 0),
     def:           BASE.def          + fa.vitalidade   * 0.5  + (eq?.def          ?? 0),
     maxHp:         BASE.maxHp        + fa.vitalidade   * 15   + fa.forca * 5      + (eq?.hp           ?? 0),
     attackSpeed:   BASE.attackSpeed  + fa.agilidade    * 0.1  + (eq?.atkSpeed     ?? 0),

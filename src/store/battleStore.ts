@@ -59,21 +59,25 @@ const INITIAL_PLAYER: Unit = {
 
 export function goblinStats(level: number): Unit {
   return {
-    name: 'Goblin',
+    name:        'Goblin',
     level,
-    hp:          16 + level * 8,
-    maxHp:       16 + level * 8,
-    atk:          4 + level * 2,
-    def:          level,
-    atkSpeed:     0.8 + level * 0.15,
-    dodgeChance:  level * 0.003,   // level 10 → 3%, level 20 → 6%
+    hp:          10 + level * 6,              // was 16+8×  — fewer hits to kill
+    maxHp:       10 + level * 6,
+    atk:          4 + level * 2,              // unchanged  — goblins still hit hard
+    def:          Math.round(level * 0.4),    // was level  — half the armor so attacks land
+    atkSpeed:     0.8 + level * 0.09,         // was 0.15   — speed advantage stays but doesn't spiral
+    dodgeChance:  level * 0.003,
   }
 }
 
-/** Damage with ±15% random variance. */
+/**
+ * Damage with ±15% variance.
+ * Minimum is 25% of the attacker's ATK so high-DEF units never reduce
+ * hits to the useless "1 damage per swing" scenario.
+ */
 function calcDmg(a: Unit, d: Unit): number {
-  const base     = Math.max(1, a.atk - d.def)
-  const variance = 0.85 + Math.random() * 0.3   // 85%–115%
+  const base     = Math.max(Math.floor(a.atk * 0.25), a.atk - d.def)
+  const variance = 0.85 + Math.random() * 0.3
   return Math.max(1, Math.round(base * variance))
 }
 
