@@ -297,11 +297,14 @@ export const useMapStore = create<MapStore>()(
         }
         if (conflict || matchCount === 0) return
 
-        // Tile carries the level baked in at generation time (hero-relative ±5).
-        // Use it directly so placed tiles match the hero's current progression.
+        // Always generate content from the tile's stored level so monster/treasure
+        // levels are consistent with the tile badge the player sees.
+        // sightedCells may have been created at a different hero level (fog mismatch),
+        // so we discard it and regenerate — content type may differ slightly from the
+        // fog preview, but level accuracy is more important.
         const tileLevel = tile.level
-        const content   = st.sightedCells[key] ?? generateContent(tileLevel)
-        delete st.sightedCells[key]
+        const content   = generateContent(tileLevel)
+        delete st.sightedCells[key]   // clean up stale fog entry
 
         st.deck.splice(idx, 1)
         st.grid[key] = { ...tile, x, y, explored: false, content }

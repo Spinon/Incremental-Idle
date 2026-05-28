@@ -1,5 +1,6 @@
 import { useMapStore } from '../store/mapStore'
 import { useHeroStore } from '../store/heroStore'
+import { useBattleStore } from '../store/battleStore'
 import { useSettingsStore } from '../store/settingsStore'
 
 export default function HouseInterior() {
@@ -8,7 +9,17 @@ export default function HouseInterior() {
   const defeatPending  = useMapStore(s => s.defeatPending)
   const heroName       = useHeroStore(s => s.name)
   const heroLevel      = useHeroStore(s => s.level)
+  const queueEnemy     = useBattleStore(s => s.queueEnemy)
+  const resetBattle    = useBattleStore(s => s.reset)
   const lang           = useSettingsStore(s => s.lang)
+
+  function startJourney() {
+    // Reset battle to a weak enemy so the arena doesn't keep the previous goblin
+    queueEnemy(Math.max(1, heroLevel - 5))
+    resetBattle()
+    resetMap(heroLevel)
+    leaveScene()
+  }
 
   const isEn = lang === 'en'
 
@@ -42,7 +53,7 @@ export default function HouseInterior() {
             <div className="w-full h-px bg-red-900/30" />
 
             <button
-              onClick={() => { resetMap(heroLevel); leaveScene() }}
+              onClick={startJourney}
               className="w-full py-3 rounded-xl text-base font-bold border border-red-700/60 bg-red-900/40 text-red-300 hover:bg-red-900/60 transition-colors"
             >
               {isEn ? '↺ Begin New Journey' : '↺ Iniciar Nova Jornada'}
@@ -84,7 +95,7 @@ export default function HouseInterior() {
                 {isEn ? '← Return to Map' : '← Retornar ao Mapa'}
               </button>
               <button
-                onClick={() => { resetMap(heroLevel); leaveScene() }}
+                onClick={startJourney}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold border border-red-900/40 bg-red-950/30 text-red-400 hover:bg-red-950/50 transition-colors"
               >
                 {isEn ? '↺ New Journey' : '↺ Nova Jornada'}
