@@ -233,7 +233,7 @@ export const useMapStore = create<MapStore>()(
             // Boss fight: monster tile first visit → up to +5 levels above tile
             // Everything else: exactly tile level
             const enemyLevel = isFirstEncounter
-              ? exitTile.level + 5
+              ? exitTile.level + Math.ceil(Math.random() * 5)
               : exitTile.level
 
             st.pendingBattle = { level: Math.max(1, enemyLevel) }
@@ -370,7 +370,7 @@ export const useMapStore = create<MapStore>()(
               // Boss fight: monster tile first visit → tile level + 5
               // All other tiles (empty, treasure, monster revisit): exactly tile level
               const enemyLevel = isFirstEncounter
-                ? tile.level + 5
+                ? tile.level + Math.ceil(Math.random() * 5)
                 : tile.level
               st.pendingBattle = { level: Math.max(1, enemyLevel) }
 
