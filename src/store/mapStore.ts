@@ -297,14 +297,25 @@ export const useMapStore = create<MapStore>()(
         }
         if (conflict || matchCount === 0) return
 
-        // Always generate content from the tile's stored level so monster/treasure
-        // levels are consistent with the tile badge the player sees.
-        // sightedCells may have been created at a different hero level (fog mismatch),
-        // so we discard it and regenerate — content type may differ slightly from the
-        // fog preview, but level accuracy is more important.
+        // Preserve the content TYPE shown in the fog (monster/treasure/market) so
+        // what the player saw in the preview matches what they get — but recalculate
+        // any level-dependent values (monsterLevel, xpAmount) from tileLevel so
+        // the difficulty is always consistent with the tile's badge.
         const tileLevel = tile.level
-        const content   = generateContent(tileLevel)
-        delete st.sightedCells[key]   // clean up stale fog entry
+        const sighted   = st.sightedCells[key]
+        let content: TileContent
+        if (sighted) {
+          if (sighted.type === 'monster') {
+            content = { type: 'monster', monsterLevel: tileLevel }
+          } else if (sighted.type === 'treasure') {
+            content = { type: 'treasure', xpAmount: Math.round((8 + tileLevel * 4) * (0.8 + Math.random() * 0.4)) }
+          } else {
+            content = { type: sighted.type } as TileContent   // market or empty — level-independent
+          }
+        } else {
+          content = generateContent(tileLevel)
+        }
+        delete st.sightedCells[key]
 
         st.deck.splice(idx, 1)
         st.grid[key] = { ...tile, x, y, explored: false, content }
