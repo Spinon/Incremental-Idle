@@ -68,3 +68,35 @@
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
+
+@keyframes xp-float {
+  0%   { opacity: 0; transform: translateY(4px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  70%  { opacity: 1; transform: translateY(-2px); }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+.anim-xp-float {
+  animation: xp-float 2.4s ease-out forwards;
+  pointer-events: none;
+}
+
+/* ── Toast notification ───────────────────────────────────── */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0)    scale(1);    }
+  to   { opacity: 0; transform: translateY(12px) scale(0.95); }
+}
+
+@keyframes toast-timer {
+  from { width: 100%; }
+  to   { width: 0%;   }
+}
+
+.anim-toast-in  { animation: toast-in  0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.anim-toast-out { animation: toast-out 0.2s  ease-in                         forwards; }
+.anim-toast-timer { animation: toast-timer linear forwards; }

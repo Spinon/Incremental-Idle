@@ -1,55 +1,83 @@
-import { useBattleStore, type Speed } from '../store/battleStore'
+import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
-import { getDerivedStats, STAMINA_DRAIN } from '../formulas/derived'
+import { getDerivedStats, staminaDrainAt, getBaseSpeed } from '../formulas/derived'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
-const SPEEDS: Speed[] = [1, 2, 3, 4]
-
 export default function SpeedControls() {
   const { speed, skipAnim, phase, setSpeed, setSkipAnim, skipBattle } = useBattleStore()
-  const stamina = useHeroStore((s) => s.stamina)
-  const attrs   = useHeroStore((s) => s.attributes)
-  const derived = getDerivedStats(attrs)
-  const t       = useT()
+  const stamina           = useHeroStore((s) => s.stamina)
+  const attrs             = useHeroStore((s) => s.attributes)
+  const skipCharges       = useHeroStore((s) => s.skipCharges)
+  const maxSkipCharges    = useHeroStore((s) => s.maxSkipCharges)
+  const consumeSkipCharge = useHeroStore((s) => s.consumeSkipCharge)
 
-  const isOver = phase === 'over'
+  const derived       = getDerivedStats(attrs)
+  const t             = useT()
+  const baseSpeed     = getBaseSpeed(derived)
+  const SPEEDS        = [baseSpeed, baseSpeed + 1, baseSpeed + 2, baseSpeed + 3]
+  const effectiveSpd  = Math.max(speed, baseSpeed)
 
-  function handleSkip() { setSkipAnim(true); skipBattle() }
-  function handleSpeed(s: Speed) { setSkipAnim(false); setSpeed(s) }
+  const isOver       = phase === 'over'
+  const hasCharge    = skipCharges >= 1
+  const skipDisabled = isOver || !hasCharge
+  const wholeCharges = Math.floor(skipCharges)
+  const chargeFill   = skipCharges < maxSkipCharges ? (skipCharges % 1) * 100 : 100
+  const staminaPct   = Math.max(0, (stamina / derived.maxStamina) * 100)
 
-  function timeAt(s: Speed) {
-    const d = STAMINA_DRAIN[s]
+  function handleSkip()          { consumeSkipCharge(); setSkipAnim(true); skipBattle() }
+  function handleSpeed(s: number){ setSkipAnim(false); setSpeed(s) }
+
+  function timeAt(s: number) {
+    const d = s > baseSpeed ? staminaDrainAt(s) / derived.staminaEfficiency : 0
     return d > 0 ? stamina / d : null
   }
-  function isLow(s: Speed) { const t = timeAt(s); return t !== null && t < 8 }
-
-  const staminaPct = Math.max(0, (stamina / derived.maxStamina) * 100)
+  function isLow(s: number) { const tt = timeAt(s); return tt !== null && tt < 8 }
 
   return (
     <div className="flex items-center gap-2 mb-4 flex-wrap">
       <button
         onClick={handleSkip}
-        disabled={isOver}
+        disabled={skipDisabled}
         className={cn(
-          'px-4 py-1.5 rounded-md text-sm font-semibold border transition-all',
-          isOver
+          'relative flex flex-col items-center px-4 py-1 rounded-md text-sm font-semibold border transition-all overflow-hidden',
+          skipDisabled
             ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
             : skipAnim
               ? 'bg-rose-600 border-rose-500 text-white shadow-lg'
               : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-500 text-slate-700 dark:text-slate-200 hover:bg-rose-100 dark:hover:bg-rose-900 hover:border-rose-300 dark:hover:border-rose-700'
         )}
       >
-        {t.skip}
+        <span>{t.skip}</span>
+        <span className="flex gap-0.5 mt-0.5 mb-1">
+          {Array.from({ length: Math.min(maxSkipCharges, 5) }).map((_, i) => (
+            <span
+              key={i}
+              className={cn(
+                'w-1.5 h-1.5 rounded-full transition-colors duration-300',
+                i < wholeCharges
+                  ? skipAnim ? 'bg-white/80' : 'bg-rose-500 dark:bg-rose-400'
+                  : 'bg-slate-300 dark:bg-slate-600'
+              )}
+            />
+          ))}
+        </span>
+        {skipCharges < maxSkipCharges && (
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/10">
+            <div
+              className={cn('h-full transition-[width] duration-200', skipAnim ? 'bg-white/50' : 'bg-rose-400 dark:bg-rose-500')}
+              style={{ width: `${chargeFill}%` }}
+            />
+          </div>
+        )}
       </button>
 
       <div className="w-px h-5 bg-slate-300 dark:bg-slate-700" />
-
       <span className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest">{t.speed}</span>
 
       {SPEEDS.map((s) => {
-        const active = speed === s && !skipAnim
-        const low    = isLow(s) && s > 1
+        const active = effectiveSpd === s && !skipAnim
+        const low    = isLow(s) && s > baseSpeed
         const time   = timeAt(s)
 
         return (
@@ -68,7 +96,7 @@ export default function SpeedControls() {
             )}
           >
             <span>{s}×</span>
-            {s > 1 && time !== null && (
+            {s > baseSpeed && time !== null && (
               <span className={cn(
                 'text-[9px] leading-none tabular-nums mt-0.5',
                 active ? 'text-white/70' : 'text-slate-400 dark:text-slate-600'
@@ -76,7 +104,7 @@ export default function SpeedControls() {
                 {time < 99 ? `${time.toFixed(0)}s` : '—'}
               </span>
             )}
-            {active && s > 1 && (
+            {active && s > baseSpeed && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/10 rounded-b-md overflow-hidden">
                 <div
                   className={cn('h-full transition-[width] duration-200', low ? 'bg-orange-300' : 'bg-white/60')}

@@ -1,7 +1,8 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { Attributes } from '../types/hero'
-import { getDerivedStats, STAMINA_DRAIN } from '../formulas/derived'
+import { getDerivedStats, staminaDrainAt } from '../formulas/derived'
 import type { Speed } from './battleStore'
 
 interface HeroStore {
@@ -13,14 +14,28 @@ interface HeroStore {
   attributes: Attributes
   stamina: number
   mana: number
+  skipCharges: number
+  maxSkipCharges: number
+  gold: number
+  lastXpGain: number
+  xpGainVersion: number
+  lastGoldGain: number
+  goldGainVersion: number
 
   spendPoint(attr: keyof Attributes): void
+  optimizePoints(): void
   gainXp(amount: number): void
+  earnGold(amount: number): void
+  spendGold(amount: number): boolean
+  restoreStamina(amount: number): void
+  restoreMana(amount: number): void
+  gainSkipCharge(): void
   tickResources(deltaMs: number, speed: Speed): void
+  consumeSkipCharge(): void
 }
 
 function xpForLevel(level: number): number {
-  return level * 15 + Math.floor(level ** 1.8) * 5
+  return level * 20 + Math.floor(level ** 2.0) * 6
 }
 
 const INITIAL_ATTRS: Attributes = {
@@ -29,6 +44,7 @@ const INITIAL_ATTRS: Attributes = {
 }
 
 export const useHeroStore = create<HeroStore>()(
+  persist(
   immer((set) => ({
     name: 'Hero',
     level: 1,
@@ -38,6 +54,29 @@ export const useHeroStore = create<HeroStore>()(
     attributes: { ...INITIAL_ATTRS },
     stamina: 100,
     mana: 50,
+    skipCharges: 3,
+    maxSkipCharges: 3,
+    gold: 0,
+    lastXpGain: 0,
+    xpGainVersion: 0,
+    lastGoldGain: 0,
+    goldGainVersion: 0,
+
+    optimizePoints: () => set((st) => {
+      if (st.freePoints <= 0) return
+      const order: (keyof Attributes)[] = [
+        'forca', 'vitalidade', 'agilidade', 'destreza', 'inteligencia', 'sabedoria', 'carisma',
+      ]
+      const base = Math.floor(st.freePoints / order.length)
+      const rem  = st.freePoints % order.length
+      order.forEach((attr, i) => {
+        st.attributes[attr] += base + (i < rem ? 1 : 0)
+      })
+      st.freePoints = 0
+      const derived = getDerivedStats(st.attributes)
+      if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
+      if (st.mana    > derived.maxMana)    st.mana    = derived.maxMana
+    }),
 
     spendPoint: (attr) => set((st) => {
       if (st.freePoints <= 0) return
@@ -49,8 +88,39 @@ export const useHeroStore = create<HeroStore>()(
       if (st.mana > derived.maxMana) st.mana = derived.maxMana
     }),
 
+    earnGold: (amount) => set((st) => {
+      st.gold += amount
+      st.lastGoldGain = amount
+      st.goldGainVersion += 1
+    }),
+
+    spendGold: (amount) => {
+      let ok = false
+      set((st) => { if (st.gold >= amount) { st.gold -= amount; ok = true } })
+      return ok
+    },
+
+    restoreStamina: (amount) => set((st) => {
+      const derived = getDerivedStats(st.attributes)
+      st.stamina = Math.min(derived.maxStamina, st.stamina + amount)
+    }),
+
+    restoreMana: (amount) => set((st) => {
+      const derived = getDerivedStats(st.attributes)
+      st.mana = Math.min(derived.maxMana, st.mana + amount)
+    }),
+
+    gainSkipCharge: () => set((st) => {
+      st.skipCharges = Math.min(st.maxSkipCharges + 1, st.skipCharges + 1)
+      st.maxSkipCharges = Math.max(st.maxSkipCharges, Math.ceil(st.skipCharges))
+    }),
+
     gainXp: (amount) => set((st) => {
-      st.xp += amount
+      const derived = getDerivedStats(st.attributes)
+      const actual = Math.round(amount * derived.xpBonus)
+      st.lastXpGain = actual
+      st.xpGainVersion += 1
+      st.xp += actual
       while (st.xp >= st.xpToNext) {
         st.xp -= st.xpToNext
         st.level += 1
@@ -63,13 +133,24 @@ export const useHeroStore = create<HeroStore>()(
       const derived = getDerivedStats(st.attributes)
       const deltaS = deltaMs / 1000
 
-      if (speed === 1) {
-        st.stamina = Math.min(derived.maxStamina, st.stamina + derived.staminaRegen * deltaS)
-      } else {
-        st.stamina = Math.max(0, st.stamina - STAMINA_DRAIN[speed] * deltaS)
-      }
+      // Net stamina change: positive = regenerating, negative = draining.
+      // Regen is always active; drain subtracts from it.
+      // At baseSpeed the net is ≥ 0 by definition, so stamina only grows there.
+      const rawDrain  = staminaDrainAt(speed) / derived.staminaEfficiency
+      const netChange = derived.staminaRegen - rawDrain
+      st.stamina = Math.max(0, Math.min(derived.maxStamina, st.stamina + netChange * deltaS))
 
       st.mana = Math.min(derived.maxMana, st.mana + derived.manaRegen * deltaS)
+
+      // Skip charges regen: level charges per hour = level/3600 per second
+      const regenRate = st.level / 3600
+      st.skipCharges = Math.min(st.maxSkipCharges, st.skipCharges + regenRate * deltaS)
     }),
-  }))
+
+    consumeSkipCharge: () => set((st) => {
+      if (st.skipCharges >= 1) st.skipCharges -= 1
+    }),
+  })),
+  { name: 'incremental-idle-hero' }
+  )
 )

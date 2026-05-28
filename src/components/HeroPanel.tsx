@@ -1,5 +1,7 @@
 import { useHeroStore } from '../store/heroStore'
+import { useInventoryStore } from '../store/inventoryStore'
 import { getDerivedStats } from '../formulas/derived'
+import { getEquipmentBonuses } from '../formulas/items'
 import type { Attributes } from '../types/hero'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -14,42 +16,35 @@ function StatRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function HeroPanel() {
-  const { level, xp, xpToNext, freePoints, attributes, spendPoint } = useHeroStore()
-  const derived = getDerivedStats(attributes)
-  const t       = useT()
-  const xpPct   = (xp / xpToNext) * 100
+  const { freePoints, attributes, spendPoint, optimizePoints } = useHeroStore()
+  const equipment    = useInventoryStore(s => s.equipment)
+  const equipBonuses = getEquipmentBonuses(equipment)
+  const derived      = getDerivedStats(attributes, equipBonuses)
+  const t            = useT()
 
   const attrKeys = Object.keys(t.attrNames) as (keyof Attributes)[]
 
   return (
-    <div className="flex flex-col gap-3">
-
-      {/* Level / XP */}
-      <div className="bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            {t.level} {level}
-          </span>
-          <span className="text-xs text-slate-500 tabular-nums">{xp} / {xpToNext} {t.xp}</span>
-        </div>
-        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
-          <div
-            className="h-full bg-indigo-500 rounded-full transition-[width] duration-300"
-            style={{ width: `${xpPct}%` }}
-          />
-        </div>
-        {freePoints > 0 && (
-          <p className="mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-300">
-            {t.available(freePoints)}
-          </p>
-        )}
-      </div>
+    <div id="hero-panel" className="flex flex-col gap-3">
 
       {/* Attributes */}
       <div className="bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-        <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-3 font-semibold">
-          {t.attributes}
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
+            {t.attributes}
+          </p>
+          <button
+            onClick={optimizePoints}
+            disabled={freePoints <= 0}
+            title={t.optimize}
+            className={cn(
+              'w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors',
+              freePoints > 0
+                ? 'bg-amber-400 hover:bg-amber-300 dark:bg-amber-500 dark:hover:bg-amber-400 text-white cursor-pointer'
+                : 'invisible pointer-events-none',
+            )}
+          >+</button>
+        </div>
         <div className="flex flex-col gap-2.5">
           {attrKeys.map((key) => {
             const label   = t.attrNames[key]
@@ -107,16 +102,19 @@ export default function HeroPanel() {
           {t.subAttrs}
         </p>
         <div className="grid grid-cols-2 gap-x-3">
-          <StatRow label={t.statNames.atk}       value={String(Math.round(derived.atk))} />
+          <StatRow label={t.statNames.atk}        value={String(Math.round(derived.atk))} />
           <StatRow label={t.statNames.def}        value={derived.def.toFixed(1)} />
           <StatRow label={t.statNames.hpMax}      value={String(Math.round(derived.maxHp))} />
-          <StatRow label={t.statNames.atkSpeed}   value={`${derived.attackSpeed.toFixed(2)}×`} />
+          <StatRow label={t.statNames.atkSpeed}   value={derived.attackSpeed.toFixed(2)} />
           <StatRow label={t.statNames.dodge}      value={`${(derived.dodgeChance * 100).toFixed(1)}%`} />
           <StatRow label={t.statNames.magicDmg}   value={String(Math.round(derived.magicDamage))} />
+          <StatRow label={t.statNames.staminaEff} value={`${derived.staminaEfficiency.toFixed(2)}×`} />
+          <StatRow label={t.statNames.manaEff}    value={`${derived.manaEfficiency.toFixed(2)}×`} />
           <StatRow label={t.statNames.moveSpeed}  value={`${derived.moveSpeed.toFixed(2)}×`} />
           <StatRow label={t.statNames.vision}     value={String(Math.round(derived.vision))} />
           <StatRow label={t.statNames.dropChance} value={`${(derived.dropChance * 100).toFixed(1)}%`} />
           <StatRow label={t.statNames.goldMult}   value={`${derived.goldMultiplier.toFixed(2)}×`} />
+          <StatRow label={t.statNames.xpBonus}    value={`${derived.xpBonus.toFixed(2)}×`} />
         </div>
       </div>
     </div>

@@ -1,19 +1,56 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
+import { useInventoryStore } from '../store/inventoryStore'
+import { getDerivedStats } from '../formulas/derived'
 import { useT } from '../i18n/useT'
+import { cn } from '../lib/utils'
+import { useSettingsStore } from '../store/settingsStore'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
-import SpeedControls from './SpeedControls'
+import type { Consumable, ItemRarity } from '../types/item'
 
-const ATTACK_MS = 1100
-const IDLE_MS   = 950
+const RARITY_BORDER: Record<ItemRarity, string> = {
+  common:   'border-slate-400  dark:border-slate-600',
+  uncommon: 'border-green-500  dark:border-green-700',
+  rare:     'border-blue-500   dark:border-blue-700',
+  epic:     'border-purple-500 dark:border-purple-700',
+  set:      'border-yellow-400 dark:border-yellow-500',
+  unique:   'border-orange-500 dark:border-orange-400',
+}
+
+const ATTACK_MS = 2000
+const IDLE_MS   = 1600
+const COMBO_MS  = 350   // short gap between hits in a combo
 
 export default function BattleArena() {
   const store      = useBattleStore()
   const gainXp     = useHeroStore((s) => s.gainXp)
+  const heroLevel  = useHeroStore((s) => s.level)
   const xpGranted  = useRef(false)
   const t          = useT()
+  const lang       = useSettingsStore(s => s.lang)
+  const isEn       = lang === 'en'
+
+  // Consumable quickslots
+  const attrs          = useHeroStore(s => s.attributes)
+  const restoreStamina = useHeroStore(s => s.restoreStamina)
+  const restoreMana    = useHeroStore(s => s.restoreMana)
+  const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
+  const consumables    = useInventoryStore(s => s.consumables)
+  const quickslots     = useInventoryStore(s => s.quickslots)
+  const removeConsumable = useInventoryStore(s => s.removeConsumable)
+
+  function useQuickslot(c: Consumable) {
+    removeConsumable(c.id)
+    const derived = getDerivedStats(attrs)
+    switch (c.effect) {
+      case 'stamina': restoreStamina(derived.maxStamina * c.magnitude); break
+      case 'mana':    restoreMana(derived.maxMana * c.magnitude);        break
+      case 'skip':    for (let i = 0; i < c.magnitude; i++) gainSkipCharge(); break
+      case 'xp':      gainXp(Math.round(c.magnitude));                  break
+    }
+  }
   const timerA     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timerB     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timerC     = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -36,7 +73,10 @@ export default function BattleArena() {
     if (store.phase === 'over') {
       if (!xpGranted.current && store.winner === 'player') {
         xpGranted.current = true
-        gainXp(store.enemy.maxHp)
+        // Only grant XP when enemy is within ±5 levels of the hero
+        if (Math.abs(heroLevel - store.enemy.level) <= 5) {
+          gainXp(store.enemy.maxHp)
+        }
       }
       timerA.current = setTimeout(() => {
         if (!cancelled) { xpGranted.current = false; store.reset() }
@@ -45,9 +85,12 @@ export default function BattleArena() {
     }
 
     if (store.phase === 'idle') {
+      // First hit of a combo → full idle pause; continuation → short gap
+      const isFirstHit = store.hitsLeft === store.comboSize
+      const wait = (isFirstHit ? IDLE_MS : COMBO_MS) / store.speed
       timerA.current = setTimeout(() => {
         if (!cancelled) store.setPhase('attacking')
-      }, IDLE_MS / store.speed)
+      }, wait)
     } else if (store.phase === 'attacking') {
       const full    = ATTACK_MS / store.speed
       const contact = full * 0.4
@@ -64,12 +107,18 @@ export default function BattleArena() {
       timerB.current = setTimeout(() => {
         if (cancelled) return
         const state = useBattleStore.getState()
-        if (state.phase !== 'over') store.switchAttacker()
+        if (state.phase === 'over') return
+        if (state.hitsLeft > 0) {
+          // combo continues — go back to idle (short gap handled above)
+          store.setPhase('idle')
+        } else {
+          store.switchAttacker()
+        }
       }, full)
     }
 
     return () => { cancelled = true; clearTimers() }
-  }, [store.phase, store.speed, store.skipAnim])
+  }, [store.phase, store.turn, store.speed, store.skipAnim])
 
   const isPlayerAttacking = store.attacker === 'player' && store.phase === 'attacking'
   const isEnemyAttacking  = store.attacker === 'enemy'  && store.phase === 'attacking'
@@ -79,10 +128,12 @@ export default function BattleArena() {
   const attackDur = `${ATTACK_MS / store.speed}ms`
   const hitDur    = `${(ATTACK_MS / store.speed) * 0.22}ms`
 
+  // Combo indicator dots
+  const showCombo = store.comboSize > 1 && store.phase !== 'over'
+  const comboAttacker = store.attacker
+
   return (
     <div className="w-full">
-      <SpeedControls />
-
       {/* ── Arena ─────────────────────────────────────────── */}
       <div className="relative h-80 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xl select-none arena-bg">
 
@@ -106,6 +157,22 @@ export default function BattleArena() {
           VS
         </div>
 
+        {/* Combo dots — shown above the attacker when comboSize > 1 */}
+        {showCombo && (
+          <div className={`absolute bottom-[148px] flex gap-1 ${comboAttacker === 'player' ? 'left-10' : 'right-10'}`}>
+            {Array.from({ length: store.comboSize }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-2 h-2 rounded-full border transition-colors ${
+                  i < store.hitsLeft
+                    ? 'bg-indigo-400 border-indigo-300'
+                    : 'bg-slate-600 border-slate-500'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Player */}
         <div className="absolute left-10 bottom-[72px] flex flex-col items-start gap-2">
           <HpBar name={store.player.name} current={store.player.hp} max={store.player.maxHp} side="player" />
@@ -120,7 +187,7 @@ export default function BattleArena() {
 
         {/* Enemy */}
         <div className="absolute right-10 bottom-[72px] flex flex-col items-end gap-2">
-          <HpBar name={store.enemy.name} current={store.enemy.hp} max={store.enemy.maxHp} side="enemy" />
+          <HpBar name={store.enemy.name} level={store.enemy.level} current={store.enemy.hp} max={store.enemy.maxHp} side="enemy" />
           <div
             key={`enemy-${store.turn}`}
             className={isEnemyAttacking ? 'anim-attack-left' : ''}
@@ -147,6 +214,40 @@ export default function BattleArena() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── Quickslot bar ───────────────────────────────────────────────── */}
+      <div className="mt-2 flex items-center gap-2 justify-center">
+        {quickslots.map((qid, slot) => {
+          const c = qid ? consumables.find(x => x.id === qid) : null
+          return (
+            <button
+              key={slot}
+              onClick={() => c && useQuickslot(c)}
+              disabled={!c}
+              title={c ? `[${slot + 1}] ${isEn ? c.nameEn : c.name}` : (isEn ? `Quickslot ${slot + 1} (empty)` : `Atalho ${slot + 1} (vazio)`)}
+              style={{ width: 44, height: 44 }}
+              className={cn(
+                'relative rounded-xl border-2 flex flex-col items-center justify-center transition-all',
+                c
+                  ? cn(RARITY_BORDER[c.rarity], 'bg-white dark:bg-slate-800 hover:scale-110 active:scale-95 shadow')
+                  : 'border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 opacity-40 cursor-not-allowed',
+              )}
+            >
+              {c ? (
+                <>
+                  <span className="text-lg leading-none">{c.icon}</span>
+                  <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500">{slot + 1}</span>
+                </>
+              ) : (
+                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600">{slot + 1}</span>
+              )}
+            </button>
+          )
+        })}
+        <span className="text-[8px] text-slate-400 dark:text-slate-600 ml-1">
+          {isEn ? 'Quickslots' : 'Atalhos'}
+        </span>
       </div>
 
       {/* Battle log */}

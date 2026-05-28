@@ -1,6 +1,6 @@
 import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
-import { getDerivedStats, STAMINA_DRAIN } from '../formulas/derived'
+import { getDerivedStats, staminaDrainAt } from '../formulas/derived'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
@@ -15,8 +15,11 @@ export default function ResourceBars() {
   const staminaPct = Math.max(0, (stamina / derived.maxStamina) * 100)
   const manaPct    = Math.max(0, (mana    / derived.maxMana)    * 100)
 
-  const drain    = STAMINA_DRAIN[speed]
-  const timeLeft = drain > 0 ? stamina / drain : null
+  // Net stamina change per second (positive = regenerating, negative = draining)
+  const rawDrain  = staminaDrainAt(speed) / derived.staminaEfficiency
+  const netChange = derived.staminaRegen - rawDrain   // mirrors heroStore tickResources
+  const netDrain  = -netChange                        // positive when actually losing stamina
+  const timeLeft  = netDrain > 0 ? stamina / netDrain : null
 
   const staminaFill = staminaPct > 50 ? 'bg-amber-400' : staminaPct > 25 ? 'bg-orange-400' : 'bg-red-500'
 
@@ -36,9 +39,9 @@ export default function ResourceBars() {
                 {timeLeft.toFixed(1)}s
               </span>
             )}
-            {speed === 1 && (
+            {netChange > 0 && (
               <span className="ml-2 text-amber-600/60 dark:text-amber-600/70 text-[10px]">
-                +{derived.staminaRegen.toFixed(1)}/s
+                +{netChange.toFixed(1)}/s
               </span>
             )}
           </span>

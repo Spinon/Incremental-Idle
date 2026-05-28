@@ -1,13 +1,23 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import BattleArena from './components/BattleArena'
+import HouseInterior from './components/HouseInterior'
+import MarketInterior from './components/MarketInterior'
 import ResourceBars from './components/ResourceBars'
 import HeroPanel from './components/HeroPanel'
 import SettingsMenu from './components/SettingsMenu'
+import MapSection from './components/map/MapSection'
+import InventoryPanel from './components/InventoryPanel'
+import StickyBar from './components/StickyBar'
+import NotifToast from './components/NotifToast'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
+import { useMapStore } from './store/mapStore'
+import { useInventoryStore } from './store/inventoryStore'
 import { useSettingsStore } from './store/settingsStore'
-import { getDerivedStats } from './formulas/derived'
+import { useNotifStore } from './store/notifStore'
+import { getDerivedStats, getBaseSpeed } from './formulas/derived'
+import { getEquipmentBonuses } from './formulas/items'
 import { useT } from './i18n/useT'
 
 function GameRoot() {
@@ -15,22 +25,57 @@ function GameRoot() {
 
   const theme        = useSettingsStore((s) => s.theme)
   const attributes   = useHeroStore((s) => s.attributes)
+  const heroLevel    = useHeroStore((s) => s.level)
   const syncFromHero = useBattleStore((s) => s.syncFromHero)
+  const setSpeed     = useBattleStore((s) => s.setSpeed)
+  const scene        = useMapStore((s) => s.scene)
+  const equipment    = useInventoryStore((s) => s.equipment)
+  const pushNotif    = useNotifStore((s) => s.push)
   const t            = useT()
+  const prevLevel    = useRef(heroLevel)
 
   // Apply/remove dark class on <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
-  // Sync hero stats → battle store whenever attributes change
+  // Force base speed when entering home or market
   useEffect(() => {
-    const d = getDerivedStats(attributes)
-    syncFromHero({ atk: d.atk, def: d.def, maxHp: d.maxHp })
-  }, [attributes, syncFromHero])
+    if (scene !== 'map') {
+      const equip = getEquipmentBonuses(equipment)
+      const d     = getDerivedStats(attributes, equip)
+      setSpeed(getBaseSpeed(d))
+    }
+  }, [scene, setSpeed]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync hero stats → battle store whenever attributes or equipment change
+  useEffect(() => {
+    const equip = getEquipmentBonuses(equipment)
+    const d     = getDerivedStats(attributes, equip)
+    syncFromHero({ atk: d.atk, def: d.def, maxHp: d.maxHp, atkSpeed: d.attackSpeed })
+  }, [attributes, equipment, syncFromHero])
+
+  // Level-up notification
+  useEffect(() => {
+    if (prevLevel.current !== 0 && heroLevel > prevLevel.current) {
+      pushNotif({
+        title:    `🎉 Nível ${heroLevel}!`,
+        titleEn:  `🎉 Level ${heroLevel}!`,
+        body:     'Você subiu de nível! Distribua seus pontos de atributo.',
+        bodyEn:   'You leveled up! Distribute your attribute points.',
+        scrollTo: 'hero-panel',
+        actions:  [
+          { label: 'Ver Herói', labelEn: 'View Hero', kind: 'scroll', payload: 'hero-panel' },
+        ],
+      })
+    }
+    prevLevel.current = heroLevel
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heroLevel])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+      <NotifToast />
       {/* Header */}
       <header className="border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center gap-3">
         <span className="text-indigo-600 dark:text-indigo-400 font-black text-lg tracking-tight">
@@ -43,13 +88,18 @@ function GameRoot() {
         </div>
       </header>
 
+      {/* Sticky HUD — speed controls + level/XP */}
+      <StickyBar />
+
       {/* Main layout */}
       <main className="w-full max-w-5xl mx-auto px-6 py-6">
         <div className="grid grid-cols-[1fr_300px] gap-6 items-start">
 
-          {/* Left — battle + resources */}
+          {/* Left — scene-dependent content + resources */}
           <div className="flex flex-col">
-            <BattleArena />
+            {scene === 'home'   ? <HouseInterior /> :
+             scene === 'market' ? <MarketInterior /> :
+                                  <BattleArena />}
             <ResourceBars />
           </div>
 
@@ -59,9 +109,14 @@ function GameRoot() {
           </aside>
         </div>
 
-        {/* Bottom placeholder */}
-        <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-6 text-center text-slate-400 dark:text-slate-700 text-sm italic">
-          {t.idle}
+        {/* Map */}
+        <div className="mt-6">
+          <MapSection />
+        </div>
+
+        {/* Inventory & Equipment */}
+        <div className="mt-6">
+          <InventoryPanel />
         </div>
       </main>
     </div>
