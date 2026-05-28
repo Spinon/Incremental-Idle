@@ -102,8 +102,8 @@ export default function MapTileCell({ tile, isPlayer, isDestination, isSelected,
       {/* Level badge */}
       {visibility === 'clear' && (
         <div className={cn(
-          'absolute bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full z-10',
-          'bg-black/55 backdrop-blur-[1px] leading-none',
+          'absolute bottom-0.5 left-0.5 px-1 py-0.5 rounded z-10',
+          'bg-black/55 leading-none',
           explored && 'opacity-50',
         )}>
           <span className={cn(
