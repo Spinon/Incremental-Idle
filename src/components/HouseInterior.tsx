@@ -2,6 +2,9 @@ import { useMapStore } from '../store/mapStore'
 import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { FOREST_MONSTER_MAP } from '../data/monsters'
+import { MONSTER_RARITY_COLOR } from '../formulas/monsters'
+import { cn } from '../lib/utils'
 
 export default function HouseInterior() {
   const leaveScene     = useMapStore(s => s.leaveScene)
@@ -11,6 +14,7 @@ export default function HouseInterior() {
   const heroLevel      = useHeroStore(s => s.level)
   const queueEnemy     = useBattleStore(s => s.queueEnemy)
   const resetBattle    = useBattleStore(s => s.reset)
+  const defeatSnapshot = useBattleStore(s => s.defeatSnapshot)
   const lang           = useSettingsStore(s => s.lang)
 
   function startJourney() {
@@ -45,6 +49,58 @@ export default function HouseInterior() {
                   : 'Sua jornada terminou em derrota. Descanse e recomece.'}
               </p>
             </div>
+
+            {/* ── Defeat recap ──────────────────────────────────────── */}
+            {defeatSnapshot && (
+              <div className="w-full rounded-xl border border-red-900/40 bg-slate-950/60 p-3 flex flex-col gap-2">
+                {/* Killer info */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-red-400/60 uppercase tracking-widest font-semibold">
+                    {isEn ? 'Killed by' : 'Morto por'}
+                  </span>
+                  <span className="text-base leading-none">
+                    {FOREST_MONSTER_MAP.get(defeatSnapshot.killerMonsterType)?.emoji ?? '⚔'}
+                  </span>
+                  <span className={cn(
+                    'text-sm font-bold',
+                    MONSTER_RARITY_COLOR[
+                      (FOREST_MONSTER_MAP.get(defeatSnapshot.killerMonsterType) ? 'normal' : 'normal') as 'normal'
+                    ] || 'text-slate-200',
+                  )}>
+                    {defeatSnapshot.killerName}
+                  </span>
+                  <span className="text-xs text-red-400 font-semibold">
+                    Nv.{defeatSnapshot.killerLevel}
+                  </span>
+                </div>
+
+                {/* Battle log */}
+                {defeatSnapshot.log.length > 0 && (
+                  <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto scrollbar-thin">
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">
+                      {isEn ? 'Last battle log' : 'Último log de batalha'}
+                    </p>
+                    {defeatSnapshot.log.slice(0, 12).map((entry, i) => (
+                      <div key={i} className={cn(
+                        'text-[10px] px-1.5 py-0.5 rounded',
+                        entry.attacker === heroName
+                          ? 'text-blue-400/80 bg-blue-950/20'
+                          : 'text-red-400/80 bg-red-950/20',
+                      )}>
+                        {entry.missed
+                          ? (isEn
+                              ? `${entry.attacker} missed!`
+                              : `${entry.attacker} errou!`)
+                          : (isEn
+                              ? `${entry.attacker} → ${entry.defender}: ${entry.dmg} dmg`
+                              : `${entry.attacker} → ${entry.defender}: ${entry.dmg} de dano`)
+                        }
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="w-full flex justify-center gap-6 text-3xl select-none opacity-50 grayscale">
               <span>🔥</span><span>🪑</span><span>🪵</span><span>🕯️</span><span>📚</span>

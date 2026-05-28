@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
+import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
+import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../data/monsters'
+import type { MonsterRarity } from '../types/monster'
 
 export type Speed = number
 export type Phase = 'idle' | 'attacking' | 'over'
@@ -15,6 +18,15 @@ export interface Unit {
   def: number
   atkSpeed: number
   dodgeChance: number   // 0–1 fraction
+  rarity?: MonsterRarity
+  monsterType?: string  // template id, e.g. 'goblin', 'wolf'
+}
+
+export interface DefeatSnapshot {
+  killerName: string
+  killerLevel: number
+  killerMonsterType: string
+  log: LogEntry[]
 }
 
 export interface LogEntry {
@@ -38,18 +50,26 @@ interface BattleStore {
   log: LogEntry[]
   turn: number
   nextEnemyLevel: number
+  nextEnemyType: string
+  nextEnemyRarity: MonsterRarity
   hitsLeft: number
   comboSize: number
+  defeatSnapshot: DefeatSnapshot | null
 
   setSpeed(s: Speed): void
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  queueEnemy(level: number): void
+  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity): void
+  captureDefeat(): void
   applyHit(): void
   switchAttacker(): void
   skipBattle(): void
   reset(): void
+  applyMagicDamage(dmg: number): void
+  healPlayer(hp: number): void
+  applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
+  restoreEnemyStats(savedAtk: number, savedAtkSpeed: number): void
 }
 
 const INITIAL_PLAYER: Unit = {
@@ -57,17 +77,8 @@ const INITIAL_PLAYER: Unit = {
   atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
 }
 
-export function goblinStats(level: number): Unit {
-  return {
-    name:        'Goblin',
-    level,
-    hp:          10 + level * 6,              // was 16+8×  — fewer hits to kill
-    maxHp:       10 + level * 6,
-    atk:          4 + level * 2,              // unchanged  — goblins still hit hard
-    def:          Math.round(level * 0.4),    // was level  — half the armor so attacks land
-    atkSpeed:     0.8 + level * 0.09,         // was 0.15   — speed advantage stays but doesn't spiral
-    dodgeChance:  level * 0.003,
-  }
+function makeInitialEnemy(): Unit {
+  return buildMonster(FOREST_MONSTERS[0], 1, 'normal')
 }
 
 /**
@@ -94,7 +105,7 @@ export const useBattleStore = create<BattleStore>()(
   persist(
   immer((set) => ({
     player: { ...INITIAL_PLAYER },
-    enemy:  goblinStats(1),
+    enemy:  makeInitialEnemy(),
     phase: 'idle',
     attacker: 'player',
     speed: 1,
@@ -103,13 +114,30 @@ export const useBattleStore = create<BattleStore>()(
     log: [],
     turn: 0,
     nextEnemyLevel: 1,
+    nextEnemyType: 'goblin',
+    nextEnemyRarity: 'normal' as MonsterRarity,
     hitsLeft: 1,
     comboSize: 1,
+    defeatSnapshot: null,
 
     setSpeed:    (s) => set((st) => { st.speed    = s }),
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
-    queueEnemy:  (level) => set((st) => { st.nextEnemyLevel = level }),
+
+    queueEnemy: (level, monsterType, monsterRarity) => set((st) => {
+      st.nextEnemyLevel  = level
+      st.nextEnemyType   = monsterType  ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
+      st.nextEnemyRarity = monsterRarity ?? pickMonsterRarity()
+    }),
+
+    captureDefeat: () => set((st) => {
+      st.defeatSnapshot = {
+        killerName:        st.enemy.name,
+        killerLevel:       st.enemy.level,
+        killerMonsterType: st.enemy.monsterType ?? st.nextEnemyType,
+        log:               st.log.slice(0, 20),
+      }
+    }),
 
     syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance }) => set((st) => {
       st.player.atk         = Math.round(atk)
@@ -193,23 +221,52 @@ export const useBattleStore = create<BattleStore>()(
       st.phase  = 'over'
     }),
 
+    applyMagicDamage: (dmg) => set((st) => {
+      if (st.phase === 'over') return
+      const newHp = Math.max(0, st.enemy.hp - dmg)
+      st.enemy.hp = newHp
+      if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
+    }),
+
+    healPlayer: (hp) => set((st) => {
+      st.player.hp = Math.min(st.player.maxHp, st.player.hp + hp)
+    }),
+
+    applyEnemyDebuff: (atkMult, atkSpeedMult) => set((st) => {
+      st.enemy.atk      = Math.max(1, Math.round(st.enemy.atk      * atkMult))
+      st.enemy.atkSpeed = Math.max(0.1, st.enemy.atkSpeed * atkSpeedMult)
+    }),
+
+    restoreEnemyStats: (savedAtk, savedAtkSpeed) => set((st) => {
+      st.enemy.atk      = savedAtk
+      st.enemy.atkSpeed = savedAtkSpeed
+    }),
+
     reset: () => set((st) => {
-      st.player.hp = st.player.maxHp
-      st.enemy     = goblinStats(st.nextEnemyLevel)
-      st.phase     = 'idle'
-      st.attacker  = 'player'
-      st.winner    = null
-      st.log       = []
-      st.turn      = 0
-      st.skipAnim  = false
-      const hits   = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
-      st.hitsLeft  = hits
-      st.comboSize = hits
+      const template = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
+      st.player.hp    = st.player.maxHp
+      st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity)
+      st.phase        = 'idle'
+      st.attacker     = 'player'
+      st.winner       = null
+      st.log          = []
+      st.turn         = 0
+      st.skipAnim     = false
+      st.defeatSnapshot = null
+      const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
+      st.hitsLeft     = hits
+      st.comboSize    = hits
     }),
   })),
   {
     name: 'incremental-idle-battle',
-    partialize: (state) => ({ speed: state.speed }),
+    partialize: (state) => ({
+      speed:            state.speed,
+      nextEnemyLevel:   state.nextEnemyLevel,
+      nextEnemyType:    state.nextEnemyType,
+      nextEnemyRarity:  state.nextEnemyRarity,
+      defeatSnapshot:   state.defeatSnapshot,
+    }),
   }
   )
 )

@@ -34,6 +34,12 @@ function GameRoot() {
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
 
+  // On every app start, rebuild the battle enemy from the persisted queue so
+  // we never fight the "initial goblin lvl 1" after a page refresh.
+  useEffect(() => {
+    useBattleStore.getState().reset()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Apply/remove dark class on <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')

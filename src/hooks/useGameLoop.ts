@@ -4,6 +4,7 @@ import { useHeroStore } from '../store/heroStore'
 import { useMapStore } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
+import { useSpellStore } from '../store/spellStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses } from '../formulas/items'
 import type { Phase } from '../store/battleStore'
@@ -25,6 +26,7 @@ export function useGameLoop() {
   const gainXp        = useHeroStore((s) => s.gainXp)
   const earnGold      = useHeroStore((s) => s.earnGold)
   const prevPhase     = useRef<Phase>('idle')
+  const prevTurn      = useRef<number>(-1)
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -33,6 +35,18 @@ export function useGameLoop() {
       const derived = getDerivedStats(attrs)
 
       tickResources(TICK_MS, speed)
+      useSpellStore.getState().tick(TICK_MS / 1000)
+
+      const turn     = useBattleStore.getState().turn
+      const attacker = useBattleStore.getState().attacker
+      if (turn !== prevTurn.current) {
+        prevTurn.current = turn
+        // Cooldowns only tick at the end of the player's turn
+        // (switchAttacker just ran → attacker is now 'enemy')
+        if (attacker === 'enemy') {
+          useSpellStore.getState().onBattleTurn()
+        }
+      }
 
       if (useHeroStore.getState().stamina <= 0 && speed > 1) {
         const bs = getBaseSpeed(derived)
@@ -57,14 +71,21 @@ export function useGameLoop() {
         const winner = useBattleStore.getState().winner
 
         if (winner === 'enemy') {
-          // ── Defeat: force player home ────────────────────────────────────
+          // ── Defeat: snapshot who killed us, then force player home ────────
+          useBattleStore.getState().captureDefeat()
           useMapStore.getState().handleDefeat()
         } else {
           // ── Victory: advance, rewards, drops ────────────────────────────
-          const battle = useMapStore.getState().drainBattle()
-          if (battle) useBattleStore.getState().queueEnemy(battle.level)
+          // Guarantee one cooldown tick even for instant kills — when the enemy
+          // dies on the first hit, switchAttacker() never fires, turn stays at 0,
+          // and the normal turn-diff check never triggers onBattleTurn again.
+          useSpellStore.getState().onBattleTurn()
+          // Reset prevTurn so turn=0 of the next battle fires a fresh tick.
+          prevTurn.current = -1
 
-          useMapStore.getState().moveOneStep()
+          useSpellStore.getState().clearEnemyDebuff()
+
+          useMapStore.getState().moveOneStep(useHeroStore.getState().level)
 
           const tileXp = useMapStore.getState().drainXp()
           if (tileXp > 0) gainXp(tileXp)

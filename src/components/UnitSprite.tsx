@@ -1,9 +1,11 @@
+import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { cn } from '../lib/utils'
 
 interface Props {
   side: 'player' | 'enemy'
   isHit: boolean
   hitDuration: string
+  monsterType?: string  // template id — only used when side === 'enemy'
 }
 
 function KnightSvg() {
@@ -99,7 +101,32 @@ function GoblinSvg() {
   )
 }
 
-export default function UnitSprite({ side, isHit, hitDuration }: Props) {
+/** Generic emoji display for monsters without a custom SVG. */
+function EnemyEmoji({ emoji }: { emoji: string }) {
+  return (
+    <div
+      style={{ width: 72, height: 112 }}
+      className="flex items-end justify-center pb-1"
+    >
+      <span
+        style={{ fontSize: 72, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}
+        role="img"
+      >
+        {emoji}
+      </span>
+    </div>
+  )
+}
+
+export default function UnitSprite({ side, isHit, hitDuration, monsterType }: Props) {
+  function renderSprite() {
+    if (side === 'player') return <KnightSvg />
+    // Look up the monster template to get its emoji
+    const template = monsterType ? FOREST_MONSTER_MAP.get(monsterType) : null
+    if (!template || template.id === 'goblin') return <GoblinSvg />
+    return <EnemyEmoji emoji={template.emoji} />
+  }
+
   return (
     <div
       className={cn('relative', isHit && 'anim-shake')}
@@ -109,7 +136,7 @@ export default function UnitSprite({ side, isHit, hitDuration }: Props) {
         className={cn(isHit && 'anim-flash')}
         style={isHit ? { animationDuration: hitDuration } : undefined}
       >
-        {side === 'player' ? <KnightSvg /> : <GoblinSvg />}
+        {renderSprite()}
       </div>
     </div>
   )

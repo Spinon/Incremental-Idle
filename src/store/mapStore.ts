@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
+import { useBattleStore } from './battleStore'
+import { pickForestMonster } from '../data/monsters'
+import { pickMonsterRarity } from '../formulas/monsters'
+import type { MonsterRarity } from '../types/monster'
 import type { Direction, MapTile, PlacedTile, TileContent } from '../types/map'
 
 export const DIR_OPPOSITE: Record<Direction, Direction> = { N: 'S', S: 'N', E: 'W', W: 'E' }
@@ -43,7 +47,14 @@ export function generateContent(level: number): TileContent {
       xpAmount: Math.round((8 + level * 4) * (0.8 + Math.random() * 0.4)),
     }
   }
-  if (r < 0.10) return { type: 'monster', monsterLevel: level }
+  if (r < 0.10) {
+    return {
+      type: 'monster',
+      monsterLevel: level,
+      monsterType:   pickForestMonster().id,
+      monsterRarity: pickMonsterRarity(),
+    }
+  }
   return { type: 'empty' }
 }
 
@@ -75,9 +86,12 @@ const INITIAL_TILE: PlacedTile = {
 }
 
 // BFS: find the nearest unexplored tile reachable via connected paths (returns the target, not the step).
+// When maxLevel is provided (auto-explore mode), unexplored tiles above that level are treated as
+// barriers: they are neither returned as targets nor traversed further.
 function findNearestUnexplored(
   grid: Record<string, PlacedTile>,
   from: { x: number; y: number },
+  maxLevel?: number,
 ): { x: number; y: number } | null {
   const visited = new Set<string>()
   const queue: Array<{ x: number; y: number }> = [{ x: from.x, y: from.y }]
@@ -96,7 +110,11 @@ function findNearestUnexplored(
       visited.add(key)
       const neighbor = grid[key]
       if (!neighbor?.connections.includes(DIR_OPPOSITE[dir])) continue
-      if (!neighbor.explored) return { x: nx, y: ny }
+      if (!neighbor.explored) {
+        // If over the level cap, treat as a barrier — don't enter or path through
+        if (maxLevel !== undefined && neighbor.level > maxLevel) continue
+        return { x: nx, y: ny }
+      }
       queue.push({ x: nx, y: ny })
     }
   }
@@ -144,7 +162,6 @@ interface MapStore {
   deckAccum: number
   pendingXp: number
   pendingGold: number
-  pendingBattle: { level: number } | null
   /** Monster-specific XP kept separate so a hero-level range check can be applied. */
   pendingMonsterXp: { xp: number; monsterLevel: number } | null
   sightedCells: Record<string, TileContent>
@@ -166,13 +183,12 @@ interface MapStore {
   setAutoExplore(v: boolean): void
   drainXp(): number
   drainGold(): number
-  drainBattle(): { level: number } | null
   drainMonsterXp(): { xp: number; monsterLevel: number } | null
   goHome(): void
   leaveScene(): void
   exitMarket(): void
   handleDefeat(): void
-  moveOneStep(): void
+  moveOneStep(heroLevel?: number): void
   resetMap(startLevel?: number): void
   tickMap(deltaMs: number, moveSpeed: number, maxDeck: number, vision: number, heroLevel: number): void
 }
@@ -187,7 +203,6 @@ export const useMapStore = create<MapStore>()(
       deckAccum: 0,
       pendingXp: 0,
       pendingGold: 0,
-      pendingBattle: null,
       pendingMonsterXp: null,
       sightedCells: {},
       autoExplore: true,
@@ -203,61 +218,79 @@ export const useMapStore = create<MapStore>()(
       leaveScene: () => set((st) => { st.scene = 'map' }),
 
       // Exit market by stepping through a random connected exit
-      exitMarket: () => set((st) => {
-        const pos  = st.playerPos
-        const tile = st.grid[gridKey(pos.x, pos.y)]
+      exitMarket: () => {
+        let queueLevel:  number | null = null
+        let queueType:   string | undefined
+        let queueRarity: MonsterRarity | undefined
 
-        // Collect adjacent tiles reachable through this tile's connections
-        const exits: { x: number; y: number }[] = []
-        if (tile) {
-          for (const dir of tile.connections) {
-            const { dx, dy } = DIR_DELTA[dir]
-            const nx = pos.x + dx, ny = pos.y + dy
-            const neighbor = st.grid[gridKey(nx, ny)]
-            if (neighbor && neighbor.connections.includes(DIR_OPPOSITE[dir])) {
-              exits.push({ x: nx, y: ny })
-            }
-          }
-        }
+        set((st) => {
+          const pos  = st.playerPos
+          const tile = st.grid[gridKey(pos.x, pos.y)]
 
-        if (exits.length > 0) {
-          const exit     = exits[Math.floor(Math.random() * exits.length)]
-          st.playerPos   = exit
-          st.destination = null
-
-          // Process arrival at exit tile (skip if it's another market)
-          const exitTile = st.grid[gridKey(exit.x, exit.y)]
-          if (exitTile && exitTile.content.type !== 'market') {
-            const isMonster        = exitTile.content.type === 'monster'
-            const isFirstEncounter = isMonster && !exitTile.explored
-            // Boss fight: monster tile first visit → up to +5 levels above tile
-            // Everything else: exactly tile level
-            const enemyLevel = isFirstEncounter
-              ? exitTile.level + Math.ceil(Math.random() * 5)
-              : exitTile.level
-
-            st.pendingBattle = { level: Math.max(1, enemyLevel) }
-
-            if (isFirstEncounter) {
-              st.pendingGold      += Math.max(2, Math.round(enemyLevel * 5 * (0.8 + Math.random() * 0.4)))
-              st.pendingMonsterXp  = {
-                xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
-                monsterLevel: enemyLevel,
-              }
-            }
-
-            if (!exitTile.explored) {
-              exitTile.explored = true
-              if (exitTile.content.type === 'treasure' && exitTile.content.xpAmount) {
-                st.pendingXp += exitTile.content.xpAmount
-                exitTile.content = { type: 'empty' }
+          const exits: { x: number; y: number }[] = []
+          if (tile) {
+            for (const dir of tile.connections) {
+              const { dx, dy } = DIR_DELTA[dir]
+              const nx = pos.x + dx, ny = pos.y + dy
+              const neighbor = st.grid[gridKey(nx, ny)]
+              if (neighbor && neighbor.connections.includes(DIR_OPPOSITE[dir])) {
+                exits.push({ x: nx, y: ny })
               }
             }
           }
-        }
 
-        st.scene = 'map'
-      }),
+          if (exits.length > 0) {
+            // Prefer the exit toward the current destination (if any, and if it's not the market itself)
+            const dest          = st.destination
+            const destIsMarket  = dest && dest.x === pos.x && dest.y === pos.y
+            let chosenExit: { x: number; y: number } | null = null
+
+            if (dest && !destIsMarket) {
+              const nextStep = findNextStep(st.grid, pos, dest)
+              if (nextStep && exits.some(e => e.x === nextStep.x && e.y === nextStep.y)) {
+                chosenExit = nextStep
+              }
+            }
+            if (!chosenExit) chosenExit = exits[Math.floor(Math.random() * exits.length)]
+
+            st.playerPos = chosenExit
+            // Only clear destination if it was the market itself (or unset)
+            if (!dest || destIsMarket) st.destination = null
+
+            const exitTile = st.grid[gridKey(chosenExit.x, chosenExit.y)]
+            if (exitTile && exitTile.content.type !== 'market') {
+              const isMonster        = exitTile.content.type === 'monster'
+              const isFirstEncounter = isMonster && !exitTile.explored
+              const enemyLevel = isFirstEncounter
+                ? exitTile.level + Math.ceil(Math.random() * 5)
+                : exitTile.level
+              queueLevel  = Math.max(1, enemyLevel)
+              queueType   = exitTile.content.monsterType
+              queueRarity = exitTile.content.monsterRarity as MonsterRarity | undefined
+
+              if (isFirstEncounter) {
+                st.pendingGold     += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
+                st.pendingMonsterXp = {
+                  xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
+                  monsterLevel: enemyLevel,
+                }
+              }
+
+              if (!exitTile.explored) {
+                exitTile.explored = true
+                if (exitTile.content.type === 'treasure' && exitTile.content.xpAmount) {
+                  st.pendingXp += exitTile.content.xpAmount
+                  exitTile.content = { type: 'empty' }
+                }
+              }
+            }
+          }
+
+          st.scene = 'map'
+        })
+
+        if (queueLevel !== null) useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity)
+      },
 
       handleDefeat: () => set((st) => {
         st.scene          = 'home'
@@ -303,9 +336,14 @@ export const useMapStore = create<MapStore>()(
         let content: TileContent
         if (sighted) {
           if (sighted.type === 'monster') {
-            content = { type: 'monster', monsterLevel: tileLevel }
+            content = {
+              type: 'monster',
+              monsterLevel:  tileLevel,
+              monsterType:   sighted.monsterType   ?? pickForestMonster().id,
+              monsterRarity: sighted.monsterRarity ?? pickMonsterRarity(),
+            }
           } else if (sighted.type === 'treasure') {
-            content = { type: 'treasure', xpAmount: Math.round((8 + tileLevel * 4) * (0.8 + Math.random() * 0.4)) }
+            content = { type: 'treasure', xpAmount: Math.round((20 + tileLevel * 10) * (0.8 + Math.random() * 0.4)) }
           } else {
             content = { type: sighted.type } as TileContent   // market or empty — level-independent
           }
@@ -331,71 +369,70 @@ export const useMapStore = create<MapStore>()(
         return gold
       },
 
-      drainBattle: () => {
-        const b = get().pendingBattle
-        if (b) set((st) => { st.pendingBattle = null })
-        return b
-      },
-
       drainMonsterXp: () => {
         const m = get().pendingMonsterXp
         if (m) set((st) => { st.pendingMonsterXp = null })
         return m
       },
 
-      moveOneStep: () => set((st) => {
-        // Auto-set destination to nearest unexplored tile (only when autoExplore is on)
-        if (!st.destination && st.autoExplore) {
-          const target = findNearestUnexplored(st.grid, st.playerPos)
-          if (target) st.destination = target
-        }
+      moveOneStep: (heroLevel?: number) => {
+        let queueLevel:  number | null = null
+        let queueType:   string | undefined
+        let queueRarity: MonsterRarity | undefined
 
-        if (!st.destination) return
-
-        const next = findNextStep(st.grid, st.playerPos, st.destination)
-        if (next) {
-          st.playerPos = next
-          if (next.x === st.destination.x && next.y === st.destination.y) {
-            st.destination = null
+        set((st) => {
+          if (!st.destination && st.autoExplore) {
+            const target = findNearestUnexplored(st.grid, st.playerPos, heroLevel)
+            if (target) st.destination = target
           }
-          const tile = st.grid[gridKey(next.x, next.y)]
-          if (tile) {
-            if (tile.content.type === 'market') {
-              // Market: open shop scene, no battle
-              st.scene = 'market'
-              if (!tile.explored) tile.explored = true
-            } else {
-              const isMonster        = tile.content.type === 'monster'
-              const isFirstEncounter = isMonster && !tile.explored
-              // Boss fight: monster tile first visit → tile level + 5
-              // All other tiles (empty, treasure, monster revisit): exactly tile level
-              const enemyLevel = isFirstEncounter
-                ? tile.level + Math.ceil(Math.random() * 5)
-                : tile.level
-              st.pendingBattle = { level: Math.max(1, enemyLevel) }
 
-              if (isFirstEncounter) {
-                // Boss rewards: bonus gold + XP (stored separately for hero level-range check)
-                st.pendingGold      += Math.max(2, Math.round(enemyLevel * 5 * (0.8 + Math.random() * 0.4)))
-                st.pendingMonsterXp  = {
-                  xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
-                  monsterLevel: enemyLevel,
+          if (!st.destination) return
+
+          const next = findNextStep(st.grid, st.playerPos, st.destination)
+          if (next) {
+            st.playerPos = next
+            if (next.x === st.destination.x && next.y === st.destination.y) {
+              st.destination = null
+            }
+            const tile = st.grid[gridKey(next.x, next.y)]
+            if (tile) {
+              if (tile.content.type === 'market') {
+                st.scene = 'market'
+                if (!tile.explored) tile.explored = true
+              } else {
+                const isMonster        = tile.content.type === 'monster'
+                const isFirstEncounter = isMonster && !tile.explored
+                const enemyLevel = isFirstEncounter
+                  ? tile.level + Math.ceil(Math.random() * 5)
+                  : tile.level
+                queueLevel  = Math.max(1, enemyLevel)
+                queueType   = tile.content.monsterType
+                queueRarity = tile.content.monsterRarity as MonsterRarity | undefined
+
+                if (isFirstEncounter) {
+                  st.pendingGold     += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
+                  st.pendingMonsterXp = {
+                    xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
+                    monsterLevel: enemyLevel,
+                  }
                 }
-              }
 
-              if (!tile.explored) {
-                tile.explored = true
-                if (tile.content.type === 'treasure' && tile.content.xpAmount) {
-                  st.pendingXp += tile.content.xpAmount
-                  tile.content = { type: 'empty' }
+                if (!tile.explored) {
+                  tile.explored = true
+                  if (tile.content.type === 'treasure' && tile.content.xpAmount) {
+                    st.pendingXp += tile.content.xpAmount
+                    tile.content = { type: 'empty' }
+                  }
                 }
               }
             }
+          } else {
+            st.destination = null
           }
-        } else {
-          st.destination = null
-        }
-      }),
+        })
+
+        if (queueLevel !== null) useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity)
+      },
 
       resetMap: (startLevel) => set((st) => {
         // First tiles are always 5 levels below the hero to avoid defeat loops
@@ -407,7 +444,6 @@ export const useMapStore = create<MapStore>()(
         st.deckAccum          = 0
         st.pendingXp          = 0
         st.pendingGold        = 0
-        st.pendingBattle      = null
         st.pendingMonsterXp   = null
         st.sightedCells       = {}
         st.scene              = 'map'

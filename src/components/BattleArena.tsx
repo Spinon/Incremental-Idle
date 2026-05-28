@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
+import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
+import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -9,14 +11,26 @@ import { useSettingsStore } from '../store/settingsStore'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
 import type { Consumable, ItemRarity } from '../types/item'
+import type { SpellRarity, AutoCastConfig } from '../types/spell'
 
-const RARITY_BORDER: Record<ItemRarity, string> = {
+const RARITY_BORDER: Record<ItemRarity | SpellRarity, string> = {
   common:   'border-slate-400  dark:border-slate-600',
   uncommon: 'border-green-500  dark:border-green-700',
   rare:     'border-blue-500   dark:border-blue-700',
   epic:     'border-purple-500 dark:border-purple-700',
   set:      'border-yellow-400 dark:border-yellow-500',
   unique:   'border-orange-500 dark:border-orange-400',
+}
+
+const EFFECT_ICON: Record<string, string> = {
+  damage: '⚔', heal: '✦', buff: '▲', debuff: '▼', utility: '◎',
+}
+const EFFECT_COLOR: Record<string, string> = {
+  damage:  'text-red-400',
+  heal:    'text-emerald-400',
+  buff:    'text-blue-400',
+  debuff:  'text-purple-400',
+  utility: 'text-amber-400',
 }
 
 const ATTACK_MS = 2000
@@ -40,6 +54,34 @@ export default function BattleArena() {
   const consumables    = useInventoryStore(s => s.consumables)
   const quickslots     = useInventoryStore(s => s.quickslots)
   const removeConsumable = useInventoryStore(s => s.removeConsumable)
+
+  // Spell quickslots
+  const level           = useHeroStore(s => s.level)
+  const earnedWordIds   = useSpellStore(s => s.earnedWordIds)
+  const spellSlots      = useSpellStore(s => s.spellSlots)
+  const cooldowns       = useSpellStore(s => s.cooldowns)
+  const castSpell       = useSpellStore(s => s.castSpell)
+  const autoSlots       = useSpellStore(s => s.autoSlots)
+  const activeBuffs     = useSpellStore(s => s.activeBuffs)
+  const activeDebuff    = useSpellStore(s => s.activeDebuff)
+  const setAutoSlot     = useSpellStore(s => s.setAutoSlot)
+  const mana            = useHeroStore(s => s.mana)
+  const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
+  const availableSpells = getPlayerSpells(knownWordIds)
+
+  const [showAutoConfig, setShowAutoConfig] = useState(false)
+  const autoConfigRef = useRef<HTMLDivElement>(null)
+
+  const closeAutoConfig = useCallback((e: MouseEvent) => {
+    if (autoConfigRef.current && !autoConfigRef.current.contains(e.target as Node)) {
+      setShowAutoConfig(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showAutoConfig) document.addEventListener('mousedown', closeAutoConfig)
+    return () => document.removeEventListener('mousedown', closeAutoConfig)
+  }, [showAutoConfig, closeAutoConfig])
 
   function useQuickslot(c: Consumable) {
     removeConsumable(c.id)
@@ -193,7 +235,7 @@ export default function BattleArena() {
             className={isEnemyAttacking ? 'anim-attack-left' : ''}
             style={isEnemyAttacking ? { animationDuration: attackDur } : undefined}
           >
-            <UnitSprite side="enemy" isHit={enemyHit} hitDuration={hitDur} />
+            <UnitSprite side="enemy" isHit={enemyHit} hitDuration={hitDur} monsterType={store.enemy.monsterType} />
           </div>
         </div>
 
@@ -215,6 +257,44 @@ export default function BattleArena() {
           </div>
         )}
       </div>
+
+      {/* ── Active spell effects ────────────────────────────────────────── */}
+      {(activeBuffs.length > 0 || activeDebuff) && (
+        <div className="mt-1.5 flex flex-wrap gap-1 justify-center">
+          {activeBuffs.map(b => {
+            const spell = SPELL_MAP.get(b.spellId)
+            const icon  = SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'
+            const label = spell
+              ? Object.entries(b.statAdds ?? {}).map(([k, v]) => `+${v} ${k}`).join(' ')
+              : b.spellId
+            return (
+              <span key={b.spellId}
+                title={spell?.name ?? b.spellId}
+                className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700/60">
+                <span>{icon}</span>
+                <span>{label}</span>
+                <span className="opacity-60">{b.remaining}t</span>
+              </span>
+            )
+          })}
+          {activeDebuff && (() => {
+            const spell = SPELL_MAP.get(activeDebuff.spellId)
+            const icon  = SPELL_ICONS[activeDebuff.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▼'
+            const parts: string[] = []
+            if (activeDebuff.atkMult < 1)      parts.push(`ATK ×${activeDebuff.atkMult}`)
+            if (activeDebuff.atkSpeedMult < 1)  parts.push(`Vel ×${activeDebuff.atkSpeedMult}`)
+            return (
+              <span
+                title={spell?.name ?? activeDebuff.spellId}
+                className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700/60">
+                <span>{icon}</span>
+                <span>{isEn ? 'Enemy' : 'Inimigo'} {parts.join(' ')}</span>
+                <span className="opacity-60">{activeDebuff.remaining}t</span>
+              </span>
+            )
+          })()}
+        </div>
+      )}
 
       {/* ── Quickslot bar ───────────────────────────────────────────────── */}
       <div className="mt-2 flex items-center gap-2 justify-center">
@@ -245,9 +325,152 @@ export default function BattleArena() {
             </button>
           )
         })}
-        <span className="text-[8px] text-slate-400 dark:text-slate-600 ml-1">
-          {isEn ? 'Quickslots' : 'Atalhos'}
+        <span className="text-[8px] text-slate-400 dark:text-slate-600 ml-1 mr-2">
+          {isEn ? 'Items' : 'Itens'}
         </span>
+
+        {/* Divider */}
+        <div className="h-7 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+        {/* ── Spell slots ─────────────────────────────────────── */}
+        {spellSlots.map((sid, slot) => {
+          const spell = sid ? availableSpells.find(s => s.id === sid) : null
+          const cd    = sid ? (cooldowns[sid] ?? 0) : 0
+          const canCast = spell && mana >= spell.manaCost && cd === 0
+          const isAuto  = autoSlots[slot]?.enabled ?? false
+          return (
+            <button
+              key={`spell-${slot}`}
+              onClick={() => spell && castSpell(spell.id)}
+              disabled={!spell || !canCast}
+              title={spell
+                ? `[${slot + 5}] ${spell.name} — ${spell.manaCost} mana · CD ${spell.cooldown} ${isEn ? 'turns' : 'turnos'}${cd > 0 ? ` (${cd} ${isEn ? 'left' : 'rest.'})` : ''}`
+                : (isEn ? `Spell slot ${slot + 1} (empty)` : `Slot de magia ${slot + 1} (vazio)`)}
+              style={{ width: 44, height: 44 }}
+              className={cn(
+                'relative rounded-xl border-2 flex flex-col items-center justify-center transition-all',
+                spell
+                  ? cn(
+                      RARITY_BORDER[spell.rarity],
+                      'bg-white dark:bg-slate-800 shadow',
+                      canCast ? 'hover:scale-110 active:scale-95' : 'opacity-50 cursor-not-allowed',
+                    )
+                  : 'border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 opacity-40 cursor-not-allowed',
+              )}
+            >
+              {spell ? (
+                <>
+                  <span className="text-base leading-none">
+                    {SPELL_ICONS[spell.id] ?? WORD_ICONS[spell.word1Id] ?? EFFECT_ICON[spell.effect.type]}
+                  </span>
+                  <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500">{slot + 1}</span>
+                  {isAuto && cd === 0 && (
+                    <div className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border border-white dark:border-slate-800" />
+                  )}
+                  {cd > 0 && (() => {
+                    const circ = 2 * Math.PI * 17
+                    const offset = circ * (cd / spell.cooldown)
+                    return (
+                      <div className="absolute inset-0 rounded-xl bg-black/50 flex items-center justify-center">
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 44 44" fill="none">
+                          <circle cx="22" cy="22" r="17" stroke="white" strokeOpacity="0.15" strokeWidth="3" />
+                          <circle
+                            cx="22" cy="22" r="17"
+                            stroke="white" strokeOpacity="0.85" strokeWidth="3"
+                            strokeDasharray={circ}
+                            strokeDashoffset={circ - offset}
+                            strokeLinecap="round"
+                            transform="rotate(-90 22 22)"
+                          />
+                        </svg>
+                        <span className="text-[9px] text-white font-bold z-10">{cd}</span>
+                      </div>
+                    )
+                  })()}
+                </>
+              ) : (
+                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600">✦</span>
+              )}
+            </button>
+          )
+        })}
+
+        {/* Gear button + label + auto-cast config panel */}
+        <div ref={autoConfigRef} className="relative flex items-center gap-1">
+          <span className="text-[8px] text-slate-400 dark:text-slate-600 ml-1">
+            {isEn ? 'Spells' : 'Magias'}
+          </span>
+          <button
+            onClick={() => setShowAutoConfig(v => !v)}
+            title={isEn ? 'Configure auto-cast' : 'Configurar auto-uso'}
+            className={cn(
+              'w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-colors',
+              showAutoConfig
+                ? 'bg-indigo-500 text-white'
+                : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600',
+            )}
+          >
+            ⚙
+          </button>
+
+          {showAutoConfig && (
+            <div className="absolute bottom-full right-0 mb-2 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 w-72">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                {isEn ? 'Spell Auto-cast' : 'Auto-uso de Magias'}
+              </p>
+              {spellSlots.map((sid, i) => {
+                const spell = sid ? availableSpells.find(s => s.id === sid) : null
+                const cfg: AutoCastConfig = autoSlots[i] ?? { enabled: false, hpThreshold: 0.7 }
+                const isHeal = spell?.effect.type === 'heal'
+                return (
+                  <div key={i} className="flex items-center gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700/60 last:border-0">
+                    <span className="text-[10px] font-bold text-slate-400 w-3 shrink-0">{i + 1}</span>
+                    {spell ? (
+                      <>
+                        <span className={cn('text-xs shrink-0', EFFECT_COLOR[spell.effect.type])}>
+                          {EFFECT_ICON[spell.effect.type]}
+                        </span>
+                        <span className="text-xs text-slate-700 dark:text-slate-200 flex-1 truncate min-w-0">
+                          {spell.name}
+                        </span>
+                        {isHeal && cfg.enabled && (
+                          <select
+                            className="text-[10px] bg-slate-100 dark:bg-slate-700 rounded px-1 py-0.5 text-slate-600 dark:text-slate-300 border-0 shrink-0"
+                            value={cfg.hpThreshold}
+                            onChange={e => setAutoSlot(i, { ...cfg, hpThreshold: Number(e.target.value) })}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <option value={0.5}>HP &lt; 50%</option>
+                            <option value={0.6}>HP &lt; 60%</option>
+                            <option value={0.7}>HP &lt; 70%</option>
+                            <option value={0.8}>HP &lt; 80%</option>
+                            <option value={0.9}>HP &lt; 90%</option>
+                            <option value={1.0}>{isEn ? 'always' : 'sempre'}</option>
+                          </select>
+                        )}
+                        <button
+                          onClick={() => setAutoSlot(i, { ...cfg, enabled: !cfg.enabled })}
+                          className={cn(
+                            'text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors shrink-0',
+                            cfg.enabled
+                              ? 'bg-indigo-500 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600',
+                          )}
+                        >
+                          {cfg.enabled ? 'AUTO' : 'OFF'}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-400 dark:text-slate-600 italic">
+                        {isEn ? 'empty' : 'vazio'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Battle log */}
