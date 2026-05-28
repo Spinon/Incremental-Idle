@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMapStore, gridKey } from '../store/mapStore'
+import { useBattleStore } from '../store/battleStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
@@ -107,6 +108,8 @@ const AUTO_LEAVE_MS = 6000
 export default function MarketInterior() {
   const leaveScene   = useMapStore(s => s.leaveScene)
   const exitMarket   = useMapStore(s => s.exitMarket)
+  const queueEnemy   = useBattleStore(s => s.queueEnemy)
+  const resetBattle  = useBattleStore(s => s.reset)
   const setSellMode  = useInventoryStore(s => s.setSellMode)
   const lang       = useSettingsStore(s => s.lang)
   const isEn       = lang === 'en'
@@ -366,7 +369,14 @@ export default function MarketInterior() {
           {/* Leave button */}
           <div className="relative overflow-hidden rounded-lg flex-1">
             <button
-              onClick={exitMarket}
+              onClick={() => {
+                exitMarket()
+                const pending = useMapStore.getState().pendingBattle
+                if (pending) {
+                  queueEnemy(pending.level)
+                  resetBattle()
+                }
+              }}
               className="w-full py-2 rounded-lg text-sm font-semibold border border-indigo-700/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-900/40 transition-colors relative z-10"
             >
               {isEn ? '← Return to Map' : '← Retornar ao Mapa'}

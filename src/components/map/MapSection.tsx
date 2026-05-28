@@ -240,11 +240,17 @@ function TileInfoPanel({ tile, onClose }: { tile: PlacedTile; onClose(): void })
         </div>
       )}
 
-      {content.type === 'empty' && (
-        <div className="text-[11px] text-slate-500">
-          {isEn ? 'Safe zone — no encounter' : 'Zona segura — sem encontro'}
-        </div>
-      )}
+      {content.type === 'empty' && (() => {
+        const g = goblinStats(level)
+        return (
+          <div className="flex gap-3 text-[11px] text-slate-400">
+            <span>Goblin <span className="text-red-400 font-semibold">Nv.{level}</span></span>
+            <span>HP <span className="text-slate-300">{g.hp}</span></span>
+            <span>ATK <span className="text-slate-300">{g.atk}</span></span>
+            <span>DEF <span className="text-slate-300">{g.def}</span></span>
+          </div>
+        )
+      })()}
 
       {content.type === 'market' && (
         <div className="text-[11px] text-indigo-400/80">
