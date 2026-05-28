@@ -46,8 +46,9 @@ export default function MapSection() {
   const setAutoExplore = useMapStore(s => s.setAutoExplore)
   const goHome         = useMapStore(s => s.goHome)
 
-  const attrs   = useHeroStore(s => s.attributes)
-  const derived = getDerivedStats(attrs)
+  const attrs     = useHeroStore(s => s.attributes)
+  const heroLevel = useHeroStore(s => s.level)
+  const derived   = getDerivedStats(attrs)
   const t       = useT()
 
   const maxDeck = Math.min(8, 3 + Math.floor(derived.vision / 50))
@@ -152,6 +153,7 @@ export default function MapSection() {
         destination={destination}
         selectedPos={selectedPos}
         vision={derived.vision}
+        heroLevel={heroLevel}
         zoom={zoom}
         cameraPos={cameraPos}
         draggingId={draggingId}

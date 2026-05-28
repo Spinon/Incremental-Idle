@@ -10,6 +10,7 @@ interface Props {
   isDestination: boolean
   isSelected: boolean
   visibility: Visibility
+  heroLevel: number
   onClick(): void
 }
 
@@ -33,7 +34,15 @@ function buildTitle(tile: PlacedTile): string {
   return base
 }
 
-export default function MapTileCell({ tile, isPlayer, isDestination, isSelected, visibility, onClick }: Props) {
+function levelColor(tileLv: number, heroLv: number): string {
+  const diff = tileLv - heroLv
+  if (diff <= -3) return 'text-green-400'
+  if (diff <= 2)  return 'text-yellow-300'
+  if (diff <= 5)  return 'text-orange-400'
+  return 'text-red-400'
+}
+
+export default function MapTileCell({ tile, isPlayer, isDestination, isSelected, visibility, heroLevel, onClick }: Props) {
   const isMarket = tile.content.type === 'market'
   const explored = tile.explored && !isPlayer
   const pipe     = isMarket ? PIPE_MARKET : (explored ? PIPE_EXPLORED : PIPE_FRESH)
@@ -91,13 +100,19 @@ export default function MapTileCell({ tile, isPlayer, isDestination, isSelected,
       )}
 
       {/* Level badge */}
-      {visibility === 'clear' && tile.level > 1 && (
-        <span className={cn(
-          'absolute bottom-0.5 left-0.5 text-[8px] leading-none z-10',
-          isMarket ? 'text-indigo-400/60' : (explored ? 'text-green-800/60' : 'text-green-500/70'),
+      {visibility === 'clear' && (
+        <div className={cn(
+          'absolute bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full z-10',
+          'bg-black/55 backdrop-blur-[1px] leading-none',
+          explored && 'opacity-50',
         )}>
-          L{tile.level}
-        </span>
+          <span className={cn(
+            'text-[10px] font-black tracking-tight',
+            isMarket ? 'text-indigo-300' : levelColor(tile.level, heroLevel),
+          )}>
+            {tile.level}
+          </span>
+        </div>
       )}
 
       {/* Selected ring */}

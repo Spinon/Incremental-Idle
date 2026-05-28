@@ -14,6 +14,7 @@ interface Props {
   destination: { x: number; y: number } | null
   selectedPos: { x: number; y: number } | null
   vision: number
+  heroLevel: number
   zoom: number
   cameraPos: { x: number; y: number }  // grid units (float); camera centre
   draggingId: string | null
@@ -31,7 +32,7 @@ function ghostBg(content: TileContent): string {
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, zoom, cameraPos, draggingId, onDrop, onTileClick, onCameraChange, onZoom,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, onDrop, onTileClick, onCameraChange, onZoom,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const visRadius = Math.max(2, Math.round(vision / 38))
@@ -162,6 +163,7 @@ export default function MapViewport({
               isPlayer={gx === playerPos.x && gy === playerPos.y}
               isDestination={!!(destination?.x === gx && destination?.y === gy)}
               isSelected={!!(selectedPos?.x === gx && selectedPos?.y === gy)}
+              heroLevel={heroLevel}
               visibility={vis}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
