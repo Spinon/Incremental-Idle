@@ -14,15 +14,18 @@ export interface Unit {
   atk: number
   def: number
   atkSpeed: number
+  dodgeChance: number   // 0–1 fraction
 }
 
 export interface LogEntry {
   attacker: string
   defender: string
   dmg: number
+  /** true when the defender dodged the hit (dmg will be 0) */
+  missed?: boolean
 }
 
-interface HeroSync { atk: number; def: number; maxHp: number; atkSpeed: number }
+interface HeroSync { atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number }
 
 interface BattleStore {
   player: Unit
@@ -49,22 +52,34 @@ interface BattleStore {
   reset(): void
 }
 
-const INITIAL_PLAYER: Unit = { name: 'Hero', level: 0, hp: 30, maxHp: 30, atk: 5, def: 2, atkSpeed: 1.0 }
+const INITIAL_PLAYER: Unit = {
+  name: 'Hero', level: 0, hp: 30, maxHp: 30,
+  atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
+}
 
 export function goblinStats(level: number): Unit {
   return {
     name: 'Goblin',
     level,
-    hp:       16 + level * 8,
-    maxHp:    16 + level * 8,
-    atk:       4 + level * 2,
-    def:       level,
-    atkSpeed:  0.8 + level * 0.15,
+    hp:          16 + level * 8,
+    maxHp:       16 + level * 8,
+    atk:          4 + level * 2,
+    def:          level,
+    atkSpeed:     0.8 + level * 0.15,
+    dodgeChance:  level * 0.003,   // level 10 → 3%, level 20 → 6%
   }
 }
 
-function calcDmg(a: Unit, d: Unit) {
-  return Math.max(1, Math.round(a.atk - d.def))
+/** Damage with ±15% random variance. */
+function calcDmg(a: Unit, d: Unit): number {
+  const base     = Math.max(1, a.atk - d.def)
+  const variance = 0.85 + Math.random() * 0.3   // 85%–115%
+  return Math.max(1, Math.round(base * variance))
+}
+
+/** Returns true when the defender dodges the hit. */
+function checkDodge(defender: Unit): boolean {
+  return Math.random() < defender.dodgeChance
 }
 
 function calcHits(mySpeed: number, theirSpeed: number): number {
@@ -92,19 +107,27 @@ export const useBattleStore = create<BattleStore>()(
     setPhase:    (p) => set((st) => { st.phase    = p }),
     queueEnemy:  (level) => set((st) => { st.nextEnemyLevel = level }),
 
-    syncFromHero: ({ atk, def, maxHp, atkSpeed }) => set((st) => {
-      st.player.atk      = Math.round(atk)
-      st.player.def      = def
-      st.player.maxHp    = Math.round(maxHp)
-      st.player.atkSpeed = atkSpeed
+    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance }) => set((st) => {
+      st.player.atk         = Math.round(atk)
+      st.player.def         = def
+      st.player.maxHp       = Math.round(maxHp)
+      st.player.atkSpeed    = atkSpeed
+      st.player.dodgeChance = dodgeChance
       if (st.player.hp > st.player.maxHp) st.player.hp = st.player.maxHp
     }),
 
     applyHit: () => set((st) => {
       const atkUnit = st.attacker === 'player' ? st.player : st.enemy
       const defUnit = st.attacker === 'player' ? st.enemy  : st.player
-      const dmg     = calcDmg(atkUnit, defUnit)
-      const newHp   = Math.max(0, defUnit.hp - dmg)
+
+      if (checkDodge(defUnit)) {
+        st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, missed: true })
+        st.hitsLeft -= 1
+        return
+      }
+
+      const dmg   = calcDmg(atkUnit, defUnit)
+      const newHp = Math.max(0, defUnit.hp - dmg)
 
       if (st.attacker === 'player') st.enemy.hp  = newHp
       else                          st.player.hp = newHp
@@ -136,13 +159,21 @@ export const useBattleStore = create<BattleStore>()(
 
       while (pHp > 0 && eHp > 0 && guard-- > 0) {
         if (cur === 'player') {
-          const dmg = calcDmg(st.player, st.enemy)
-          eHp = Math.max(0, eHp - dmg)
-          st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg })
+          if (checkDodge(st.enemy)) {
+            st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg: 0, missed: true })
+          } else {
+            const dmg = calcDmg(st.player, st.enemy)
+            eHp = Math.max(0, eHp - dmg)
+            st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg })
+          }
         } else {
-          const dmg = calcDmg(st.enemy, st.player)
-          pHp = Math.max(0, pHp - dmg)
-          st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg })
+          if (checkDodge(st.player)) {
+            st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg: 0, missed: true })
+          } else {
+            const dmg = calcDmg(st.enemy, st.player)
+            pHp = Math.max(0, pHp - dmg)
+            st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg })
+          }
         }
         hitsLeft--
         if (hitsLeft <= 0) {

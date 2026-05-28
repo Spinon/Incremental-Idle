@@ -10,7 +10,8 @@ const pt = {
   nextBattle: 'Próxima batalha...',
   log: 'Diário de Batalha',
   awaiting: 'Aguardando combate...',
-  strike: (a: string, d: string, n: number) => `${a} acerta ${d} por ${n} de dano!`,
+  strike: (a: string, d: string, n: number, missed?: boolean) =>
+    missed ? `${a} erra ${d}!` : `${a} acerta ${d} por ${n} de dano!`,
   stamina: 'STAMINA',
   mana: 'MANA',
   level: 'Nível',
@@ -62,7 +63,8 @@ const en = {
   nextBattle: 'Next battle starting...',
   log: 'Battle Log',
   awaiting: 'Awaiting combat...',
-  strike: (a: string, d: string, n: number) => `${a} strikes ${d} for ${n} damage!`,
+  strike: (a: string, d: string, n: number, missed?: boolean) =>
+    missed ? `${a} misses ${d}!` : `${a} strikes ${d} for ${n} damage!`,
   stamina: 'STAMINA',
   mana: 'MANA',
   level: 'Level',

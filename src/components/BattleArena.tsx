@@ -256,8 +256,14 @@ export default function BattleArena() {
         {store.log.length === 0
           ? <p className="text-sm text-slate-400 dark:text-slate-600 italic">{t.awaiting}</p>
           : store.log.map((entry, i) => (
-              <p key={i} className={`text-sm leading-snug ${i === 0 ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}`}>
-                {t.strike(entry.attacker, entry.defender, entry.dmg)}
+              <p key={i} className={`text-sm leading-snug ${
+                i === 0
+                  ? entry.missed
+                    ? 'text-slate-400 dark:text-slate-500 italic'
+                    : 'text-slate-700 dark:text-slate-200'
+                  : 'text-slate-400 dark:text-slate-500'
+              }`}>
+                {t.strike(entry.attacker, entry.defender, entry.dmg, entry.missed)}
               </p>
             ))
         }
