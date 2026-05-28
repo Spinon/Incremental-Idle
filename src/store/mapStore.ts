@@ -230,16 +230,13 @@ export const useMapStore = create<MapStore>()(
           if (exitTile && exitTile.content.type !== 'market') {
             const isMonster        = exitTile.content.type === 'monster'
             const isFirstEncounter = isMonster && !exitTile.explored
-            const baseLvl          = isMonster
-              ? (exitTile.content.monsterLevel ?? exitTile.level)
-              : Math.max(1, exitTile.level - 1)
+            // Boss fight: monster tile first visit → up to +5 levels above tile
+            // Everything else: exactly tile level
             const enemyLevel = isFirstEncounter
-              ? Math.max(baseLvl + 2, Math.round(baseLvl * 1.6))
-              : isMonster
-                ? Math.max(1, baseLvl - 1)
-                : baseLvl
+              ? exitTile.level + 5
+              : exitTile.level
 
-            st.pendingBattle = { level: enemyLevel }
+            st.pendingBattle = { level: Math.max(1, enemyLevel) }
 
             if (isFirstEncounter) {
               st.pendingGold      += Math.max(2, Math.round(enemyLevel * 5 * (0.8 + Math.random() * 0.4)))
@@ -370,20 +367,15 @@ export const useMapStore = create<MapStore>()(
             } else {
               const isMonster        = tile.content.type === 'monster'
               const isFirstEncounter = isMonster && !tile.explored
-              const baseLvl          = isMonster
-                ? (tile.content.monsterLevel ?? tile.level)
-                : Math.max(1, tile.level - 1)
-
-              // First encounter: significantly stronger boss
+              // Boss fight: monster tile first visit → tile level + 5
+              // All other tiles (empty, treasure, monster revisit): exactly tile level
               const enemyLevel = isFirstEncounter
-                ? Math.max(baseLvl + 2, Math.round(baseLvl * 1.6))
-                : isMonster
-                  ? Math.max(1, baseLvl - 1)   // post-boss: slightly weaker repeat
-                  : baseLvl
-              st.pendingBattle = { level: enemyLevel }
+                ? tile.level + 5
+                : tile.level
+              st.pendingBattle = { level: Math.max(1, enemyLevel) }
 
               if (isFirstEncounter) {
-                // Boss rewards: 2× gold + XP drop (XP stored separately for level-range check)
+                // Boss rewards: bonus gold + XP (stored separately for hero level-range check)
                 st.pendingGold      += Math.max(2, Math.round(enemyLevel * 5 * (0.8 + Math.random() * 0.4)))
                 st.pendingMonsterXp  = {
                   xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
