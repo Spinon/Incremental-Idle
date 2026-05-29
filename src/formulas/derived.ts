@@ -15,7 +15,7 @@ const BASE = {
   manaEfficiency: 1,
   moveSpeed: 1,
   vision: 100,
-  dropChance: 0.015,
+  dropChance: 0.025,
   goldMultiplier: 1,
   xpBonus: 1,
 }
@@ -57,7 +57,7 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses): DerivedSta
     vision:        BASE.vision       + fa.inteligencia * 8 + fa.sabedoria * 12  + (eq?.vision      ?? 0),
 
     // Drops & progression — Carisma big contributor
-    dropChance:     BASE.dropChance      + fa.carisma * 0.006 + (eq?.dropChance ?? 0),
+    dropChance:     Math.min(0.5, BASE.dropChance + fa.carisma * 0.003 + (eq?.dropChance ?? 0)),
     goldMultiplier: BASE.goldMultiplier  + fa.carisma * 0.05  + (eq?.goldMult   ?? 0),
     xpBonus:        BASE.xpBonus        + fa.carisma * 0.03  + (eq?.xpBonus    ?? 0),
   }
@@ -65,25 +65,23 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses): DerivedSta
 
 /**
  * Stamina drained per second at speed `s`.
- * Formula: 3*(s-1)² + 2*(s-1) — matches original values at s=2,3,4 and
- * extends cleanly to any higher speed.
- *   s=1→0  s=2→5  s=3→16  s=4→33  s=5→56  s=6→85  s=7→120 …
+ * Formula: 5*(s-1)*(s) — grows faster than before, making higher speeds costly.
+ *   s=1→0  s=2→10  s=3→30  s=4→60  s=5→100  s=6→150  s=7→210 …
  */
 export function staminaDrainAt(s: number): number {
   if (s <= 1) return 0
   const t = s - 1
-  return 3 * t * t + 2 * t
+  return 5 * t * s
 }
 
 /**
  * Returns the highest integer speed at which stamina is self-sustaining
- * (net drain ≤ 0, i.e. drain/efficiency ≤ regen).
- * At exact parity (drain = regen) the net is 0 — no stamina is lost, so it
- * counts as self-sufficient.  This becomes the minimum (base) speed shown in UI.
+ * (drain/efficiency strictly less than regen — surplus regen required).
+ * This becomes the minimum (base) speed shown in UI.
  */
 export function getBaseSpeed(derived: DerivedStats): number {
   for (let s = 2; s <= 30; s++) {
-    if (staminaDrainAt(s) / derived.staminaEfficiency > derived.staminaRegen) {
+    if (staminaDrainAt(s) / derived.staminaEfficiency >= derived.staminaRegen) {
       return s - 1
     }
   }
