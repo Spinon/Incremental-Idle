@@ -93,13 +93,29 @@ function makeInitialEnemy(): Unit {
 }
 
 /**
- * Damage with ±15% variance.
- * Minimum is 25% of the attacker's ATK so high-DEF units never reduce
- * hits to the useless "1 damage per swing" scenario.
+ * Hybrid damage formula — two-phase reduction:
+ *
+ * Phase 1 (linear absorption): DEF points subtract directly from ATK, floored
+ *   at 15 % of ATK so even 0-damage hits never occur.
+ *   → identical to the old formula for low DEF, where it matters most.
+ *
+ * Phase 2 (percentage mitigation): each DEF point provides an additional
+ *   3 % damage reduction on top of the linear phase, soft-capped at 50 %.
+ *   → makes investing deeply in DEF progressively more rewarding.
+ *
+ * Net effect:
+ *   DEF  5 → ~25–30 % total reduction (Phase1 dominant)
+ *   DEF 10 → ~40–45 % total reduction
+ *   DEF 20 → ~55–60 % total reduction (Phase2 starts to cap)
+ *   DEF 30 → ~65 %  (Phase2 at cap, Phase1 still active)
+ *
+ * Variance ±15 % applied at the end.
  */
 function calcDmg(a: Unit, d: Unit): number {
-  const base     = Math.max(Math.floor(a.atk * 0.25), a.atk - d.def)
-  const variance = 0.85 + Math.random() * 0.3
+  const absorbed   = Math.max(Math.round(a.atk * 0.15), a.atk - d.def)
+  const mitigation = Math.min(0.50, d.def * 0.03)
+  const base       = Math.max(1, Math.round(absorbed * (1 - mitigation)))
+  const variance   = 0.85 + Math.random() * 0.3
   return Math.max(1, Math.round(base * variance))
 }
 

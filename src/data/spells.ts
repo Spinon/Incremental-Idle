@@ -151,18 +151,33 @@ export const ALL_SPELLS: Spell[] = [
   // HEAL — restore the player's HP
   // ═══════════════════════════════════════════════════════════════
 
+  // Heal spells scale with magicDamage (driven by Inteligência) instead of
+  // maxHp. This means healing power requires BOTH Vitalidade (for a large HP
+  // pool) AND Inteligência (to make heals big enough to matter), creating a
+  // meaningful build decision instead of a free auto-win button.
+  //
+  // Reference values at 0 INT (magicDamage = 3):
+  //   vitae_manus  → 15 + 1.8×3  = 20 HP   (base ~ 65 % of starting HP)
+  //   lux_unda     → 22 + 2.8×3  = 30 HP
+  //   vitae_aura   → 10 + 1.5×3  = 15 HP  + staminaRegen buff
+  //   caelum_vitae → 40 + 5.0×3  = 55 HP  (needs 40 mana)
+  //   eternum_vitae→ 65 + 8.0×3  = 89 HP  (needs 55 mana, CD 20)
+  //
+  // At 10 INT (magicDamage = 13):
+  //   vitae_manus  → 15 + 1.8×13 = 38 HP
+  //   lux_unda     → 22 + 2.8×13 = 58 HP
   {
     id: 'vitae_manus', name: 'Toque Vital',
     word1Id: 'vitae', word2Id: 'manus', rarity: 'common',
     manaCost: 12, cooldown: 4,
-    effect: { type: 'heal', base: 15, scaling: 0.25, scalingStat: 'maxHp' },
+    effect: { type: 'heal', base: 15, scaling: 1.8, scalingStat: 'magicDamage' },
     description: 'Um toque gentil que canaliza energia vital para curar ferimentos.',
   },
   {
     id: 'lux_unda', name: 'Onda de Luz',
     word1Id: 'lux', word2Id: 'unda', rarity: 'uncommon',
     manaCost: 18, cooldown: 6,
-    effect: { type: 'heal', base: 22, scaling: 0.35, scalingStat: 'maxHp' },
+    effect: { type: 'heal', base: 22, scaling: 2.8, scalingStat: 'magicDamage' },
     description: 'Uma onda de luz pura limpa ferimentos e restaura vitalidade.',
   },
   {
@@ -170,7 +185,7 @@ export const ALL_SPELLS: Spell[] = [
     word1Id: 'vitae', word2Id: 'aura', rarity: 'uncommon',
     manaCost: 16, cooldown: 6,
     effect: {
-      type: 'heal', base: 12, scaling: 0.2, scalingStat: 'maxHp',
+      type: 'heal', base: 10, scaling: 1.5, scalingStat: 'magicDamage',
       statAdds: { staminaRegen: 3 }, duration: 8,
     },
     description: 'Cura e gera uma aura que aumenta a regeneração de stamina por 8 turnos.',
@@ -179,14 +194,14 @@ export const ALL_SPELLS: Spell[] = [
     id: 'caelum_vitae', name: 'Graça Celestial',
     word1Id: 'caelum', word2Id: 'vitae', rarity: 'epic',
     manaCost: 40, cooldown: 12,
-    effect: { type: 'heal', base: 55, scaling: 0.75, scalingStat: 'maxHp' },
+    effect: { type: 'heal', base: 40, scaling: 5.0, scalingStat: 'magicDamage' },
     description: 'Bênção divina restaura grandes quantidades de HP.',
   },
   {
     id: 'eternum_vitae', name: 'Vida Eterna',
     word1Id: 'eternum', word2Id: 'vitae', rarity: 'unique',
     manaCost: 55, cooldown: 20,
-    effect: { type: 'heal', base: 90, scaling: 1.3, scalingStat: 'maxHp' },
+    effect: { type: 'heal', base: 65, scaling: 8.0, scalingStat: 'magicDamage' },
     description: 'A magia da eternidade tece vitalidade para além dos limites.',
   },
 

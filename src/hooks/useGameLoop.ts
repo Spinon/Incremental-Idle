@@ -46,9 +46,10 @@ export function useGameLoop() {
 
   useEffect(() => {
     const id = setInterval(() => {
-      const speed   = useBattleStore.getState().speed
-      const attrs   = useHeroStore.getState().attributes
-      const derived = getDerivedStats(attrs)
+      const speed    = useBattleStore.getState().speed
+      const attrs    = useHeroStore.getState().attributes
+      const heroLvl  = useHeroStore.getState().level
+      const derived  = getDerivedStats(attrs, undefined, heroLvl)
 
       tickResources(TICK_MS, speed)
       useSpellStore.getState().tick(TICK_MS / 1000)

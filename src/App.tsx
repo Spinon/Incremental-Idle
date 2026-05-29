@@ -54,17 +54,18 @@ function GameRoot() {
   useEffect(() => {
     if (scene !== 'map') {
       const equip = getEquipmentBonuses(equipment)
-      const d     = getDerivedStats(attributes, equip)
+      const d     = getDerivedStats(attributes, equip, heroLevel)
       setSpeed(getBaseSpeed(d))
     }
   }, [scene, setSpeed]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync hero stats → battle store whenever attributes or equipment change
+  // Sync hero stats → battle store whenever attributes, equipment or level change.
+  // heroLevel is included so passive level bonuses take effect on level-up.
   useEffect(() => {
     const equip = getEquipmentBonuses(equipment)
-    const d     = getDerivedStats(attributes, equip)
+    const d     = getDerivedStats(attributes, equip, heroLevel)
     syncFromHero({ atk: d.atk, def: d.def, maxHp: d.maxHp, atkSpeed: d.attackSpeed, dodgeChance: d.dodgeChance })
-  }, [attributes, equipment, syncFromHero])
+  }, [attributes, equipment, heroLevel, syncFromHero])
 
   // Level-up notification
   useEffect(() => {

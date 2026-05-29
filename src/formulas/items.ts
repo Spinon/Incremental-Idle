@@ -88,22 +88,30 @@ export { ATTR_LABEL_PT, ATTR_LABEL_EN }
 
 // ─── Stat scaling ─────────────────────────────────────────────────────────────
 
-// Flat bases — full unique set ≈ 10 hero-level equivalents in combat power.
-// Rarity multiplier (RARITY_MULT) is the only scaling axis.
-function statBase(stat: keyof ItemStats): number {
-  const bases: Record<keyof ItemStats, number> = {
-    atk:         0.7,
-    def:         0.12,
-    hp:          15,
-    atkSpeed:    0.04,
-    magicDamage: 0.7,
-    vision:      8,
-    moveSpeed:   0.05,
-    dropChance:  0.004,
-    goldMult:    0.04,
-    xpBonus:     0.025,
+/**
+ * Base stat value for an item at a given enemy level.
+ * Flat base + gentle per-level scaling so items found later are meaningfully
+ * stronger, but rarity multiplier (RARITY_MULT) remains the primary power axis.
+ *
+ * A common item at Lv10 is ~35 % stronger than at Lv1.
+ * A unique item at Lv10 is ~35 % stronger than a unique at Lv1,
+ * but still ~12× stronger than a common at the same level.
+ */
+function statBase(stat: keyof ItemStats, level: number): number {
+  type S = keyof ItemStats
+  const flat: Record<S, number> = {
+    atk:         0.50,  def:       0.08,  hp:          12,
+    atkSpeed:    0.030, magicDamage: 0.50, vision:       6,
+    moveSpeed:   0.040, dropChance: 0.003, goldMult:    0.030,
+    xpBonus:     0.020,
   }
-  return bases[stat]
+  const perLv: Record<S, number> = {
+    atk:         0.12,  def:       0.015, hp:          1.0,
+    atkSpeed:    0.003, magicDamage: 0.12, vision:      0.40,
+    moveSpeed:   0.002, dropChance: 0.0002, goldMult:  0.002,
+    xpBonus:     0.002,
+  }
+  return flat[stat] + level * perLv[stat]
 }
 
 const FLOAT_STATS = new Set<keyof ItemStats>(['atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus'])
@@ -137,7 +145,7 @@ export function generateItem(level: number, forMarket = false): Item {
   // ── Sub-attribute stats ───────────────────────────────────────────────────
   const stats: ItemStats = {}
   for (const s of chosen) {
-    const raw = statBase(s) * mult
+    const raw = statBase(s, level) * mult
     ;(stats as Record<string, number>)[s] = FLOAT_STATS.has(s)
       ? Math.round(raw * 1000) / 1000
       : Math.max(1, Math.round(raw))
@@ -163,8 +171,8 @@ export function generateItem(level: number, forMarket = false): Item {
   if (rarity === 'set') {
     const stat  = chosen[Math.floor(Math.random() * chosen.length)]
     const value = FLOAT_STATS.has(stat)
-      ? Math.round(statBase(stat) * 0.35 * 1000) / 1000
-      : Math.max(1, Math.round(statBase(stat) * 0.4))
+      ? Math.round(statBase(stat, level) * 0.35 * 1000) / 1000
+      : Math.max(1, Math.round(statBase(stat, level) * 0.4))
     setBonus = { stat, value }
   }
 

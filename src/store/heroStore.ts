@@ -24,18 +24,21 @@ interface HeroStore {
 
   spendPoint(attr: keyof Attributes): void
   optimizePoints(): void
+  applyPreset(preset: 'combat' | 'explorer' | 'mage'): void
   gainXp(amount: number): void
   earnGold(amount: number): void
   spendGold(amount: number): boolean
   restoreStamina(amount: number): void
   restoreMana(amount: number): void
+  consumeMana(amount: number): void
   gainSkipCharge(): void
   tickResources(deltaMs: number, speed: Speed): void
   consumeSkipCharge(): void
 }
 
 function xpForLevel(level: number): number {
-  return level * 20 + Math.floor(level ** 2.0) * 6
+  // Steep curve: ~100 XP at L1, ~5k at L10, ~32k at L20, ~110k at L30
+  return Math.floor(level * 80 + level ** 2.4 * 22)
 }
 
 const INITIAL_ATTRS: Attributes = {
@@ -78,6 +81,40 @@ export const useHeroStore = create<HeroStore>()(
       if (st.mana    > derived.maxMana)    st.mana    = derived.maxMana
     }),
 
+    /**
+     * Spend all free attribute points according to a role preset:
+     *   combat   — 45 % Força + 55 % Vitalidade  (ATK / HP / DEF)
+     *   explorer — 50 % Agilidade + 50 % Destreza (speed / dodge / efficiency)
+     *   mage     — 50 % Inteligência + 50 % Sabedoria (magic dmg / mana / vision)
+     */
+    applyPreset: (preset) => set((st) => {
+      if (st.freePoints <= 0) return
+      const pts = st.freePoints
+      let a = 0, b = 0
+
+      if (preset === 'combat') {
+        a = Math.round(pts * 0.45)
+        b = pts - a
+        st.attributes.forca      += a
+        st.attributes.vitalidade += b
+      } else if (preset === 'explorer') {
+        a = Math.floor(pts / 2)
+        b = pts - a
+        st.attributes.agilidade += a
+        st.attributes.destreza  += b
+      } else {
+        a = Math.floor(pts / 2)
+        b = pts - a
+        st.attributes.inteligencia += a
+        st.attributes.sabedoria    += b
+      }
+
+      st.freePoints = 0
+      const derived = getDerivedStats(st.attributes)
+      if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
+      if (st.mana    > derived.maxMana)    st.mana    = derived.maxMana
+    }),
+
     spendPoint: (attr) => set((st) => {
       if (st.freePoints <= 0) return
       st.attributes[attr] += 1
@@ -108,6 +145,10 @@ export const useHeroStore = create<HeroStore>()(
     restoreMana: (amount) => set((st) => {
       const derived = getDerivedStats(st.attributes)
       st.mana = Math.min(derived.maxMana, st.mana + amount)
+    }),
+
+    consumeMana: (amount) => set((st) => {
+      st.mana = Math.max(0, st.mana - amount)
     }),
 
     gainSkipCharge: () => set((st) => {

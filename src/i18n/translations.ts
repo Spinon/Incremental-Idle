@@ -50,6 +50,14 @@ const pt = {
     dodge: 'Esquiva', magicDmg: 'Dano Mágico', staminaEff: 'Efet. Stamina',
     manaEff: 'Efet. Mana', moveSpeed: 'Vel. Mov.', vision: 'Visão',
     dropChance: 'Chance Drop', goldMult: 'Mult. Ouro', xpBonus: 'Bônus XP',
+    maxSpeed: 'Vel. Máx Sustentável',
+  },
+  presets: {
+    label: 'Guia rápido',
+    combat:   '⚔ Combatente',
+    explorer: '🏃 Explorador',
+    mage:     '🧙 Mago',
+    even:     '⚖ Distribuir',
   },
 } as const
 
@@ -103,6 +111,14 @@ const en = {
     dodge: 'Dodge', magicDmg: 'Magic Dmg', staminaEff: 'Stamina Eff.',
     manaEff: 'Mana Eff.', moveSpeed: 'Move Spd', vision: 'Vision',
     dropChance: 'Drop Rate', goldMult: 'Gold Mult', xpBonus: 'XP Bonus',
+    maxSpeed: 'Max Sust. Speed',
+  },
+  presets: {
+    label: 'Quick build',
+    combat:   '⚔ Fighter',
+    explorer: '🏃 Explorer',
+    mage:     '🧙 Mage',
+    even:     '⚖ Balanced',
   },
 } as const
 

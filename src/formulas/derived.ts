@@ -20,7 +20,20 @@ const BASE = {
   xpBonus: 1,
 }
 
-export function getDerivedStats(a: Attributes, equip?: EquipBonuses): DerivedStats {
+/**
+ * Computes all derived stats from raw attributes, optional equipment bonuses,
+ * and the hero's current level.
+ *
+ * The `level` parameter adds a **passive combat baseline** that grows with
+ * experience independently of attribute choices:
+ *   ATK  += (level-1) × 1.5   — one free Força point worth of ATK per level
+ *   DEF  += ⌊(level-1) × 0.5⌋ — half a Vitalidade DEF point per level
+ *   HP   += (level-1) × 8     — between Força (5) and Vitalidade (15) HP per level
+ *
+ * This closes the scaling gap between a balanced hero and concentrated monster
+ * stats without forcing the player into a pure combat attribute build.
+ */
+export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1): DerivedStats {
   // Apply attribute bonuses from unique items before deriving stats
   const ab = equip?.attrBonus ?? {}
   const fa: Attributes = {
@@ -32,12 +45,13 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses): DerivedSta
     sabedoria:    a.sabedoria    + (ab.sabedoria    ?? 0),
     carisma:      a.carisma      + (ab.carisma      ?? 0),
   }
-  const eq = equip
+  const eq  = equip
+  const lvl = Math.max(0, level - 1)   // 0 at Lv1, 9 at Lv10, 19 at Lv20…
   return {
-    // Combat — small scaling + equipment
-    atk:           BASE.atk          + fa.forca        * 1.5  + (eq?.atk          ?? 0),
-    def:           BASE.def          + fa.vitalidade   * 0.5  + (eq?.def          ?? 0),
-    maxHp:         BASE.maxHp        + fa.vitalidade   * 15   + fa.forca * 5      + (eq?.hp           ?? 0),
+    // Combat — attribute scaling + passive level baseline + equipment
+    atk:    BASE.atk    + fa.forca      * 1.5  + lvl * 1.5              + (eq?.atk ?? 0),
+    def:    BASE.def    + fa.vitalidade * 0.5  + Math.floor(lvl * 0.5)  + (eq?.def ?? 0),
+    maxHp:  BASE.maxHp  + fa.vitalidade * 15   + fa.forca * 5 + lvl * 8 + (eq?.hp  ?? 0),
     attackSpeed:   BASE.attackSpeed  + fa.agilidade    * 0.1  + (eq?.atkSpeed     ?? 0),
     dodgeChance:                       fa.destreza     * 0.005,
     magicDamage:   BASE.magicDamage  + fa.inteligencia * 1    + (eq?.magicDamage  ?? 0),
