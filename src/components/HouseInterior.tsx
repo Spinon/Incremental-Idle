@@ -90,12 +90,30 @@ export default function HouseInterior() {
                       </p>
                       {defeatSnapshot.log.slice(0, 12).map((entry, i) => {
                         const isHero = entry.attacker === heroName
+                        if (entry.spell) {
+                          const { spell } = entry
+                          const color =
+                            spell.effectType === 'damage'  ? 'text-orange-400/80 bg-orange-950/20'
+                            : spell.effectType === 'heal'  ? 'text-emerald-400/80 bg-emerald-950/20'
+                            : spell.effectType === 'buff'  ? 'text-blue-400/80 bg-blue-950/20'
+                            : spell.effectType === 'debuff'? 'text-purple-400/80 bg-purple-950/20'
+                            :                               'text-amber-400/80 bg-amber-950/20'
+                          return (
+                            <div key={i} className={cn('text-[10px] px-2 py-0.5 rounded flex items-center gap-1', color)}>
+                              <span>{spell.icon}</span>
+                              <span className="font-semibold">{spell.name}</span>
+                              {spell.value > 0 && (
+                                <span className="ml-auto font-bold">
+                                  {spell.effectType === 'heal' ? `+${spell.value}` : `-${spell.value}`}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        }
                         return (
                           <div key={i} className={cn(
                             'text-[10px] px-2 py-0.5 rounded flex items-center gap-1',
-                            isHero
-                              ? 'text-blue-400/80 bg-blue-950/20'
-                              : 'text-red-400/80 bg-red-950/20',
+                            isHero ? 'text-blue-400/80 bg-blue-950/20' : 'text-red-400/80 bg-red-950/20',
                           )}>
                             {entry.missed
                               ? <span className="italic">{entry.attacker} <span className="font-bold">MISS</span></span>

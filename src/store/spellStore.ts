@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
-import { SPELL_MAP, getAvailableSpells } from '../data/spells'
+import { SPELL_MAP, SPELL_ICONS, getAvailableSpells } from '../data/spells'
 import { calcSpellDamage, calcSpellHeal } from '../formulas/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { useHeroStore } from './heroStore'
@@ -88,6 +88,18 @@ export const useSpellStore = create<SpellStore>()(
 
       // ── Apply battle effects BEFORE Immer set (no side effects inside set) ──
       const battleStore = useBattleStore.getState()
+
+      // Log the spell before applying so the float triggers together with the hit
+      battleStore.logSpell({
+        casterName: heroState.name,
+        name:       spell.name,
+        icon:       SPELL_ICONS[spellId] ?? '✨',
+        effectType: effect.type,
+        value:      effect.type === 'damage' ? dmg
+                  : effect.type === 'heal'   ? heal
+                  : 0,
+      })
+
       if (dmg  > 0) battleStore.applyMagicDamage(dmg)
       if (heal > 0) battleStore.healPlayer(heal)
 

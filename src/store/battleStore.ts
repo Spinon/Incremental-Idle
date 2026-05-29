@@ -29,12 +29,22 @@ export interface DefeatSnapshot {
   log: LogEntry[]
 }
 
+export interface SpellLogData {
+  name: string
+  icon: string
+  effectType: 'damage' | 'heal' | 'buff' | 'debuff' | 'utility'
+  /** Damage dealt (damage spells) or HP restored (heal spells); 0 for buff/debuff/utility. */
+  value: number
+}
+
 export interface LogEntry {
   attacker: string
   defender: string
   dmg: number
   /** true when the defender dodged the hit (dmg will be 0) */
   missed?: boolean
+  /** Present when this entry was produced by a spell cast, not a physical attack. */
+  spell?: SpellLogData
 }
 
 interface HeroSync { atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number }
@@ -66,6 +76,7 @@ interface BattleStore {
   switchAttacker(): void
   skipBattle(): void
   reset(): void
+  logSpell(data: SpellLogData & { casterName: string }): void
   applyMagicDamage(dmg: number): void
   healPlayer(hp: number): void
   applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
@@ -219,6 +230,19 @@ export const useBattleStore = create<BattleStore>()(
       st.player.hp = pHp; st.enemy.hp = eHp
       st.winner = pHp <= 0 ? 'enemy' : 'player'
       st.phase  = 'over'
+    }),
+
+    logSpell: ({ casterName, name, icon, effectType, value }) => set((st) => {
+      // For damage/debuff the target is the enemy; for heal/buff the caster benefits
+      const defender = (effectType === 'damage' || effectType === 'debuff')
+        ? st.enemy.name
+        : casterName
+      st.log.unshift({
+        attacker: casterName,
+        defender,
+        dmg: effectType === 'damage' ? value : 0,
+        spell: { name, icon, effectType, value },
+      })
     }),
 
     applyMagicDamage: (dmg) => set((st) => {

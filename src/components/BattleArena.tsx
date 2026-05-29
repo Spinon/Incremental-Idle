@@ -98,8 +98,8 @@ export default function BattleArena() {
   const timerC     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [impact, setImpact] = useState(false)
 
-  // Floating damage number state
-  interface DmgFloat { id: number; dmg: number; missed: boolean; side: 'player' | 'enemy' }
+  // Floating number state — positive value = heal (green), negative = damage
+  interface DmgFloat { id: number; value: number; missed: boolean; side: 'player' | 'enemy'; icon?: string }
   const [floats, setFloats] = useState<DmgFloat[]>([])
   const floatId = useRef(0)
   const lastLogLen = useRef(0)
@@ -108,12 +108,32 @@ export default function BattleArena() {
   const logLen = store.log.length
   useEffect(() => {
     if (logLen > lastLogLen.current && store.log.length > 0 && !store.skipAnim) {
-      const entry  = store.log[0]   // newest entry (unshifted to front)
-      const target = entry.attacker === store.player.name ? 'player' : 'enemy'
-      const id     = ++floatId.current
-      setFloats(prev => [...prev.slice(-6), { id, dmg: entry.dmg, missed: !!entry.missed, side: target }])
-      // clean up after animation
-      setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1150)
+      const entry = store.log[0]  // newest entry (unshifted to front)
+
+      // Float appears on the DEFENDER's side (the unit taking the hit/effect)
+      const side: 'player' | 'enemy' = entry.defender === store.player.name ? 'player' : 'enemy'
+
+      let floatValue = 0
+      let floatIcon: string | undefined
+
+      if (entry.missed) {
+        floatValue = 0  // "MISS" handled separately
+      } else if (entry.spell) {
+        if (entry.spell.effectType === 'damage')  floatValue = -(entry.spell.value)
+        else if (entry.spell.effectType === 'heal') floatValue = entry.spell.value
+        // buff/debuff/utility: show spell icon without a number
+        else floatIcon = entry.spell.icon
+      } else {
+        floatValue = -entry.dmg
+      }
+
+      // Skip utility floats that have no number or icon
+      const shouldFloat = entry.missed || floatValue !== 0 || floatIcon !== undefined
+      if (shouldFloat) {
+        const id = ++floatId.current
+        setFloats(prev => [...prev.slice(-6), { id, value: floatValue, missed: !!entry.missed, side, icon: floatIcon }])
+        setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1150)
+      }
     }
     lastLogLen.current = logLen
   }, [logLen]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -236,23 +256,31 @@ export default function BattleArena() {
           </div>
         )}
 
-        {/* Floating damage numbers */}
+        {/* Floating numbers (damage / heal / spell indicator) */}
         {floats.map(f => (
           <div
             key={f.id}
             className={cn(
-              'absolute anim-dmg-float font-black text-lg drop-shadow-md pointer-events-none',
-              f.side === 'player'
-                ? 'left-20 bottom-28'
-                : 'right-20 bottom-28',
+              'absolute anim-dmg-float font-black drop-shadow-lg pointer-events-none',
+              f.side === 'player' ? 'left-16 bottom-28' : 'right-16 bottom-28',
               f.missed
-                ? 'text-slate-400 dark:text-slate-500 text-base italic'
-                : f.side === 'player'
-                  ? 'text-red-500 dark:text-red-400'
-                  : 'text-yellow-400 dark:text-yellow-300',
+                ? 'text-slate-400 dark:text-slate-500 text-sm italic'
+                : f.icon
+                  ? 'text-2xl'
+                  : f.value > 0
+                    ? 'text-emerald-400 dark:text-emerald-300 text-lg'   // heal
+                    : f.side === 'player'
+                      ? 'text-red-500 dark:text-red-400 text-lg'          // player takes damage
+                      : 'text-yellow-300 dark:text-yellow-200 text-xl',   // enemy takes damage
             )}
           >
-            {f.missed ? 'MISS' : `-${f.dmg}`}
+            {f.missed
+              ? 'MISS'
+              : f.icon
+                ? f.icon
+                : f.value > 0
+                  ? `+${f.value}`
+                  : `${f.value}`}
           </div>
         ))}
 
@@ -543,10 +571,38 @@ export default function BattleArena() {
           ? <p className="text-xs text-slate-400 dark:text-slate-600 italic">{t.awaiting}</p>
           : store.log.map((entry, i) => {
               const isPlayerAttacker = entry.attacker === store.player.name
+              const isNew = i === 0
+
+              // ── Spell entry ──────────────────────────────────────────────
+              if (entry.spell) {
+                const { spell } = entry
+                const bgClass =
+                  spell.effectType === 'damage'  ? (isNew ? 'bg-orange-50/70 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-600')
+                  : spell.effectType === 'heal'   ? (isNew ? 'bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-600')
+                  : spell.effectType === 'buff'   ? (isNew ? 'bg-blue-50/70 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300' : 'text-slate-400 dark:text-slate-600')
+                  : spell.effectType === 'debuff' ? (isNew ? 'bg-purple-50/70 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300' : 'text-slate-400 dark:text-slate-600')
+                  :                                 (isNew ? 'bg-amber-50/70 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300' : 'text-slate-400 dark:text-slate-600')
+                return (
+                  <div key={i} className={cn('text-[11px] leading-tight py-0.5 px-1.5 rounded mb-0.5 flex items-center gap-1', bgClass)}>
+                    <span className="shrink-0">{spell.icon}</span>
+                    <span className={cn('truncate', isNew && 'font-semibold')}>{spell.name}</span>
+                    {spell.value > 0 && (
+                      <span className={cn('ml-auto font-bold tabular-nums shrink-0', isNew && (
+                        spell.effectType === 'damage' ? 'text-orange-600 dark:text-orange-300'
+                        : 'text-emerald-600 dark:text-emerald-300'
+                      ))}>
+                        {spell.effectType === 'heal' ? `+${spell.value}` : `-${spell.value}`}
+                      </span>
+                    )}
+                  </div>
+                )
+              }
+
+              // ── Physical attack entry ────────────────────────────────────
               return (
                 <div key={i} className={cn(
                   'text-[11px] leading-tight py-0.5 px-1.5 rounded mb-0.5 flex items-center gap-1',
-                  i === 0
+                  isNew
                     ? entry.missed
                       ? 'text-slate-500 dark:text-slate-400 italic bg-slate-100/50 dark:bg-slate-800/40'
                       : isPlayerAttacker
@@ -557,10 +613,10 @@ export default function BattleArena() {
                   {entry.missed
                     ? <span>{entry.attacker} <span className="font-bold">MISS</span></span>
                     : <>
-                        <span className={i === 0 ? 'font-semibold' : ''}>{entry.attacker}</span>
-                        <span className="opacity-50">→</span>
-                        <span className={i === 0 ? 'font-semibold' : ''}>{entry.defender}</span>
-                        <span className={cn('ml-auto font-bold tabular-nums', i === 0 && (isPlayerAttacker ? 'text-indigo-600 dark:text-indigo-300' : 'text-red-600 dark:text-red-300'))}>
+                        <span className={isNew ? 'font-semibold' : ''}>{entry.attacker}</span>
+                        <span className="opacity-40">→</span>
+                        <span className={isNew ? 'font-semibold' : ''}>{entry.defender}</span>
+                        <span className={cn('ml-auto font-bold tabular-nums shrink-0', isNew && (isPlayerAttacker ? 'text-indigo-600 dark:text-indigo-300' : 'text-red-600 dark:text-red-300'))}>
                           -{entry.dmg}
                         </span>
                       </>
