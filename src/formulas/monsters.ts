@@ -45,15 +45,25 @@ export function pickMonsterRarity(tilesPlaced = 0): MonsterRarity {
   return 'normal'
 }
 
-/** Derive combat stats directly from raw attribute values (monster-specific formula). */
+/**
+ * Derive combat stats from raw attribute values using the same formulas as the
+ * hero wherever applicable.  Stat distribution (via MonsterPreferences) is the
+ * only mechanical difference between monster types.
+ */
 function monsterStats(a: Attributes) {
   return {
-    atk:         Math.max(1, Math.round(a.forca * 2.5 + a.destreza * 0.6)),
-    def:         Math.max(0, Math.round(a.vitalidade * 0.5)),
-    maxHp:       Math.max(5, Math.round(a.vitalidade * 8 + a.forca * 3 + 5)),
-    attackSpeed: Math.max(0.1, Math.round((0.5 + a.agilidade * 0.12 + a.destreza * 0.04) * 100) / 100),
-    // Same coefficient as the hero (agilidade * 0.005) — dodge is a reflexes stat.
-    dodgeChance: Math.min(0.5, Math.round(a.agilidade * 0.005 * 1000) / 1000),
+    // ── Same coefficients as hero ─────────────────────────────────────────
+    atk:             Math.max(1, Math.round(a.forca * 2.5 + a.destreza * 0.6)),
+    // DEF: vitalidade (tank) + inteligência (combat wisdom), same as hero
+    def:             Math.max(0, Math.round(a.vitalidade * 0.5 + a.inteligencia * 0.2)),
+    maxHp:           Math.max(5, Math.round(a.vitalidade * 8 + a.forca * 3 + 5)),
+    attackSpeed:     Math.max(0.1, Math.round((0.5 + a.agilidade * 0.12 + a.destreza * 0.04) * 100) / 100),
+    dodgeChance:     Math.min(0.50, Math.round(a.agilidade * 0.005 * 1000) / 1000),
+    // Critical hits — destreza gives chance, forca amplifies damage (identical to hero)
+    critChance:      Math.min(0.50, Math.round(a.destreza * 0.005 * 1000) / 1000),
+    critDamage:      1.5 + a.forca * 0.01,
+    // Defensive efficiency — destreza gives technique-based damage reduction
+    damageReduction: Math.min(0.35, Math.round(a.destreza * 0.01 * 1000) / 1000),
   }
 }
 
@@ -118,9 +128,9 @@ export function buildMonster(
     def:             s.def,
     atkSpeed:        s.attackSpeed,
     dodgeChance:     s.dodgeChance,
-    critChance:      0,     // monsters don't crit (reserved for future elite mobs)
-    critDamage:      1.5,   // default multiplier (irrelevant while critChance = 0)
-    damageReduction: 0,     // monsters have no technique-based damage reduction
+    critChance:      s.critChance,
+    critDamage:      s.critDamage,
+    damageReduction: s.damageReduction,
     rarity,
     monsterType:     template.id,
   }
