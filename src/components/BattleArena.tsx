@@ -256,34 +256,6 @@ export default function BattleArena() {
           </div>
         )}
 
-        {/* Floating numbers (damage / heal / spell indicator) */}
-        {floats.map(f => (
-          <div
-            key={f.id}
-            className={cn(
-              'absolute anim-dmg-float font-black drop-shadow-lg pointer-events-none',
-              f.side === 'player' ? 'left-16 bottom-28' : 'right-16 bottom-28',
-              f.missed
-                ? 'text-slate-400 dark:text-slate-500 text-sm italic'
-                : f.icon
-                  ? 'text-2xl'
-                  : f.value > 0
-                    ? 'text-emerald-400 dark:text-emerald-300 text-lg'   // heal
-                    : f.side === 'player'
-                      ? 'text-red-500 dark:text-red-400 text-lg'          // player takes damage
-                      : 'text-yellow-300 dark:text-yellow-200 text-xl',   // enemy takes damage
-            )}
-          >
-            {f.missed
-              ? 'MISS'
-              : f.icon
-                ? f.icon
-                : f.value > 0
-                  ? `+${f.value}`
-                  : `${f.value}`}
-          </div>
-        ))}
-
         {/* Player */}
         <div className="absolute left-10 bottom-[72px] flex flex-col items-start gap-2">
           <HpBar name={store.player.name} current={store.player.hp} max={store.player.maxHp} side="player" />
@@ -320,6 +292,28 @@ export default function BattleArena() {
             <UnitSprite side="enemy" isHit={enemyHit} hitDuration={hitDur} monsterType={store.enemy.monsterType} />
           </div>
         </div>
+
+        {/* Floating numbers — after sprites so they render on top */}
+        {floats.map(f => (
+          <div
+            key={f.id}
+            className={cn(
+              'absolute z-10 anim-dmg-float font-black drop-shadow-lg pointer-events-none',
+              f.side === 'player' ? 'left-16 bottom-28' : 'right-16 bottom-28',
+              f.missed
+                ? 'text-slate-400 dark:text-slate-500 text-sm italic'
+                : f.icon
+                  ? 'text-2xl'
+                  : f.value > 0
+                    ? 'text-emerald-400 dark:text-emerald-300 text-lg'
+                    : f.side === 'player'
+                      ? 'text-red-500 dark:text-red-400 text-lg'
+                      : 'text-yellow-300 dark:text-yellow-200 text-xl',
+            )}
+          >
+            {f.missed ? 'MISS' : f.icon ? f.icon : f.value > 0 ? `+${f.value}` : `${f.value}`}
+          </div>
+        ))}
 
         {/* Battle over overlay */}
         {store.phase === 'over' && (

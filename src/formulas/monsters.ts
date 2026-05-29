@@ -27,12 +27,21 @@ export const MONSTER_RARITY_COLOR: Record<MonsterRarity, string> = {
   unique:   'text-orange-400',
 }
 
-export function pickMonsterRarity(): MonsterRarity {
+/**
+ * Pick a monster rarity, gated by how many tiles have been placed.
+ * Higher rarities unlock every 20 tiles:
+ *   0+ → normal only
+ *  20+ → uncommon unlocked
+ *  40+ → rare unlocked
+ *  60+ → epic unlocked
+ *  80+ → unique unlocked
+ */
+export function pickMonsterRarity(tilesPlaced = 0): MonsterRarity {
   const r = Math.random() * 100
-  if (r < 0.1)  return 'unique'
-  if (r < 1.0)  return 'epic'
-  if (r < 4.0)  return 'rare'
-  if (r < 14.0) return 'uncommon'
+  if (r < 0.1  && tilesPlaced >= 80) return 'unique'
+  if (r < 1.0  && tilesPlaced >= 60) return 'epic'
+  if (r < 4.0  && tilesPlaced >= 40) return 'rare'
+  if (r < 14.0 && tilesPlaced >= 20) return 'uncommon'
   return 'normal'
 }
 

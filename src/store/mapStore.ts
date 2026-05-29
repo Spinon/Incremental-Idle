@@ -38,7 +38,7 @@ function heroRelativeLevel(heroLevel: number): number {
   return Math.max(1, heroLevel + offset)
 }
 
-export function generateContent(level: number): TileContent {
+export function generateContent(level: number, tilesPlaced = 0): TileContent {
   const r = Math.random()
   if (r < 0.015) return { type: 'market' }
   if (r < 0.04) {
@@ -52,7 +52,7 @@ export function generateContent(level: number): TileContent {
       type: 'monster',
       monsterLevel: level,
       monsterType:   pickForestMonster().id,
-      monsterRarity: pickMonsterRarity(),
+      monsterRarity: pickMonsterRarity(tilesPlaced),
     }
   }
   return { type: 'empty' }
@@ -348,7 +348,7 @@ export const useMapStore = create<MapStore>()(
             content = { type: sighted.type } as TileContent   // market or empty — level-independent
           }
         } else {
-          content = generateContent(tileLevel)
+          content = generateContent(tileLevel, st.tilesPlaced)
         }
         delete st.sightedCells[key]
 
@@ -491,7 +491,7 @@ export const useMapStore = create<MapStore>()(
             if (st.grid[key] || st.sightedCells[key]) continue
             // Fog content also hero-relative so previewed areas feel appropriate
             const lvl = heroRelativeLevel(heroLevel)
-            st.sightedCells[key] = generateContent(lvl)
+            st.sightedCells[key] = generateContent(lvl, st.tilesPlaced)
           }
         }
       }),
