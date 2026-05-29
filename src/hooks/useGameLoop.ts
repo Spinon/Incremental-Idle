@@ -104,10 +104,10 @@ export function useGameLoop() {
 
           useMapStore.getState().moveOneStep(useHeroStore.getState().level)
 
-          // ── Auto-place tiles (when auto-explore is active) ───────────────
+          // ── Auto-place tiles (Full Auto mode only) ──────────────────────
           // Place every valid tile immediately — if the map becomes fully
           // enclosed with a full deck, trigger a forced home → restart.
-          if (useMapStore.getState().autoExplore) {
+          if (useMapStore.getState().autoExplore === 'full') {
             const mapStore = useMapStore.getState()
             // Place all tiles that currently fit
             while (useMapStore.getState().tryAutoPlace()) { /* */ }

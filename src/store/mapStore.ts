@@ -208,7 +208,12 @@ interface MapStore {
   /** Monster-specific XP kept separate so a hero-level range check can be applied. */
   pendingMonsterXp: { xp: number; monsterLevel: number } | null
   sightedCells: Record<string, TileContent>
-  autoExplore: boolean
+  /**
+   * 'manual'   — player controls everything (no automation)
+   * 'move'     — auto-pathfinding to unexplored tiles (original Auto behaviour)
+   * 'full'     — auto-pathfinding + auto-tile-placement + auto-restart when stuck
+   */
+  autoExplore: 'manual' | 'move' | 'full'
   scene: 'map' | 'home' | 'market'
   tilesPlaced: number
   defeatPending: boolean
@@ -229,7 +234,7 @@ interface MapStore {
 
   placeTile(tileId: string, x: number, y: number): void
   setDestination(x: number, y: number): void
-  setAutoExplore(v: boolean): void
+  setAutoExplore(v: 'manual' | 'move' | 'full'): void
   drainXp(): number
   drainGold(): number
   drainMonsterXp(): { xp: number; monsterLevel: number } | null
@@ -258,7 +263,7 @@ export const useMapStore = create<MapStore>()(
       pendingGold: 0,
       pendingMonsterXp: null,
       sightedCells: {},
-      autoExplore: true,
+      autoExplore: 'move' as 'manual' | 'move' | 'full',
       scene: 'map' as 'map' | 'home' | 'market',
       tilesPlaced: 0,
       defeatPending: false,
@@ -450,7 +455,7 @@ export const useMapStore = create<MapStore>()(
         let queueRarity: MonsterRarity | undefined
 
         set((st) => {
-          if (!st.destination && st.autoExplore) {
+          if (!st.destination && st.autoExplore !== 'manual') {
             const target = findNearestUnexplored(st.grid, st.playerPos, heroLevel)
             if (target) st.destination = target
           }
@@ -566,6 +571,17 @@ export const useMapStore = create<MapStore>()(
         }
       }),
     })),
-    { name: 'incremental-idle-map' },
+    {
+      name: 'incremental-idle-map',
+      version: 1,
+      migrate: (raw, version) => {
+        const s = raw as Record<string, unknown>
+        // v0 stored autoExplore as boolean — migrate to the 3-state string
+        if (version < 1 && typeof s.autoExplore === 'boolean') {
+          s.autoExplore = s.autoExplore ? 'move' : 'manual'
+        }
+        return s as unknown as MapStore
+      },
+    },
   ),
 )

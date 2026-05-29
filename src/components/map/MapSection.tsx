@@ -96,19 +96,38 @@ export default function MapSection() {
         </span>
 
         <div className="ml-auto flex items-center gap-1">
-          {/* Auto-explore toggle */}
-          <button
-            onClick={() => setAutoExplore(!autoExplore)}
-            title={autoExplore ? t.autoExplore : t.stay}
-            className={cn(
-              'h-6 px-2 rounded text-[10px] font-semibold border transition-colors',
-              autoExplore
-                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500'
-                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
-            )}
-          >
-            {autoExplore ? '⟳ Auto' : '☞ Manual'}
-          </button>
+          {/* Auto-explore toggle — cycles Manual → Auto Move → Full Auto */}
+          {(() => {
+            const cycle: Record<typeof autoExplore, typeof autoExplore> = {
+              manual: 'move',
+              move:   'full',
+              full:   'manual',
+            }
+            const labels = {
+              manual: '☞ Manual',
+              move:   '⟳ Auto Move',
+              full:   '⚙ Full Auto',
+            }
+            const styles = {
+              manual: 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
+              move:   'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500',
+              full:   'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-500',
+            }
+            const titles = {
+              manual: 'Clique para Auto Move',
+              move:   'Clique para Full Auto',
+              full:   'Clique para Manual',
+            }
+            return (
+              <button
+                onClick={() => setAutoExplore(cycle[autoExplore])}
+                title={titles[autoExplore]}
+                className={cn('h-6 px-2 rounded text-[10px] font-semibold border transition-colors', styles[autoExplore])}
+              >
+                {labels[autoExplore]}
+              </button>
+            )
+          })()}
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
