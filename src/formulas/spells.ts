@@ -13,11 +13,12 @@ export function calcSpellDamage(spell: Spell, derived: DerivedStats): number {
   return Math.max(1, Math.round(raw))
 }
 
-/** Final heal amount from a spell */
+/** Final heal amount from a spell (includes Sabedoria healBonus multiplier). */
 export function calcSpellHeal(spell: Spell, derived: DerivedStats): number {
   const { base = 0, scaling = 0, scalingStat } = spell.effect
   const statValue = scalingStat ? (derived[scalingStat] as number) : 0
-  return Math.max(1, Math.round(base + scaling * statValue))
+  const raw = Math.max(1, Math.round(base + scaling * statValue))
+  return Math.max(1, Math.round(raw * derived.healBonus))
 }
 
 /** Apply active buffs on top of derived stats (non-mutating) */

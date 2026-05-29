@@ -109,15 +109,18 @@ export function buildMonster(
   const prefix = label ? `[${label}] ` : ''
 
   return {
-    name:        prefix + template.name,
+    name:            prefix + template.name,
     level,
-    hp:          s.maxHp,
-    maxHp:       s.maxHp,
-    atk:         s.atk,
-    def:         s.def,
-    atkSpeed:    s.attackSpeed,
-    dodgeChance: s.dodgeChance,
+    hp:              s.maxHp,
+    maxHp:           s.maxHp,
+    atk:             s.atk,
+    def:             s.def,
+    atkSpeed:        s.attackSpeed,
+    dodgeChance:     s.dodgeChance,
+    critChance:      0,     // monsters don't crit (reserved for future elite mobs)
+    critDamage:      1.5,   // default multiplier (irrelevant while critChance = 0)
+    damageReduction: 0,     // monsters have no technique-based damage reduction
     rarity,
-    monsterType: template.id,
+    monsterType:     template.id,
   }
 }

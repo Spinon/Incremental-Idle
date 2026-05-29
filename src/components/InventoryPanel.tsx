@@ -6,6 +6,7 @@ import { getEquipmentBonuses, ATTR_LABEL_PT, ATTR_LABEL_EN } from '../formulas/i
 import { getDerivedStats } from '../formulas/derived'
 import { cn } from '../lib/utils'
 import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, Consumable } from '../types/item'
+import SpellbookPanel from './SpellbookPanel'
 
 const ALL_RARITIES: ItemRarity[] = ['common', 'uncommon', 'rare', 'epic', 'set', 'unique']
 
@@ -1098,6 +1099,14 @@ export default function InventoryPanel() {
               : 'Nenhum item ainda — derrote monstros para encontrar equipamentos!'}
           </p>
         )}
+      </div>
+
+      {/* ─── Spellbook section ───────────────────────────────────────────── */}
+      <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+        <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold mb-3">
+          {isEn ? 'Spellbook' : 'Grimório'}
+        </p>
+        <SpellbookPanel />
       </div>
 
       {/* ─── Consumables section ─────────────────────────────────────────── */}

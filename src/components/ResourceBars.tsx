@@ -31,17 +31,22 @@ export default function ResourceBars() {
           <span className="font-bold text-amber-600 dark:text-amber-400/90 tracking-wide">{t.stamina}</span>
           <span className="text-slate-500 dark:text-slate-400 tabular-nums">
             {Math.floor(stamina)}<span className="text-slate-400 dark:text-slate-600">/{Math.round(derived.maxStamina)}</span>
+            <span className={cn(
+              'ml-2 text-[10px] font-semibold',
+              netChange > 0
+                ? 'text-amber-600/70 dark:text-amber-500/70'
+                : netChange < 0
+                  ? 'text-red-500 dark:text-red-400'
+                  : 'text-slate-400 dark:text-slate-500'
+            )}>
+              {netChange > 0 ? '+' : ''}{netChange.toFixed(1)}/s
+            </span>
             {timeLeft !== null && (
               <span className={cn(
-                'ml-2 font-semibold',
-                timeLeft > 15 ? 'text-slate-400 dark:text-slate-500' : timeLeft > 5 ? 'text-orange-500 dark:text-orange-400' : 'text-red-500 dark:text-red-400'
+                'ml-1 text-[10px]',
+                timeLeft > 10 ? 'text-slate-400 dark:text-slate-500' : timeLeft > 5 ? 'text-orange-500 dark:text-orange-400' : 'text-red-500 dark:text-red-400'
               )}>
-                {timeLeft.toFixed(1)}s
-              </span>
-            )}
-            {netChange > 0 && (
-              <span className="ml-2 text-amber-600/60 dark:text-amber-600/70 text-[10px]">
-                +{netChange.toFixed(1)}/s
+                ({timeLeft.toFixed(0)}s)
               </span>
             )}
           </span>

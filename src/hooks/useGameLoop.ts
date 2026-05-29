@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
-import { useMapStore } from '../store/mapStore'
+import { useMapStore, gridKey } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
@@ -86,17 +86,19 @@ export function useGameLoop() {
       const scene = useMapStore.getState().scene
 
       // ── Market exit detection ─────────────────────────────────────────────
-      // When exitMarket() fires it sets scene='map' but doesn't queue an enemy
-      // or call reset(). We detect the market→map transition here and do both
-      // in the same game-loop tick so React batches the updates into one render
-      // (preventing the BattleArena from briefly mounting with phase='over' and
-      // double-granting XP from the previous fight).
+      // exitMarket() already repositioned the hero to the exit tile. We just
+      // need to queue an enemy for that tile and reset the battle.
+      // NOTE: do NOT call moveOneStep here — that was causing a 2-tile skip.
       if (prevScene.current === 'market' && scene === 'map') {
-        useMapStore.getState().moveOneStep(heroLvl)
-        const xpFromStep = useMapStore.getState().drainXp()
-        if (xpFromStep > 0) gainXp(xpFromStep)
-        const goldFromStep = useMapStore.getState().drainGold()
-        if (goldFromStep > 0) earnGold(goldFromStep)
+        const mapSt2  = useMapStore.getState()
+        const curTile = mapSt2.grid[gridKey(mapSt2.playerPos.x, mapSt2.playerPos.y)]
+        if (curTile && curTile.content.type !== 'market') {
+          useBattleStore.getState().queueEnemy(
+            Math.max(1, curTile.level),
+            curTile.content.monsterType,
+            curTile.content.monsterRarity as MonsterRarity | undefined,
+          )
+        }
         useBattleStore.getState().reset()
         prevTurn.current = -1
       }

@@ -152,20 +152,25 @@ export default function HeroPanel() {
         )}
 
         <div className="grid grid-cols-2 gap-x-3">
-          <StatRow label={t.statNames.atk}        value={String(Math.round(derived.atk))} />
-          <StatRow label={t.statNames.def}        value={derived.def.toFixed(1)} />
-          <StatRow label={t.statNames.hpMax}      value={String(Math.round(derived.maxHp))} />
-          <StatRow label={t.statNames.atkSpeed}   value={derived.attackSpeed.toFixed(2)} />
-          <StatRow label={t.statNames.dodge}      value={`${(derived.dodgeChance * 100).toFixed(1)}%`} />
-          <StatRow label={t.statNames.magicDmg}   value={String(Math.round(derived.magicDamage))} />
-          <StatRow label={t.statNames.staminaEff} value={`${derived.staminaEfficiency.toFixed(2)}×`} />
-          <StatRow label={t.statNames.manaEff}    value={`${derived.manaEfficiency.toFixed(2)}×`} />
-          <StatRow label={t.statNames.moveSpeed}  value={`${derived.moveSpeed.toFixed(2)}×`} />
-          <StatRow label={t.statNames.maxSpeed}   value={`${maxSpeed}×`} />
-          <StatRow label={t.statNames.vision}     value={String(Math.round(derived.vision))} />
-          <StatRow label={t.statNames.dropChance} value={`${(derived.dropChance * 100).toFixed(1)}%`} />
-          <StatRow label={t.statNames.goldMult}   value={`${derived.goldMultiplier.toFixed(2)}×`} />
-          <StatRow label={t.statNames.xpBonus}    value={`${derived.xpBonus.toFixed(2)}×`} />
+          <StatRow label={t.statNames.atk}             value={String(Math.round(derived.atk))} />
+          <StatRow label={t.statNames.def}             value={derived.def.toFixed(1)} />
+          <StatRow label={t.statNames.hpMax}           value={String(Math.round(derived.maxHp))} />
+          <StatRow label={t.statNames.atkSpeed}        value={derived.attackSpeed.toFixed(2)} />
+          <StatRow label={t.statNames.dodge}           value={`${(derived.dodgeChance * 100).toFixed(1)}%`} />
+          <StatRow label={t.statNames.critChance}      value={`${(derived.critChance * 100).toFixed(1)}%`} />
+          <StatRow label={t.statNames.critDamage}      value={`${derived.critDamage.toFixed(2)}×`} />
+          <StatRow label={t.statNames.damageReduction} value={`${(derived.damageReduction * 100).toFixed(1)}%`} />
+          <StatRow label={t.statNames.magicDmg}        value={String(Math.round(derived.magicDamage))} />
+          <StatRow label={t.statNames.healBonus}       value={`${derived.healBonus.toFixed(2)}×`} />
+          <StatRow label={t.statNames.staminaEff}      value={`${derived.staminaEfficiency.toFixed(2)}×`} />
+          <StatRow label={t.statNames.manaEff}         value={`${derived.manaEfficiency.toFixed(2)}×`} />
+          <StatRow label={t.statNames.moveSpeed}       value={`${derived.moveSpeed.toFixed(2)}×`} />
+          <StatRow label={t.statNames.maxSpeed}        value={`${maxSpeed}×`} />
+          <StatRow label={t.statNames.vision}          value={String(Math.round(derived.vision))} />
+          <StatRow label={t.statNames.dropChance}      value={`${(derived.dropChance * 100).toFixed(1)}%`} />
+          <StatRow label={t.statNames.goldEfficiency}  value={`${((derived.goldEfficiency - 1) * 100).toFixed(0)}% desc.`} />
+          <StatRow label={t.statNames.goldMult}        value={`${derived.goldMultiplier.toFixed(2)}×`} />
+          <StatRow label={t.statNames.xpBonus}        value={`${derived.xpBonus.toFixed(2)}×`} />
         </div>
       </div>
     </div>

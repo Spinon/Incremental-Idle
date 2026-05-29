@@ -64,7 +64,12 @@ function GameRoot() {
   useEffect(() => {
     const equip = getEquipmentBonuses(equipment)
     const d     = getDerivedStats(attributes, equip, heroLevel)
-    syncFromHero({ atk: d.atk, def: d.def, maxHp: d.maxHp, atkSpeed: d.attackSpeed, dodgeChance: d.dodgeChance })
+    syncFromHero({
+      atk: d.atk, def: d.def, maxHp: d.maxHp,
+      atkSpeed: d.attackSpeed, dodgeChance: d.dodgeChance,
+      critChance: d.critChance, critDamage: d.critDamage,
+      damageReduction: d.damageReduction,
+    })
   }, [attributes, equipment, heroLevel, syncFromHero])
 
   // Level-up notification

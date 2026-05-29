@@ -9,25 +9,31 @@ export interface Attributes {
 }
 
 export interface DerivedStats {
-  // Combat
+  // Combat — primary
   atk: number
   def: number
   maxHp: number
   attackSpeed: number
-  dodgeChance: number
+  dodgeChance: number       // Agilidade
   magicDamage: number
+  // Combat — advanced
+  critChance: number        // Destreza — probability of a critical hit (0–0.5)
+  critDamage: number        // Força   — critical hit damage multiplier (≥1.5)
+  damageReduction: number   // Destreza — fraction of all incoming damage negated (0–0.35)
+  healBonus: number         // Sabedoria — multiplies all spell heals cast by the hero
   // Resources
   maxStamina: number
   staminaRegen: number
-  staminaEfficiency: number   // reduces drain rate — driven by Agilidade + Destreza
+  staminaEfficiency: number   // reduces drain rate — Agilidade + Destreza
   maxMana: number
   manaRegen: number
-  manaEfficiency: number      // reduces mana cost of abilities — driven by Inteligência
+  manaEfficiency: number      // reduces mana cost — Inteligência
   // Exploration
   moveSpeed: number
   vision: number
-  // Drops & progression
+  // Economy & drops
   dropChance: number
   goldMultiplier: number
-  xpBonus: number             // multiplies XP gained — driven by Carisma
+  goldEfficiency: number      // Carisma — buy discount / sell overcharge in market
+  xpBonus: number
 }

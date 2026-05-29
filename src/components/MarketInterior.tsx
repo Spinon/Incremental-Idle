@@ -4,7 +4,8 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
-import { generateMarketOffer, wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN } from '../formulas/items'
+import { generateMarketOffer, wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses } from '../formulas/items'
+import { getDerivedStats } from '../formulas/derived'
 import { DROP_WORDS, WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
@@ -125,11 +126,17 @@ export default function MarketInterior() {
   const addItem        = useInventoryStore(s => s.addItem)
   const addConsumable  = useInventoryStore(s => s.addConsumable)
 
-  const earnWord     = useSpellStore(s => s.earnWord)
+  const earnWord      = useSpellStore(s => s.earnWord)
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
-  const heroLevel    = useHeroStore(s => s.level)
-  const heroAttrs    = useHeroStore(s => s.attributes)
-  const tilesPlaced  = useMapStore(s => s.tilesPlaced)
+  const heroLevel     = useHeroStore(s => s.level)
+  const heroAttrs     = useHeroStore(s => s.attributes)
+  const equipment     = useInventoryStore(s => s.equipment)
+  const tilesPlaced   = useMapStore(s => s.tilesPlaced)
+
+  // Carisma-based market discount: prices divided by goldEfficiency
+  const goldEfficiency = getDerivedStats(heroAttrs, getEquipmentBonuses(equipment), heroLevel).goldEfficiency
+  /** Effective buy price after Carisma discount. */
+  const eff = (base: number) => Math.max(1, Math.round(base / goldEfficiency))
 
   // Generate offer once on mount
   const [offer] = useState<MarketOffer>(() => generateMarketOffer(tileLevel))
@@ -194,24 +201,26 @@ export default function MarketInterior() {
 
   function buyConsumable(c: Consumable) {
     setPaused(true)
-    if (!spendGold(c.price)) return
+    const price = eff(c.price)
+    if (!spendGold(price)) return
     const ok = addConsumable(c)
-    if (!ok) { useHeroStore.getState().earnGold(c.price); showFail(c.id); return }
+    if (!ok) { useHeroStore.getState().earnGold(price); showFail(c.id); return }
     setBought(b => new Set(b).add(c.id))
   }
 
   function buyWord(wo: WordOffer) {
     setPaused(true)
-    if (!spendGold(wo.price)) return
+    if (!spendGold(eff(wo.price))) return
     earnWord(wo.wordId)
     setBought(b => new Set(b).add(wo.wordId))
   }
 
   function buyEquipment(item: Item) {
     setPaused(true)
-    if (!spendGold(item.price!)) return
+    const price = eff(item.price!)
+    if (!spendGold(price)) return
     const ok = addItem(item as Item)
-    if (!ok) { useHeroStore.getState().earnGold(item.price!); showFail(item.id); return }
+    if (!ok) { useHeroStore.getState().earnGold(price); showFail(item.id); return }
     setBought(b => new Set(b).add(item.id))
   }
 
@@ -299,7 +308,10 @@ export default function MarketInterior() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">⬡ {c.price}</span>
+                    <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">
+                      ⬡ {eff(c.price)}
+                      {eff(c.price) < c.price && <span className="text-[9px] text-emerald-400 ml-0.5 line-through opacity-60">{c.price}</span>}
+                    </span>
                     <button
                       onClick={() => buyConsumable(c)}
                       disabled={isBought || !canAfford}
@@ -373,7 +385,10 @@ export default function MarketInterior() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">⬡ {price}</span>
+                    <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">
+                      ⬡ {eff(price)}
+                      {eff(price) < price && <span className="text-[9px] text-emerald-400 ml-0.5 line-through opacity-60">{price}</span>}
+                    </span>
                     <button
                       onClick={() => buyEquipment(item)}
                       disabled={isBought || !canAfford}
@@ -463,7 +478,10 @@ export default function MarketInterior() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">⬡ {wo.price}</span>
+                        <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">
+                          ⬡ {eff(wo.price)}
+                          {eff(wo.price) < wo.price && <span className="text-[9px] text-emerald-400 ml-0.5 line-through opacity-60">{wo.price}</span>}
+                        </span>
                         <button
                           onClick={() => buyWord(wo)}
                           disabled={isBought || !canAfford}

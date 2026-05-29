@@ -97,19 +97,28 @@ export { ATTR_LABEL_PT, ATTR_LABEL_EN }
  * A unique item at Lv10 is ~35 % stronger than a unique at Lv1,
  * but still ~12× stronger than a common at the same level.
  */
+/**
+ * Base stat per item, scaled by enemy level and rarity multiplier.
+ * With the armor-ratio formula (k=20) DEF items are tuned to shift the
+ * ratio meaningfully; ATK items push raw output; HP items provide a
+ * reliable buffer against the ratio-based damage.
+ *
+ * Reference — rare item (×3.2) at enemy level 10:
+ *   ATK 11  DEF 8  HP 112  AtkSpd 0.29  MagicDmg 11
+ */
 function statBase(stat: keyof ItemStats, level: number): number {
   type S = keyof ItemStats
   const flat: Record<S, number> = {
-    atk:         0.50,  def:       0.08,  hp:          12,
-    atkSpeed:    0.030, magicDamage: 0.50, vision:       6,
-    moveSpeed:   0.040, dropChance: 0.003, goldMult:    0.030,
-    xpBonus:     0.020,
+    atk:         1.5,   def:         1.0,   hp:          25,
+    atkSpeed:    0.05,  magicDamage: 1.5,   vision:      8,
+    moveSpeed:   0.05,  dropChance:  0.005, goldMult:    0.05,
+    xpBonus:     0.03,
   }
   const perLv: Record<S, number> = {
-    atk:         0.12,  def:       0.015, hp:          1.0,
-    atkSpeed:    0.003, magicDamage: 0.12, vision:      0.40,
-    moveSpeed:   0.002, dropChance: 0.0002, goldMult:  0.002,
-    xpBonus:     0.002,
+    atk:         0.20,  def:         0.15,  hp:          2.5,
+    atkSpeed:    0.006, magicDamage: 0.20,  vision:      0.5,
+    moveSpeed:   0.003, dropChance:  0.0003, goldMult:   0.004,
+    xpBonus:     0.003,
   }
   return flat[stat] + level * perLv[stat]
 }

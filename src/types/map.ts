@@ -5,6 +5,10 @@ export interface TileContent {
   type: 'empty' | 'monster' | 'treasure' | 'market'
   xpAmount?: number
   monsterLevel?: number
+  /** Monster template ID (e.g. 'goblin', 'wolf') */
+  monsterType?: string
+  /** Monster rarity string (MonsterRarity) */
+  monsterRarity?: string
 }
 
 export interface MapTile {

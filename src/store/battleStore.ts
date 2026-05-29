@@ -17,9 +17,12 @@ export interface Unit {
   atk: number
   def: number
   atkSpeed: number
-  dodgeChance: number   // 0–1 fraction
+  dodgeChance: number       // 0–1  (Agilidade for hero, destreza-derived for monsters)
+  critChance: number        // 0–0.5 probability of a critical hit
+  critDamage: number        // multiplier on crit (1.5 = 150% damage)
+  damageReduction: number   // 0–0.35 flat fraction of ALL incoming damage negated
   rarity?: MonsterRarity
-  monsterType?: string  // template id, e.g. 'goblin', 'wolf'
+  monsterType?: string
 }
 
 export interface DefeatSnapshot {
@@ -47,7 +50,10 @@ export interface LogEntry {
   spell?: SpellLogData
 }
 
-interface HeroSync { atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number }
+interface HeroSync {
+  atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number
+  critChance: number; critDamage: number; damageReduction: number
+}
 
 interface BattleStore {
   player: Unit
@@ -86,6 +92,7 @@ interface BattleStore {
 const INITIAL_PLAYER: Unit = {
   name: 'Hero', level: 0, hp: 30, maxHp: 30,
   atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
+  critChance: 0, critDamage: 1.5, damageReduction: 0,
 }
 
 function makeInitialEnemy(): Unit {
@@ -93,29 +100,36 @@ function makeInitialEnemy(): Unit {
 }
 
 /**
- * Hybrid damage formula — two-phase reduction:
+ * Armor-ratio damage formula — replaces hybrid linear+percent model.
  *
  * Phase 1 (linear absorption): DEF points subtract directly from ATK, floored
  *   at 15 % of ATK so even 0-damage hits never occur.
  *   → identical to the old formula for low DEF, where it matters most.
  *
- * Phase 2 (percentage mitigation): each DEF point provides an additional
- *   3 % damage reduction on top of the linear phase, soft-capped at 50 %.
- *   → makes investing deeply in DEF progressively more rewarding.
+ * Armor-ratio k=20 (pure percentage, no absolute subtraction):
+ *   damage = atk × 20 / (def + 20)
+ *   DEF  0 → 100 %    DEF 10 → 67 %    DEF 20 → 50 %    DEF 40 → 33 %
+ *   Natural diminishing returns — no hard cap, no minimum floor.
  *
- * Net effect:
- *   DEF  5 → ~25–30 % total reduction (Phase1 dominant)
- *   DEF 10 → ~40–45 % total reduction
- *   DEF 20 → ~55–60 % total reduction (Phase2 starts to cap)
- *   DEF 30 → ~65 %  (Phase2 at cap, Phase1 still active)
+ * Then defensive efficiency (Destreza, capped 35 %) applied multiplicatively:
+ *   damage ×= (1 − d.damageReduction)
  *
- * Variance ±15 % applied at the end.
+ * Then critical hit (Destreza critChance, Força critDamage):
+ *   if rand < a.critChance → damage ×= a.critDamage
+ *
+ * Variance ±15 % last.
  */
 function calcDmg(a: Unit, d: Unit): number {
-  const absorbed   = Math.max(Math.round(a.atk * 0.15), a.atk - d.def)
-  const mitigation = Math.min(0.50, d.def * 0.03)
-  const base       = Math.max(1, Math.round(absorbed * (1 - mitigation)))
-  const variance   = 0.85 + Math.random() * 0.3
+  const K = 20
+  const armor  = K / (d.def + K)
+  const defEff = 1 - d.damageReduction
+  let base = Math.max(1, Math.round(a.atk * armor * defEff))
+
+  if (a.critChance > 0 && Math.random() < a.critChance) {
+    base = Math.round(base * a.critDamage)
+  }
+
+  const variance = 0.85 + Math.random() * 0.3
   return Math.max(1, Math.round(base * variance))
 }
 
@@ -166,12 +180,15 @@ export const useBattleStore = create<BattleStore>()(
       }
     }),
 
-    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance }) => set((st) => {
-      st.player.atk         = Math.round(atk)
-      st.player.def         = def
-      st.player.maxHp       = Math.round(maxHp)
-      st.player.atkSpeed    = atkSpeed
-      st.player.dodgeChance = dodgeChance
+    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, damageReduction }) => set((st) => {
+      st.player.atk             = Math.round(atk)
+      st.player.def             = def
+      st.player.maxHp           = Math.round(maxHp)
+      st.player.atkSpeed        = atkSpeed
+      st.player.dodgeChance     = dodgeChance
+      st.player.critChance      = critChance
+      st.player.critDamage      = critDamage
+      st.player.damageReduction = damageReduction
       if (st.player.hp > st.player.maxHp) st.player.hp = st.player.maxHp
     }),
 

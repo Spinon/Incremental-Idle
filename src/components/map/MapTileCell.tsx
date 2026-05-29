@@ -1,5 +1,6 @@
 import type { PlacedTile } from '../../types/map'
-import { goblinStats } from '../../store/battleStore'
+import { buildMonster } from '../../formulas/monsters'
+import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
 import { cn } from '../../lib/utils'
 
 export type Visibility = 'clear' | 'penumbra' | 'fog'
@@ -25,9 +26,10 @@ const BG_MARKET   = 'bg-indigo-950/70'
 function buildTitle(tile: PlacedTile): string {
   const base = `Tile Nível ${tile.level}`
   if (tile.content.type === 'monster') {
-    const lvl = tile.content.monsterLevel ?? tile.level
-    const g   = goblinStats(lvl)
-    return `${base} — Goblin Nv.${lvl}\nHP ${g.hp}  ATK ${g.atk}  DEF ${g.def}`
+    const lvl      = tile.content.monsterLevel ?? tile.level
+    const template = FOREST_MONSTER_MAP.get(tile.content.monsterType ?? '') ?? FOREST_MONSTERS[0]
+    const g        = buildMonster(template, lvl, 'normal')
+    return `${base} — ${template.name} Nv.${lvl}\nHP ${g.hp}  ATK ${g.atk}  DEF ${g.def}`
   }
   if (tile.content.type === 'treasure') return `${base} — Tesouro: ${tile.content.xpAmount} XP`
   if (tile.content.type === 'market')   return `${base} — Mercado`
