@@ -10,8 +10,8 @@ const BASE = {
   maxStamina: 100,
   staminaRegen: 4,
   staminaEfficiency: 1,
-  maxMana: 50,
-  manaRegen: 3,
+  maxMana: 150,
+  manaRegen: 0.5,
   manaEfficiency: 1,
   moveSpeed: 1,
   vision: 100,
@@ -72,8 +72,8 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
     staminaEfficiency: BASE.staminaEfficiency + fa.agilidade * 0.04 + fa.destreza   * 0.025,
 
     // ── Mana ─────────────────────────────────────────────────────────────────
-    maxMana:        BASE.maxMana        + fa.sabedoria    * 15  + fa.inteligencia * 5,
-    manaRegen:      BASE.manaRegen      + fa.sabedoria    * 1   + fa.inteligencia * 0.3,
+      maxMana:        BASE.maxMana        + fa.sabedoria    * 20  + fa.inteligencia * 8,
+    manaRegen:      BASE.manaRegen      + fa.sabedoria    * 1.5 + fa.inteligencia * 0.2,
     manaEfficiency: BASE.manaEfficiency + fa.inteligencia * 0.04,
 
     // ── Exploration ──────────────────────────────────────────────────────────

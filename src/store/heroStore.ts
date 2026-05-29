@@ -56,7 +56,7 @@ export const useHeroStore = create<HeroStore>()(
     freePoints: 7,
     attributes: { ...INITIAL_ATTRS },
     stamina: 100,
-    mana: 50,
+    mana: 150,
     skipCharges: 3,
     maxSkipCharges: 3,
     gold: 0,
