@@ -3,6 +3,7 @@ import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
+import { useUIStore } from '../store/uiStore'
 import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { useT } from '../i18n/useT'
@@ -68,6 +69,9 @@ export default function BattleArena() {
   const mana            = useHeroStore(s => s.mana)
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
+
+  const showMini       = useUIStore(s => s.showMiniPlayer)
+  const toggleMini     = useUIStore(s => s.toggleMiniPlayer)
 
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const autoConfigRef = useRef<HTMLDivElement>(null)
@@ -218,6 +222,20 @@ export default function BattleArena() {
     <div className="w-full">
       {/* ── Arena ─────────────────────────────────────────── */}
       <div className="relative h-80 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xl select-none arena-bg">
+
+        {/* Mini-player toggle */}
+        <button
+          onClick={toggleMini}
+          title={showMini ? (isEn ? 'Close mini player' : 'Fechar mini player') : (isEn ? 'Open mini player' : 'Abrir mini player')}
+          className={cn(
+            'absolute top-2 right-2 z-10 w-6 h-6 rounded-md text-[11px] flex items-center justify-center transition-colors border',
+            showMini
+              ? 'bg-indigo-600 border-indigo-500 text-white'
+              : 'bg-black/20 border-white/10 text-white/50 hover:bg-black/40 hover:text-white/80',
+          )}
+        >
+          ⊞
+        </button>
 
         {/* Stars (dark only) */}
         {([

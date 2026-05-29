@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import MiniBattlePlayer from './components/MiniBattlePlayer'
 import BattleArena from './components/BattleArena'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
@@ -85,6 +86,7 @@ function GameRoot() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+      <MiniBattlePlayer />
       <NotifToast />
       {/* Header */}
       <header className="border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center gap-3">
