@@ -437,7 +437,7 @@ export const useMapStore = create<MapStore>()(
       resetMap: (startLevel) => set((st) => {
         // First tiles are always 5 levels below the hero to avoid defeat loops
         const deckLevel = Math.max(1, (startLevel ?? 1) - 5)
-        st.grid               = { [gridKey(0, 0)]: { ...INITIAL_TILE } }
+        st.grid               = { [gridKey(0, 0)]: { ...INITIAL_TILE, level: deckLevel } }
         st.deck               = Array.from({ length: 3 }, () => generateTile(deckLevel))
         st.playerPos          = { x: 0, y: 0 }
         st.destination        = null
