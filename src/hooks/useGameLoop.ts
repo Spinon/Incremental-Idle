@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
-import { useMapStore, gridKey } from '../store/mapStore'
+import { useMapStore } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
@@ -86,19 +86,16 @@ export function useGameLoop() {
       const scene = useMapStore.getState().scene
 
       // ── Market exit detection ─────────────────────────────────────────────
-      // exitMarket() already repositioned the hero to the exit tile. We just
-      // need to queue an enemy for that tile and reset the battle.
-      // NOTE: do NOT call moveOneStep here — that was causing a 2-tile skip.
+      // processMarketExitTile() marks the exit tile as explored, grants any
+      // first-encounter rewards, and queues the correct enemy (including the
+      // tile-based stealth buff via tilesPlaced).  This also fixes the bug
+      // where market exits left the exit tile permanently unexplored.
       if (prevScene.current === 'market' && scene === 'map') {
-        const mapSt2  = useMapStore.getState()
-        const curTile = mapSt2.grid[gridKey(mapSt2.playerPos.x, mapSt2.playerPos.y)]
-        if (curTile && curTile.content.type !== 'market') {
-          useBattleStore.getState().queueEnemy(
-            Math.max(1, curTile.level),
-            curTile.content.monsterType,
-            curTile.content.monsterRarity as MonsterRarity | undefined,
-          )
-        }
+        useMapStore.getState().processMarketExitTile()
+        const tileXp2 = useMapStore.getState().drainXp()
+        if (tileXp2 > 0) gainXp(tileXp2)
+        const gold2 = useMapStore.getState().drainGold()
+        if (gold2 > 0) earnGold(gold2)
         useBattleStore.getState().reset()
         prevTurn.current = -1
       }

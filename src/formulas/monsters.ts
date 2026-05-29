@@ -105,13 +105,19 @@ function distributePoints(prefs: MonsterPreferences, total: number): Attributes 
 }
 
 export function buildMonster(
-  template: MonsterTemplate,
-  level:    number,
-  rarity:   MonsterRarity = 'normal',
+  template:    MonsterTemplate,
+  level:       number,
+  rarity:      MonsterRarity = 'normal',
+  tilesPlaced  = 0,
 ): Unit {
-  const totalPoints = template.basePoints
-    + level * template.pointsPerLevel
-    + MONSTER_RARITY_BONUS[rarity]
+  // Stealth scaling: +5% total attribute points per 10 tiles placed.
+  // Invisible to the player in the UI but makes enemies progressively
+  // stronger as the map grows — keeps the game challenging mid-run.
+  const tileMult   = 1 + Math.floor(tilesPlaced / 10) * 0.05
+  const totalPoints = Math.round(
+    (template.basePoints + level * template.pointsPerLevel + MONSTER_RARITY_BONUS[rarity])
+    * tileMult,
+  )
 
   const attrs = distributePoints(template.preferences, totalPoints)
   const s     = monsterStats(attrs)

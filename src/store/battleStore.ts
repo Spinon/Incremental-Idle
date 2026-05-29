@@ -70,6 +70,7 @@ interface BattleStore {
   nextEnemyLevel: number
   nextEnemyType: string
   nextEnemyRarity: MonsterRarity
+  nextTilesPlaced: number
   hitsLeft: number
   comboSize: number
   defeatSnapshot: DefeatSnapshot | null
@@ -78,7 +79,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity): void
+  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number): void
   captureDefeat(): void
   applyHit(): void
   switchAttacker(): void
@@ -161,6 +162,7 @@ export const useBattleStore = create<BattleStore>()(
     nextEnemyLevel: 1,
     nextEnemyType: 'goblin',
     nextEnemyRarity: 'normal' as MonsterRarity,
+    nextTilesPlaced: 0,
     hitsLeft: 1,
     comboSize: 1,
     defeatSnapshot: null,
@@ -169,10 +171,11 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    queueEnemy: (level, monsterType, monsterRarity) => set((st) => {
-      st.nextEnemyLevel  = level
-      st.nextEnemyType   = monsterType  ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
-      st.nextEnemyRarity = monsterRarity ?? pickMonsterRarity()
+    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced) => set((st) => {
+      st.nextEnemyLevel   = level
+      st.nextEnemyType    = monsterType   ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
+      st.nextEnemyRarity  = monsterRarity ?? pickMonsterRarity()
+      st.nextTilesPlaced  = tilesPlaced   ?? st.nextTilesPlaced
     }),
 
     captureDefeat: () => set((st) => {
@@ -306,7 +309,7 @@ export const useBattleStore = create<BattleStore>()(
     reset: () => set((st) => {
       const template = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
       st.player.hp    = st.player.maxHp
-      st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity)
+      st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
       st.phase        = 'idle'
       st.attacker     = 'player'
       st.winner       = null
@@ -326,6 +329,7 @@ export const useBattleStore = create<BattleStore>()(
       nextEnemyLevel:   state.nextEnemyLevel,
       nextEnemyType:    state.nextEnemyType,
       nextEnemyRarity:  state.nextEnemyRarity,
+      nextTilesPlaced:  state.nextTilesPlaced,
       defeatSnapshot:   state.defeatSnapshot,
     }),
   }

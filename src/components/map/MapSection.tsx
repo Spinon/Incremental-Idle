@@ -204,7 +204,7 @@ export default function MapSection() {
           {/* Tile info panel — shows below viewport when a tile is selected */}
           {selectedTile && (
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3">
-              <TileInfoPanel tile={selectedTile} onClose={() => setSelectedPos(null)} />
+              <TileInfoPanel tile={selectedTile} onClose={() => setSelectedPos(null)} tilesPlaced={tilesPlaced} />
             </div>
           )}
 
@@ -227,6 +227,7 @@ export default function MapSection() {
             playerPos={playerPos}
             visRadius={visRadius}
             heroLevel={heroLevel}
+            tilesPlaced={tilesPlaced}
             selectedPos={selectedPos}
             onSelect={(x, y) => handleTileClick(x, y)}
           />
@@ -256,11 +257,12 @@ interface NearbyPanelProps {
   playerPos: { x: number; y: number }
   visRadius: number
   heroLevel: number
+  tilesPlaced: number
   selectedPos: { x: number; y: number } | null
   onSelect(x: number, y: number): void
 }
 
-function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, selectedPos, onSelect }: NearbyPanelProps) {
+function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, tilesPlaced, selectedPos, onSelect }: NearbyPanelProps) {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
 
@@ -277,7 +279,7 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
       const mType    = tile.content.monsterType ?? 'goblin'
       const mRarity  = (tile.content.monsterRarity ?? 'normal') as MonsterRarity
       const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
-      const monster  = buildMonster(template, lvl, mRarity)
+      const monster  = buildMonster(template, lvl, mRarity, tilesPlaced)
       result.push({
         x: tile.x, y: tile.y, level: lvl,
         monsterType: mType, monsterRarity: mRarity,
@@ -298,7 +300,7 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
       const mType    = content.monsterType ?? 'goblin'
       const mRarity  = (content.monsterRarity ?? 'normal') as MonsterRarity
       const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
-      const monster  = buildMonster(template, lvl, mRarity)
+      const monster  = buildMonster(template, lvl, mRarity, tilesPlaced)
       result.push({
         x, y, level: lvl,
         monsterType: mType, monsterRarity: mRarity,
@@ -315,7 +317,7 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
     })
 
     return result
-  }, [grid, sightedCells, playerPos, visRadius])
+  }, [grid, sightedCells, playerPos, visRadius, tilesPlaced])
 
   if (entries.length === 0) {
     return (
@@ -382,7 +384,7 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
 
 // ─── Tile info sub-component ─────────────────────────────────────────────────
 
-function TileInfoPanel({ tile, onClose }: { tile: PlacedTile; onClose(): void }) {
+function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: PlacedTile; onClose(): void; tilesPlaced?: number }) {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
 
@@ -395,7 +397,7 @@ function TileInfoPanel({ tile, onClose }: { tile: PlacedTile; onClose(): void })
   if (content.type === 'empty' && prevKey.current !== emptyTileKey) {
     prevKey.current = emptyTileKey
     const tpl = FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)]
-    emptyMonster.current = { template: tpl, stats: buildMonster(tpl, level, 'normal') }
+    emptyMonster.current = { template: tpl, stats: buildMonster(tpl, level, 'normal', tilesPlaced) }
   }
 
   const headerLabel =
@@ -427,7 +429,7 @@ function TileInfoPanel({ tile, onClose }: { tile: PlacedTile; onClose(): void })
       {content.type === 'monster' && (() => {
         const lvl      = content.monsterLevel ?? level
         const template = FOREST_MONSTER_MAP.get(content.monsterType ?? '') ?? FOREST_MONSTERS[0]
-        const g        = buildMonster(template, lvl, (content.monsterRarity ?? 'normal') as MonsterRarity)
+        const g        = buildMonster(template, lvl, (content.monsterRarity ?? 'normal') as MonsterRarity, tilesPlaced)
         return (
           <div className="flex gap-4 text-[11px] text-slate-400">
             <span>{template.emoji} {template.name} <span className="text-red-400 font-semibold">Nv.{lvl}</span></span>
