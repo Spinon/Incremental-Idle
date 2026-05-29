@@ -4,9 +4,12 @@ import { useBattleStore } from '../store/battleStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { generateMarketOffer, ATTR_LABEL_PT, ATTR_LABEL_EN } from '../formulas/items'
+import { useSpellStore, getKnownWordIds } from '../store/spellStore'
+import { generateMarketOffer, wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN } from '../formulas/items'
+import { DROP_WORDS, WORD_MAP } from '../data/words'
+import { WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
-import type { Item, Consumable, ItemRarity, MarketOffer } from '../types/item'
+import type { Item, Consumable, ItemRarity, MarketOffer, WordOffer } from '../types/item'
 
 // ─── Rarity colours (minimal palette) ────────────────────────────────────────
 
@@ -108,7 +111,6 @@ const AUTO_LEAVE_MS = 6000
 export default function MarketInterior() {
   const leaveScene   = useMapStore(s => s.leaveScene)
   const exitMarket   = useMapStore(s => s.exitMarket)
-  const queueEnemy   = useBattleStore(s => s.queueEnemy)
   const resetBattle  = useBattleStore(s => s.reset)
   const setSellMode  = useInventoryStore(s => s.setSellMode)
   const lang       = useSettingsStore(s => s.lang)
@@ -126,8 +128,34 @@ export default function MarketInterior() {
   const addItem        = useInventoryStore(s => s.addItem)
   const addConsumable  = useInventoryStore(s => s.addConsumable)
 
+  const earnWord     = useSpellStore(s => s.earnWord)
+  const earnedWordIds = useSpellStore(s => s.earnedWordIds)
+  const heroLevel    = useHeroStore(s => s.level)
+  const heroAttrs    = useHeroStore(s => s.attributes)
+  const tilesPlaced  = useMapStore(s => s.tilesPlaced)
+
   // Generate offer once on mount
   const [offer] = useState<MarketOffer>(() => generateMarketOffer(tileLevel))
+
+  // Generate word offers once on mount — filtered by progression and known words
+  const [wordOffers] = useState<WordOffer[]>(() => {
+    const knownIds = new Set(getKnownWordIds(
+      heroLevel, heroAttrs.inteligencia, heroAttrs.sabedoria, earnedWordIds,
+    ))
+    const available = DROP_WORDS.filter(w => {
+      if (knownIds.has(w.id)) return false
+      if (w.rarity === 'unique' && tilesPlaced < 80) return false
+      if (w.rarity === 'epic'   && tilesPlaced < 60) return false
+      if (w.rarity === 'rare'   && tilesPlaced < 40) return false
+      return true
+    })
+    // Shuffle and take up to 2
+    const shuffled = [...available].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, 2).map(w => ({
+      wordId: w.id,
+      price:  wordPrice(w.rarity as 'rare' | 'epic' | 'unique', tileLevel),
+    }))
+  })
 
   // Track what was bought (id-set)
   const [bought, setBought]   = useState<Set<string>>(new Set())
@@ -166,6 +194,13 @@ export default function MarketInterior() {
     const ok = addConsumable(c)
     if (!ok) { useHeroStore.getState().earnGold(c.price); showFail(c.id); return }
     setBought(b => new Set(b).add(c.id))
+  }
+
+  function buyWord(wo: WordOffer) {
+    setPaused(true)
+    if (!spendGold(wo.price)) return
+    earnWord(wo.wordId)
+    setBought(b => new Set(b).add(wo.wordId))
   }
 
   function buyEquipment(item: Item) {
@@ -356,6 +391,98 @@ export default function MarketInterior() {
           </div>
         </div>
 
+        {/* ── Spellbook words ── */}
+        {wordOffers.length > 0 && (
+          <>
+            <div className="h-px bg-indigo-900/40" />
+            <div>
+              <p className="text-[9px] text-indigo-400/60 uppercase tracking-widest font-semibold mb-2">
+                {isEn ? 'Arcane Words' : 'Palavras Arcanas'}
+              </p>
+              <div className="flex flex-col gap-2">
+                {wordOffers.map(wo => {
+                  const word      = WORD_MAP.get(wo.wordId)
+                  if (!word) return null
+                  const isBought  = bought.has(wo.wordId)
+                  const canAfford = gold >= wo.price
+                  const icon      = WORD_ICONS[word.id] ?? '📖'
+
+                  // Count new spell combos this word would unlock with current known words
+                  const knownIds = getKnownWordIds(
+                    heroLevel, heroAttrs.inteligencia, heroAttrs.sabedoria, earnedWordIds,
+                  )
+                  const newCombos = knownIds.length  // 1 new word × N known = N new combos
+
+                  const rarityBorder: Record<string, string> = {
+                    rare:   'border-blue-500/50',
+                    epic:   'border-purple-500/50',
+                    unique: 'border-orange-500/50',
+                  }
+                  const rarityText: Record<string, string> = {
+                    rare:   'text-blue-400',
+                    epic:   'text-purple-400',
+                    unique: 'text-orange-400',
+                  }
+                  const rarLbls: Record<string, string> = isEn
+                    ? { rare: 'Rare', epic: 'Epic', unique: 'Unique' }
+                    : { rare: 'Raro', epic: 'Épico', unique: 'Único' }
+                  const rarLbl = rarLbls[word.rarity] ?? word.rarity
+
+                  return (
+                    <div
+                      key={wo.wordId}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors bg-indigo-950/40',
+                        isBought ? 'border-green-800/40 opacity-60' : rarityBorder[word.rarity] ?? 'border-indigo-800/30',
+                      )}
+                    >
+                      <span className="text-2xl shrink-0">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={cn('text-[12px] font-bold', rarityText[word.rarity])}>
+                            {isEn ? word.nameEn : word.namePt}
+                          </span>
+                          <span className={cn('text-[8px] font-semibold uppercase tracking-widest', rarityText[word.rarity])}>
+                            {rarLbl}
+                          </span>
+                          <span className="text-[9px] text-indigo-500/60 capitalize">
+                            {isEn ? word.category : word.category === 'element' ? 'elemento' : 'forma'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-indigo-400/60 mt-0.5">
+                          {word.description}
+                        </div>
+                        <div className="text-[9px] text-indigo-500/70 mt-0.5">
+                          {isEn
+                            ? `+${newCombos} new spell${newCombos !== 1 ? 's' : ''} unlocked`
+                            : `+${newCombos} novo${newCombos !== 1 ? 's' : ''} feitiço${newCombos !== 1 ? 's' : ''} desbloqueado${newCombos !== 1 ? 's' : ''}`}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">⬡ {wo.price}</span>
+                        <button
+                          onClick={() => buyWord(wo)}
+                          disabled={isBought || !canAfford}
+                          className={cn(
+                            'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors',
+                            isBought
+                              ? 'opacity-40 cursor-not-allowed bg-green-900/20 border-green-800/30 text-green-500'
+                              : canAfford
+                                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500'
+                                : 'opacity-30 cursor-not-allowed bg-indigo-900/30 border-indigo-800/30 text-indigo-500',
+                          )}
+                        >
+                          {isBought ? (isEn ? 'Learned' : 'Aprendida') : (isEn ? 'Learn' : 'Aprender')}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Footer actions */}
         <div className="flex gap-2">
           {/* Manual sell button — opens sell mode in inventory (stays in market) */}
@@ -371,11 +498,7 @@ export default function MarketInterior() {
             <button
               onClick={() => {
                 exitMarket()
-                const pending = useMapStore.getState().pendingBattle
-                if (pending) {
-                  queueEnemy(pending.level)
-                  resetBattle()
-                }
+                resetBattle()
               }}
               className="w-full py-2 rounded-lg text-sm font-semibold border border-indigo-700/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-900/40 transition-colors relative z-10"
             >

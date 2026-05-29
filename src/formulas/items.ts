@@ -88,18 +88,20 @@ export { ATTR_LABEL_PT, ATTR_LABEL_EN }
 
 // ─── Stat scaling ─────────────────────────────────────────────────────────────
 
-function statBase(stat: keyof ItemStats, level: number): number {
+// Flat bases — full unique set ≈ 10 hero-level equivalents in combat power.
+// Rarity multiplier (RARITY_MULT) is the only scaling axis.
+function statBase(stat: keyof ItemStats): number {
   const bases: Record<keyof ItemStats, number> = {
-    atk:         1.5 + level * 1.2,
-    def:         1.0 + level * 0.8,
-    hp:          8   + level * 7,
-    atkSpeed:    0.04 + level * 0.015,
-    magicDamage: 1.5 + level * 1.2,
-    vision:      5   + level * 3,
-    moveSpeed:   0.03 + level * 0.01,
-    dropChance:  0.008 + level * 0.004,
-    goldMult:    0.04 + level * 0.025,
-    xpBonus:     0.04 + level * 0.025,
+    atk:         0.7,
+    def:         0.12,
+    hp:          15,
+    atkSpeed:    0.04,
+    magicDamage: 0.7,
+    vision:      8,
+    moveSpeed:   0.05,
+    dropChance:  0.004,
+    goldMult:    0.04,
+    xpBonus:     0.025,
   }
   return bases[stat]
 }
@@ -135,7 +137,7 @@ export function generateItem(level: number, forMarket = false): Item {
   // ── Sub-attribute stats ───────────────────────────────────────────────────
   const stats: ItemStats = {}
   for (const s of chosen) {
-    const raw = statBase(s, level) * mult
+    const raw = statBase(s) * mult
     ;(stats as Record<string, number>)[s] = FLOAT_STATS.has(s)
       ? Math.round(raw * 1000) / 1000
       : Math.max(1, Math.round(raw))
@@ -161,8 +163,8 @@ export function generateItem(level: number, forMarket = false): Item {
   if (rarity === 'set') {
     const stat  = chosen[Math.floor(Math.random() * chosen.length)]
     const value = FLOAT_STATS.has(stat)
-      ? Math.round(statBase(stat, level) * 0.35 * 1000) / 1000
-      : Math.max(1, Math.round(statBase(stat, level) * 0.4))
+      ? Math.round(statBase(stat) * 0.35 * 1000) / 1000
+      : Math.max(1, Math.round(statBase(stat) * 0.4))
     setBonus = { stat, value }
   }
 
@@ -172,7 +174,7 @@ export function generateItem(level: number, forMarket = false): Item {
     const numAttrs   = Math.random() < 0.6 ? 2 : 1   // 60% chance of 2 attrs
     const shuffled   = [...ALL_ATTRS].sort(() => Math.random() - 0.5)
     const picked     = shuffled.slice(0, numAttrs)
-    const perAttr    = Math.max(1, Math.round(0.5 + level * 0.2))
+    const perAttr    = Math.random() < 0.5 ? 2 : 1
     attrBonus = {}
     for (const a of picked) attrBonus[a] = perAttr
   }
@@ -277,10 +279,25 @@ export function generateConsumable(level: number): Consumable {
   }
 }
 
+/**
+ * Price for a word of the given rarity at the current market tile level.
+ * Uses the same base as items (20 + level*6) with a 1.5× premium — words
+ * unlock multiple spells simultaneously, so they're worth more than one item.
+ *
+ *   rare   × 9  (items × 6)
+ *   epic   × 24 (items × 16)
+ *   unique × 90 (items × 60)
+ */
+export function wordPrice(rarity: 'rare' | 'epic' | 'unique', tileLevel: number): number {
+  const base: Record<string, number> = { rare: 9, epic: 24, unique: 90 }
+  return Math.round((20 + tileLevel * 6) * base[rarity])
+}
+
 export function generateMarketOffer(level: number): MarketOffer {
   return {
     consumables: [generateConsumable(level), generateConsumable(level)],
     equipment:   [generateItem(level, true), generateItem(level, true)],
+    words:       [],   // populated by MarketInterior which has access to known words
   }
 }
 

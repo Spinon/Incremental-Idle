@@ -74,10 +74,16 @@ export interface Consumable {
   price:     number
 }
 
+export interface WordOffer {
+  wordId: string
+  price:  number
+}
+
 /** Fresh offer generated each time the player enters a market. */
 export interface MarketOffer {
   consumables: Consumable[]   // 2 entries
   equipment:   Item[]         // 2 entries
+  words:       WordOffer[]    // 0-2 entries, filtered by progression
 }
 
 // ─── Equipment bonuses ────────────────────────────────────────────────────────

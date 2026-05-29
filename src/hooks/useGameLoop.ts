@@ -4,10 +4,26 @@ import { useHeroStore } from '../store/heroStore'
 import { useMapStore } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
-import { useSpellStore } from '../store/spellStore'
+import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses } from '../formulas/items'
+import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
+import type { MonsterRarity } from '../types/monster'
+
+// Chance a monster of each rarity drops a word on defeat
+const WORD_DROP_CHANCE: Partial<Record<MonsterRarity, number>> = {
+  rare:   0.02,
+  epic:   0.04,
+  unique: 0.10,
+}
+
+// Which word rarities each monster rarity can drop (cumulative)
+const WORD_DROP_POOL: Partial<Record<MonsterRarity, ReadonlyArray<'rare' | 'epic' | 'unique'>>> = {
+  rare:   ['rare'],
+  epic:   ['rare', 'epic'],
+  unique: ['rare', 'epic', 'unique'],
+}
 
 const RARITY_LABEL_PT: Record<string, string> = {
   common: 'Comum', uncommon: 'Incomum', rare: 'Raro',
@@ -126,6 +142,44 @@ export function useGameLoop() {
                 ] : [
                   { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'inventory-panel' },
                 ],
+              })
+            }
+          }
+
+          // Word drop (rare+ monsters only)
+          const enemy         = useBattleStore.getState().enemy
+          const monsterRarity = enemy.rarity as MonsterRarity | undefined
+          const dropChance    = monsterRarity ? WORD_DROP_CHANCE[monsterRarity] : undefined
+
+          if (dropChance && Math.random() < dropChance) {
+            const allowedRarities = WORD_DROP_POOL[monsterRarity!]!
+            const spellSt         = useSpellStore.getState()
+            const heroSt          = useHeroStore.getState()
+            const knownIds        = new Set(getKnownWordIds(
+              heroSt.level, heroSt.attributes.inteligencia,
+              heroSt.attributes.sabedoria, spellSt.earnedWordIds,
+            ))
+
+            // Filter DROP_WORDS to eligible rarities and not already known
+            const candidates = DROP_WORDS.filter(
+              w => allowedRarities.includes(w.rarity as 'rare' | 'epic' | 'unique')
+                && !knownIds.has(w.id),
+            )
+
+            if (candidates.length > 0) {
+              const word = candidates[Math.floor(Math.random() * candidates.length)]
+              useSpellStore.getState().earnWord(word.id)
+
+              const rarityPt = RARITY_LABEL_PT[word.rarity] ?? word.rarity
+              const rarityEn = RARITY_LABEL_EN[word.rarity] ?? word.rarity
+              useNotifStore.getState().push({
+                title:    '📖 Palavra aprendida!',
+                titleEn:  '📖 Word learned!',
+                body:     `${rarityPt} — ${word.namePt}`,
+                bodyEn:   `${rarityEn} — ${word.nameEn}`,
+                rarity:   word.rarity as 'rare' | 'epic' | 'unique',
+                scrollTo: 'inventory-panel',
+                actions:  [{ label: 'Ver Grimório', labelEn: 'View Spellbook', kind: 'scroll', payload: 'inventory-panel' }],
               })
             }
           }
