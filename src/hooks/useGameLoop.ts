@@ -105,23 +105,26 @@ export function useGameLoop() {
           useMapStore.getState().moveOneStep(useHeroStore.getState().level)
 
           // ── Auto-place tiles (Full Auto mode only) ──────────────────────
-          // Place every valid tile immediately — if the map becomes fully
-          // enclosed with a full deck, trigger a forced home → restart.
           if (useMapStore.getState().autoExplore === 'full') {
-            const mapStore = useMapStore.getState()
-            // Place all tiles that currently fit
-            while (useMapStore.getState().tryAutoPlace()) { /* */ }
-            // Check if map is enclosed (no open adjacent slots exist)
-            // Only trigger stuck when deck is also full so we're not just
-            // waiting for a better-shaped tile to generate.
+            const heroLv = useHeroStore.getState().level
+
+            // Place only tiles within the hero's level — tiles above the cap
+            // would be skipped by findNearestUnexplored, leaving the hero with
+            // no destination and appearing "stuck" after each kill.
+            while (useMapStore.getState().tryAutoPlace(heroLv)) { /* */ }
+
+            // Truly stuck: deck is full AND no tile of ANY level can be
+            // placed (map is geometrically enclosed, not just level-capped).
             const afterPlace = useMapStore.getState()
-            const heroLv     = useHeroStore.getState().level
             const attrs2     = useHeroStore.getState().attributes
             const d2         = getDerivedStats(attrs2, undefined, heroLv)
             const maxDk      = Math.min(8, 3 + Math.floor(d2.vision / 50))
-            if (afterPlace.deck.length >= maxDk && afterPlace.scene === 'map') {
-              // No placements were possible AND deck is full → stuck
-              mapStore.handleStuck()
+            if (
+              afterPlace.scene === 'map' &&
+              afterPlace.deck.length >= maxDk &&
+              !afterPlace.canAutoPlace()          // no tile fits at all → enclosed
+            ) {
+              useMapStore.getState().handleStuck()
             }
           }
 

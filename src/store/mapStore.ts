@@ -242,8 +242,16 @@ interface MapStore {
   leaveScene(): void
   exitMarket(): void
   handleDefeat(): void
-  /** Try to place a random valid deck tile on the grid. Returns true if placed. */
-  tryAutoPlace(): boolean
+  /**
+   * Try to place a random valid deck tile on the grid.
+   * When `maxTileLevel` is provided only tiles at or below that level are
+   * considered — keeps placed tiles within the hero's auto-explore range so
+   * `findNearestUnexplored` can always find a reachable destination.
+   * Returns true if a tile was placed.
+   */
+  tryAutoPlace(maxTileLevel?: number): boolean
+  /** Returns true if ANY deck tile can be legally placed (no level filter). */
+  canAutoPlace(): boolean
   /** Send the player home and mark the map as stuck (triggers auto-restart UI). */
   handleStuck(): void
   moveOneStep(heroLevel?: number): void
@@ -276,13 +284,24 @@ export const useMapStore = create<MapStore>()(
       goHome:     () => set((st) => { st.scene = 'home'; st.destination = null }),
       leaveScene: () => set((st) => { st.scene = 'map'; st.stuckPending = false }),
 
-      tryAutoPlace: (): boolean => {
+      tryAutoPlace: (maxTileLevel?: number): boolean => {
         const { grid, deck } = get()
-        const placements = findValidPlacements(grid, deck)
+        // Only consider tiles within the hero's reachable level — tiles above
+        // the cap would be invisible to findNearestUnexplored, making the hero
+        // stand still with "no destination" after placing them.
+        const eligible = maxTileLevel !== undefined
+          ? deck.filter(t => t.level <= maxTileLevel)
+          : deck
+        const placements = findValidPlacements(grid, eligible)
         if (placements.length === 0) return false
         const choice = placements[Math.floor(Math.random() * placements.length)]
         get().placeTile(choice.tileId, choice.x, choice.y)
         return true
+      },
+
+      canAutoPlace: (): boolean => {
+        const { grid, deck } = get()
+        return findValidPlacements(grid, deck).length > 0
       },
 
       handleStuck: () => set((st) => {
