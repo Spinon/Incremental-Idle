@@ -52,7 +52,8 @@ function monsterStats(a: Attributes) {
     def:         Math.max(0, Math.round(a.vitalidade * 0.5)),
     maxHp:       Math.max(5, Math.round(a.vitalidade * 8 + a.forca * 3 + 5)),
     attackSpeed: Math.max(0.1, Math.round((0.5 + a.agilidade * 0.12 + a.destreza * 0.04) * 100) / 100),
-    dodgeChance: Math.min(0.5, Math.round((a.destreza * 0.01 + a.agilidade * 0.003) * 1000) / 1000),
+    // Same coefficient as the hero (agilidade * 0.005) — dodge is a reflexes stat.
+    dodgeChance: Math.min(0.5, Math.round(a.agilidade * 0.005 * 1000) / 1000),
   }
 }
 
