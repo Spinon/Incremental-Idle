@@ -104,6 +104,27 @@ export function useGameLoop() {
 
           useMapStore.getState().moveOneStep(useHeroStore.getState().level)
 
+          // ── Auto-place tiles (when auto-explore is active) ───────────────
+          // Place every valid tile immediately — if the map becomes fully
+          // enclosed with a full deck, trigger a forced home → restart.
+          if (useMapStore.getState().autoExplore) {
+            const mapStore = useMapStore.getState()
+            // Place all tiles that currently fit
+            while (useMapStore.getState().tryAutoPlace()) { /* */ }
+            // Check if map is enclosed (no open adjacent slots exist)
+            // Only trigger stuck when deck is also full so we're not just
+            // waiting for a better-shaped tile to generate.
+            const afterPlace = useMapStore.getState()
+            const heroLv     = useHeroStore.getState().level
+            const attrs2     = useHeroStore.getState().attributes
+            const d2         = getDerivedStats(attrs2, undefined, heroLv)
+            const maxDk      = Math.min(8, 3 + Math.floor(d2.vision / 50))
+            if (afterPlace.deck.length >= maxDk && afterPlace.scene === 'map') {
+              // No placements were possible AND deck is full → stuck
+              mapStore.handleStuck()
+            }
+          }
+
           const tileXp = useMapStore.getState().drainXp()
           if (tileXp > 0) gainXp(tileXp)
 

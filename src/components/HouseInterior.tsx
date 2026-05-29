@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useMapStore } from '../store/mapStore'
 import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
@@ -7,16 +8,43 @@ import { MONSTER_RARITY_COLOR, MONSTER_RARITY_LABEL } from '../formulas/monsters
 import type { MonsterRarity } from '../types/monster'
 import { cn } from '../lib/utils'
 
+const AUTO_RESTART_MS = 10_000
+
 export default function HouseInterior() {
   const leaveScene     = useMapStore(s => s.leaveScene)
   const resetMap       = useMapStore(s => s.resetMap)
   const defeatPending  = useMapStore(s => s.defeatPending)
+  const stuckPending   = useMapStore(s => s.stuckPending)
   const heroName       = useHeroStore(s => s.name)
   const heroLevel      = useHeroStore(s => s.level)
   const queueEnemy     = useBattleStore(s => s.queueEnemy)
   const resetBattle    = useBattleStore(s => s.reset)
   const defeatSnapshot = useBattleStore(s => s.defeatSnapshot)
   const lang           = useSettingsStore(s => s.lang)
+
+  // ── Auto-restart timer ─────────────────────────────────────────────────────
+  // Counts down when the player is on the defeat screen or stuck screen.
+  // Pauses when the user interacts with the panel so they can read / decide.
+  const shouldAutoRestart = defeatPending || stuckPending
+  const [elapsed, setElapsed] = useState(0)
+  const [paused,  setPaused]  = useState(false)
+
+  // Reset when entering/leaving auto-restart state
+  useEffect(() => { setElapsed(0); setPaused(false) }, [shouldAutoRestart])
+
+  useEffect(() => {
+    if (!shouldAutoRestart || paused) return
+    const startedAt = Date.now() - elapsed
+    const id = setInterval(() => {
+      const cur = Date.now() - startedAt
+      if (cur >= AUTO_RESTART_MS) { clearInterval(id); startJourney() }
+      else setElapsed(cur)
+    }, 50)
+    return () => clearInterval(id)
+  }, [paused, shouldAutoRestart]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const autoRestartPct = Math.min(100, (elapsed / AUTO_RESTART_MS) * 100)
+  const autoRestartSec = Math.ceil(Math.max(0, (AUTO_RESTART_MS - elapsed) / 1000))
 
   function startJourney() {
     // Reset battle to a weak enemy so the arena doesn't keep the previous goblin
@@ -29,27 +57,42 @@ export default function HouseInterior() {
   const isEn = lang === 'en'
 
   return (
-    <div className="rounded-2xl border border-amber-900/40 dark:border-amber-800/30 overflow-hidden"
+    <div
+      className="rounded-2xl border border-amber-900/40 dark:border-amber-800/30 overflow-hidden"
       style={{ background: 'linear-gradient(160deg, #1c0f05 0%, #2d1a08 50%, #1a1205 100%)' }}
+      onPointerDown={() => setPaused(true)}   // any click pauses the auto-restart
     >
       {/* Roof beam */}
       <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #78350f, #92400e, #78350f)' }} />
 
       <div className="p-6 flex flex-col items-center gap-5">
 
-        {defeatPending ? (
-          /* ── Defeat state ────────────────────────────────────────── */
+        {(defeatPending || stuckPending) ? (
+          /* ── Defeat / Stuck state ───────────────────────────────── */
           <>
-            <div className="w-full text-center py-3 rounded-xl border border-red-900/50 bg-red-950/40">
-              <p className="text-red-400 font-black text-2xl tracking-tight mb-1">
-                {isEn ? '☠ Defeated' : '☠ Derrotado'}
-              </p>
-              <p className="text-red-500/70 text-xs">
-                {isEn
-                  ? 'Your journey ended in defeat. Rest and begin anew.'
-                  : 'Sua jornada terminou em derrota. Descanse e recomece.'}
-              </p>
-            </div>
+            {stuckPending ? (
+              <div className="w-full text-center py-3 rounded-xl border border-amber-800/50 bg-amber-950/30">
+                <p className="text-amber-400 font-black text-2xl tracking-tight mb-1">
+                  {isEn ? '🗺 Map Full' : '🗺 Mapa Bloqueado'}
+                </p>
+                <p className="text-amber-500/70 text-xs">
+                  {isEn
+                    ? 'All tiles placed — no space left. Starting a new journey.'
+                    : 'Sem espaço para novas peças. Iniciando nova jornada.'}
+                </p>
+              </div>
+            ) : (
+              <div className="w-full text-center py-3 rounded-xl border border-red-900/50 bg-red-950/40">
+                <p className="text-red-400 font-black text-2xl tracking-tight mb-1">
+                  {isEn ? '☠ Defeated' : '☠ Derrotado'}
+                </p>
+                <p className="text-red-500/70 text-xs">
+                  {isEn
+                    ? 'Your journey ended in defeat. Rest and begin anew.'
+                    : 'Sua jornada terminou em derrota. Descanse e recomece.'}
+                </p>
+              </div>
+            )}
 
             {/* ── Defeat recap ──────────────────────────────────────── */}
             {defeatSnapshot && (() => {
@@ -139,9 +182,32 @@ export default function HouseInterior() {
 
             <div className="w-full h-px bg-red-900/30" />
 
+            {/* Auto-restart progress bar */}
+            <div className="w-full flex flex-col gap-1.5">
+              <div className="relative w-full h-2 bg-red-950/60 rounded-full overflow-hidden border border-red-900/40">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-none',
+                    stuckPending ? 'bg-amber-600/70' : 'bg-red-600/70',
+                  )}
+                  style={{ width: `${autoRestartPct}%` }}
+                />
+              </div>
+              <p className="text-[9px] text-center text-red-900/60">
+                {paused
+                  ? (isEn ? 'Auto-restart paused — click the button to continue' : 'Auto-reinício pausado — clique no botão para continuar')
+                  : (isEn ? `New journey in ${autoRestartSec}s…` : `Nova jornada em ${autoRestartSec}s…`)}
+              </p>
+            </div>
+
             <button
               onClick={startJourney}
-              className="w-full py-3 rounded-xl text-base font-bold border border-red-700/60 bg-red-900/40 text-red-300 hover:bg-red-900/60 transition-colors"
+              className={cn(
+                'w-full py-3 rounded-xl text-base font-bold border transition-colors',
+                stuckPending
+                  ? 'border-amber-700/60 bg-amber-900/40 text-amber-300 hover:bg-amber-900/60'
+                  : 'border-red-700/60 bg-red-900/40 text-red-300 hover:bg-red-900/60',
+              )}
             >
               {isEn ? '↺ Begin New Journey' : '↺ Iniciar Nova Jornada'}
             </button>
