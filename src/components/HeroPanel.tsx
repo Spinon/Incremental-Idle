@@ -32,23 +32,10 @@ export default function HeroPanel() {
 
       {/* Attributes */}
       <div className="bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center mb-3">
           <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
             {t.attributes}
           </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={optimizePoints}
-              disabled={freePoints <= 0}
-              title={t.optimize}
-              className={cn(
-                'w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors',
-                freePoints > 0
-                  ? 'bg-amber-400 hover:bg-amber-300 dark:bg-amber-500 dark:hover:bg-amber-400 text-white cursor-pointer'
-                  : 'invisible pointer-events-none',
-              )}
-            >+</button>
-          </div>
         </div>
 
         {/* Quick-build presets — only shown when there are points to spend */}

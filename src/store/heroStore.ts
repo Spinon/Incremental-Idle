@@ -67,14 +67,46 @@ export const useHeroStore = create<HeroStore>()(
 
     optimizePoints: () => set((st) => {
       if (st.freePoints <= 0) return
-      const order: (keyof Attributes)[] = [
-        'forca', 'vitalidade', 'agilidade', 'destreza', 'inteligencia', 'sabedoria', 'carisma',
-      ]
-      const base = Math.floor(st.freePoints / order.length)
-      const rem  = st.freePoints % order.length
-      order.forEach((attr, i) => {
-        st.attributes[attr] += base + (i < rem ? 1 : 0)
-      })
+
+      // Target weights for a well-rounded combat-sustain build.
+      // Order reflects priority when there are fewer points than targets.
+      const WEIGHTS: Record<keyof Attributes, number> = {
+        vitalidade:   0.28,  // DEF ratio + HP — highest return
+        agilidade:    0.20,  // atkSpeed, dodge, exploration
+        forca:        0.15,  // damage + stamina
+        sabedoria:    0.15,  // mana sustain (threshold ≈ 6 pts at Lv10)
+        inteligencia: 0.10,  // magic DEF + magic damage
+        destreza:     0.07,  // crit chance + damage reduction
+        carisma:      0.05,  // drop rate + gold efficiency
+      }
+      const attrs = Object.keys(WEIGHTS) as (keyof Attributes)[]
+
+      // Total points in play (already spent + free)
+      const totalPoints = attrs.reduce((s, k) => s + st.attributes[k], 0) + st.freePoints
+
+      // Ideal per attribute — never less than what's already invested
+      const ideal = {} as Record<keyof Attributes, number>
+      for (const k of attrs) {
+        ideal[k] = Math.max(st.attributes[k], Math.round(totalPoints * WEIGHTS[k]))
+      }
+
+      // Deficit: how many more points each attr needs (≥ 0)
+      // Sort highest deficit first; break ties by weight (prefer priority attrs)
+      const deficits = attrs
+        .map(k => ({ k, d: ideal[k] - st.attributes[k] }))
+        .filter(x => x.d > 0)
+        .sort((a, b) => b.d !== a.d ? b.d - a.d : WEIGHTS[b.k] - WEIGHTS[a.k])
+
+      let remaining = st.freePoints
+      for (const { k, d } of deficits) {
+        if (remaining <= 0) break
+        const add = Math.min(d, remaining)
+        st.attributes[k] += add
+        remaining -= add
+      }
+      // If every attr already exceeds its ideal, overflow → vitalidade
+      if (remaining > 0) st.attributes.vitalidade += remaining
+
       st.freePoints = 0
       const derived = getDerivedStats(st.attributes)
       if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
