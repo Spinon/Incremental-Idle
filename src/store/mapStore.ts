@@ -310,12 +310,11 @@ export const useMapStore = create<MapStore>()(
         st.stuckPending = true
       }),
 
-      // Exit market by stepping through a random connected exit
+      // Exit market: move the player to a random connected adjacent tile and
+      // return to the map.  No enemy is queued here — the next battle starts
+      // naturally when moveOneStep processes the hero's first step after the
+      // market.  Treasure on the exit tile is still collected (non-combat).
       exitMarket: () => {
-        let queueLevel:  number | null = null
-        let queueType:   string | undefined
-        let queueRarity: MonsterRarity | undefined
-
         set((st) => {
           const pos  = st.playerPos
           const tile = st.grid[gridKey(pos.x, pos.y)]
@@ -334,8 +333,8 @@ export const useMapStore = create<MapStore>()(
 
           if (exits.length > 0) {
             // Prefer the exit toward the current destination (if any, and if it's not the market itself)
-            const dest          = st.destination
-            const destIsMarket  = dest && dest.x === pos.x && dest.y === pos.y
+            const dest         = st.destination
+            const destIsMarket = dest && dest.x === pos.x && dest.y === pos.y
             let chosenExit: { x: number; y: number } | null = null
 
             if (dest && !destIsMarket) {
@@ -347,42 +346,23 @@ export const useMapStore = create<MapStore>()(
             if (!chosenExit) chosenExit = exits[Math.floor(Math.random() * exits.length)]
 
             st.playerPos = chosenExit
-            // Only clear destination if it was the market itself (or unset)
             if (!dest || destIsMarket) st.destination = null
 
+            // Collect treasure on exit tile (non-combat pickup) but do NOT
+            // queue a monster fight — that happens via the normal moveOneStep.
             const exitTile = st.grid[gridKey(chosenExit.x, chosenExit.y)]
-            if (exitTile && exitTile.content.type !== 'market') {
-              const isMonster        = exitTile.content.type === 'monster'
-              const isFirstEncounter = isMonster && !exitTile.explored
-              const enemyLevel = isFirstEncounter
-                ? exitTile.level + Math.ceil(Math.random() * 5)
-                : exitTile.level
-              queueLevel  = Math.max(1, enemyLevel)
-              queueType   = exitTile.content.monsterType
-              queueRarity = exitTile.content.monsterRarity as MonsterRarity | undefined
-
-              if (isFirstEncounter) {
-                st.pendingGold     += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
-                st.pendingMonsterXp = {
-                  xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
-                  monsterLevel: enemyLevel,
-                }
-              }
-
-              if (!exitTile.explored) {
-                exitTile.explored = true
-                if (exitTile.content.type === 'treasure' && exitTile.content.xpAmount) {
-                  st.pendingXp += exitTile.content.xpAmount
-                  exitTile.content = { type: 'empty' }
-                }
+            if (exitTile && !exitTile.explored && exitTile.content.type === 'treasure') {
+              exitTile.explored = true
+              if (exitTile.content.xpAmount) {
+                st.pendingXp       += exitTile.content.xpAmount
+                exitTile.content    = { type: 'empty' }
               }
             }
           }
 
           st.scene = 'map'
         })
-
-        if (queueLevel !== null) useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity)
+        // intentionally no queueEnemy call — battle starts on next moveOneStep
       },
 
       handleDefeat: () => set((st) => {

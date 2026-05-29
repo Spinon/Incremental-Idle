@@ -43,6 +43,7 @@ export function useGameLoop() {
   const earnGold      = useHeroStore((s) => s.earnGold)
   const prevPhase     = useRef<Phase>('idle')
   const prevTurn      = useRef<number>(-1)
+  const prevScene     = useRef<string>('map')
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -83,6 +84,23 @@ export function useGameLoop() {
       // Battle-end handling — always track phase, react only in map scene
       const phase = useBattleStore.getState().phase
       const scene = useMapStore.getState().scene
+
+      // ── Market exit detection ─────────────────────────────────────────────
+      // When exitMarket() fires it sets scene='map' but doesn't queue an enemy
+      // or call reset(). We detect the market→map transition here and do both
+      // in the same game-loop tick so React batches the updates into one render
+      // (preventing the BattleArena from briefly mounting with phase='over' and
+      // double-granting XP from the previous fight).
+      if (prevScene.current === 'market' && scene === 'map') {
+        useMapStore.getState().moveOneStep(heroLvl)
+        const xpFromStep = useMapStore.getState().drainXp()
+        if (xpFromStep > 0) gainXp(xpFromStep)
+        const goldFromStep = useMapStore.getState().drainGold()
+        if (goldFromStep > 0) earnGold(goldFromStep)
+        useBattleStore.getState().reset()
+        prevTurn.current = -1
+      }
+      prevScene.current = scene
 
       if (scene === 'map' && prevPhase.current !== 'over' && phase === 'over') {
         const winner = useBattleStore.getState().winner
