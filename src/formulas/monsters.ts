@@ -50,10 +50,14 @@ function monsterStats(a: Attributes) {
 /**
  * Distribute `total` points across attribute keys according to preference weights.
  * Each attribute gets ±1 point of jitter so same-type monsters vary slightly.
+ * Jitter is only applied when total is large enough to absorb it without
+ * zeroing the dominant attribute.
  */
 function distributePoints(prefs: MonsterPreferences, total: number): Attributes {
   const keys = Object.keys(prefs) as (keyof MonsterPreferences)[]
   const totalWeight = keys.reduce((s, k) => s + prefs[k], 0)
+  // Only jitter when there's enough budget — prevents dominant attr being zeroed
+  const applyJitter = total >= keys.length * 3
 
   const attrs: Attributes = {
     forca: 0, vitalidade: 0, agilidade: 0, destreza: 0,
@@ -63,15 +67,19 @@ function distributePoints(prefs: MonsterPreferences, total: number): Attributes 
   let allocated = 0
   for (const key of keys) {
     const ideal  = (prefs[key] / totalWeight) * total
-    const jitter = Math.round(Math.random() * 2 - 1)   // -1, 0 or +1
+    const jitter = applyJitter ? Math.round(Math.random() * 2 - 1) : 0  // -1, 0 or +1
     const val    = Math.max(0, Math.round(ideal) + jitter)
     attrs[key]   = val
     allocated   += val
   }
 
-  // Correct any rounding drift on the highest-preference attribute
+  // Correct any rounding drift on the highest-preference attribute.
+  // Clamp to at least 1 so the dominant stat is never wiped by accumulated jitter.
   const topKey = keys.reduce((a, b) => prefs[a] > prefs[b] ? a : b)
-  attrs[topKey] = Math.max(0, attrs[topKey] + (total - allocated))
+  attrs[topKey] = Math.max(
+    prefs[topKey] > 0 ? 1 : 0,
+    attrs[topKey] + (total - allocated),
+  )
 
   return attrs
 }

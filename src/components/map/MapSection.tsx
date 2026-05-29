@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
 import { getDerivedStats } from '../../formulas/derived'
@@ -227,6 +227,8 @@ interface NearbyEntry {
   explored: boolean
   dist: number
   fromGrid: boolean
+  /** Pre-computed display stats (stable, no Math.random jitter per-render). */
+  stats: { hp: number; atk: number; def: number }
 }
 
 interface NearbyPanelProps {
@@ -252,14 +254,16 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
       if (tile.content.type !== 'monster') continue
       const dist = Math.max(Math.abs(tile.x - playerPos.x), Math.abs(tile.y - playerPos.y))
       if (dist > revealRange) continue
+      const lvl      = tile.content.monsterLevel ?? tile.level
+      const mType    = tile.content.monsterType ?? 'goblin'
+      const mRarity  = (tile.content.monsterRarity ?? 'normal') as MonsterRarity
+      const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
+      const monster  = buildMonster(template, lvl, mRarity)
       result.push({
-        x: tile.x, y: tile.y,
-        level: tile.content.monsterLevel ?? tile.level,
-        monsterType:   tile.content.monsterType   ?? 'goblin',
-        monsterRarity: (tile.content.monsterRarity ?? 'normal') as MonsterRarity,
-        explored: tile.explored,
-        dist,
-        fromGrid: true,
+        x: tile.x, y: tile.y, level: lvl,
+        monsterType: mType, monsterRarity: mRarity,
+        explored: tile.explored, dist, fromGrid: true,
+        stats: { hp: monster.maxHp, atk: monster.atk, def: monster.def },
       })
     }
 
@@ -271,14 +275,16 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
       if (dist > revealRange) continue
       // Skip if there's already a grid tile at this position
       if (grid[key]) continue
+      const lvl      = content.monsterLevel ?? 1
+      const mType    = content.monsterType ?? 'goblin'
+      const mRarity  = (content.monsterRarity ?? 'normal') as MonsterRarity
+      const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
+      const monster  = buildMonster(template, lvl, mRarity)
       result.push({
-        x, y,
-        level: content.monsterLevel ?? 1,
-        monsterType:   content.monsterType   ?? 'goblin',
-        monsterRarity: (content.monsterRarity ?? 'normal') as MonsterRarity,
-        explored: false,
-        dist,
-        fromGrid: false,
+        x, y, level: lvl,
+        monsterType: mType, monsterRarity: mRarity,
+        explored: false, dist, fromGrid: false,
+        stats: { hp: monster.maxHp, atk: monster.atk, def: monster.def },
       })
     }
 
@@ -308,8 +314,7 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
         {isEn ? 'Nearby enemies' : 'Inimigos próximos'}
       </p>
       {entries.map(e => {
-        const template = FOREST_MONSTER_MAP.get(e.monsterType) ?? FOREST_MONSTERS[0]
-        const monster  = buildMonster(template, e.level, e.monsterRarity)
+        const template    = FOREST_MONSTER_MAP.get(e.monsterType) ?? FOREST_MONSTERS[0]
         const rarityLabel = MONSTER_RARITY_LABEL[e.monsterRarity]
         const rarityColor = MONSTER_RARITY_COLOR[e.monsterRarity]
         const isSelected  = selectedPos?.x === e.x && selectedPos?.y === e.y
@@ -323,17 +328,17 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
             className={cn(
               'w-full text-left rounded-lg px-2 py-1.5 border transition-colors',
               isSelected
-                ? 'border-sky-500/60 bg-sky-950/30'
+                ? 'border-sky-400/60 bg-sky-50 dark:bg-sky-950/30'
                 : isPlayer
-                  ? 'border-indigo-500/40 bg-indigo-950/20'
-                  : 'border-transparent hover:border-slate-600/40 hover:bg-slate-800/40',
+                  ? 'border-indigo-400/50 bg-indigo-50 dark:bg-indigo-950/20'
+                  : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600/40 hover:bg-slate-100 dark:hover:bg-slate-800/40',
               e.explored && 'opacity-50',
               !e.fromGrid && 'cursor-default',
             )}
           >
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm leading-none shrink-0">{template.emoji}</span>
-              <span className="text-[11px] font-semibold text-slate-200 dark:text-slate-300 truncate">
+              <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate">
                 {rarityLabel && <span className={cn('mr-1 text-[10px]', rarityColor)}>[{rarityLabel}]</span>}
                 {template.name}
               </span>
@@ -341,13 +346,13 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, sele
                 Nv.{e.level}
               </span>
             </div>
-            <div className="flex gap-2 mt-0.5 text-[9px] text-slate-500 dark:text-slate-500 tabular-nums">
-              <span>❤ {monster.maxHp}</span>
-              <span>⚔ {monster.atk}</span>
-              <span>🛡 {monster.def}</span>
-              <span className="text-slate-600 dark:text-slate-600">({e.x},{e.y})</span>
-              {e.explored && <span className="text-green-700 font-semibold">{isEn ? 'Defeated' : 'Derrotado'}</span>}
-              {!e.fromGrid && <span className="text-slate-600 italic">{isEn ? 'uncharted' : 'não mapeado'}</span>}
+            <div className="flex gap-2 mt-0.5 text-[9px] text-slate-500 tabular-nums">
+              <span className="text-red-500/80">❤ {e.stats.hp}</span>
+              <span className="text-orange-500/80">⚔ {e.stats.atk}</span>
+              <span className="text-blue-500/70">🛡 {e.stats.def}</span>
+              <span className="text-slate-400">({e.x},{e.y})</span>
+              {e.explored && <span className="text-green-600 font-semibold">{isEn ? 'Defeated' : 'Derrotado'}</span>}
+              {!e.fromGrid && <span className="text-slate-400 italic">{isEn ? 'uncharted' : 'não mapeado'}</span>}
             </div>
           </button>
         )
@@ -363,6 +368,16 @@ function TileInfoPanel({ tile, onClose }: { tile: PlacedTile; onClose(): void })
   const isEn = lang === 'en'
 
   const { content, level, explored, x, y } = tile
+
+  // Stable random monster for empty tiles — recomputed only when the tile changes.
+  const emptyMonster = useRef<{ template: typeof FOREST_MONSTERS[0]; stats: ReturnType<typeof buildMonster> } | null>(null)
+  const emptyTileKey = `${x},${y}`
+  const prevKey = useRef('')
+  if (content.type === 'empty' && prevKey.current !== emptyTileKey) {
+    prevKey.current = emptyTileKey
+    const tpl = FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)]
+    emptyMonster.current = { template: tpl, stats: buildMonster(tpl, level, 'normal') }
+  }
 
   const headerLabel =
     content.type === 'market'   ? (isEn ? 'Market' : 'Mercado') :
@@ -414,9 +429,8 @@ function TileInfoPanel({ tile, onClose }: { tile: PlacedTile; onClose(): void })
         </div>
       )}
 
-      {content.type === 'empty' && (() => {
-        const template = FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)]
-        const g        = buildMonster(template, level, 'normal')
+      {content.type === 'empty' && emptyMonster.current && (() => {
+        const { template, stats: g } = emptyMonster.current!
         return (
           <div className="flex gap-3 text-[11px] text-slate-400">
             <span>{template.emoji} {template.name} <span className="text-red-400 font-semibold">Nv.{level}</span></span>

@@ -5,24 +5,37 @@
 
 /* ── Battle arena backgrounds (theme-aware) ──────────────── */
 .arena-bg {
-  background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 45%, #bbf7d0 100%);
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 100%, #bbf7d0 0%, transparent 70%),
+    linear-gradient(180deg, #bfdbfe 0%, #dbeafe 30%, #e0f2fe 60%, #bbf7d0 100%);
 }
 .dark .arena-bg {
-  background: linear-gradient(180deg, #0f0c1a 0%, #1a1040 40%, #0d2010 100%);
+  background:
+    radial-gradient(ellipse 80% 35% at 50% 100%, #0d2a10 0%, transparent 70%),
+    linear-gradient(180deg, #050810 0%, #0c1230 35%, #0f1a20 65%, #0a1a08 100%);
+}
+
+/* Subtle vignette */
+.arena-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 100% 100% at 50% 50%, transparent 60%, rgba(0,0,0,0.12) 100%);
+  pointer-events: none;
 }
 
 .arena-ground {
-  background: linear-gradient(0deg, #16a34a 0%, #4ade80 60%, transparent 100%);
+  background: linear-gradient(0deg, #15803d 0%, #22c55e 50%, transparent 100%);
 }
 .dark .arena-ground {
-  background: linear-gradient(0deg, #1a3a0a 0%, #0d2010 60%, transparent 100%);
+  background: linear-gradient(0deg, #14290a 0%, #1a3d0d 50%, transparent 100%);
 }
 
 .arena-ground-line {
-  background-color: #86efac40;
+  background-color: #4ade8050;
 }
 .dark .arena-ground-line {
-  background-color: #166534;
+  background-color: #1a4d1040;
 }
 
 /* ── Battle animations ────────────────────────────────────── */
@@ -78,6 +91,30 @@
 .anim-xp-float {
   animation: xp-float 2.4s ease-out forwards;
   pointer-events: none;
+}
+
+/* ── Low-HP pulse on the bar fill ────────────────────────── */
+
+@keyframes hp-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+.anim-hp-pulse {
+  animation: hp-pulse 0.9s ease-in-out infinite;
+}
+
+/* ── Floating damage number ───────────────────────────────── */
+
+@keyframes dmg-float {
+  0%   { opacity: 0;   transform: translateY(0)    scale(0.6); }
+  12%  { opacity: 1;   transform: translateY(-8px) scale(1.1); }
+  60%  { opacity: 1;   transform: translateY(-22px) scale(1); }
+  100% { opacity: 0;   transform: translateY(-36px) scale(0.9); }
+}
+.anim-dmg-float {
+  animation: dmg-float 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── Toast notification ───────────────────────────────────── */

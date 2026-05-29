@@ -3,7 +3,8 @@ import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
-import { MONSTER_RARITY_COLOR } from '../formulas/monsters'
+import { MONSTER_RARITY_COLOR, MONSTER_RARITY_LABEL } from '../formulas/monsters'
+import type { MonsterRarity } from '../types/monster'
 import { cn } from '../lib/utils'
 
 export default function HouseInterior() {
@@ -51,56 +52,68 @@ export default function HouseInterior() {
             </div>
 
             {/* ── Defeat recap ──────────────────────────────────────── */}
-            {defeatSnapshot && (
-              <div className="w-full rounded-xl border border-red-900/40 bg-slate-950/60 p-3 flex flex-col gap-2">
-                {/* Killer info */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-red-400/60 uppercase tracking-widest font-semibold">
-                    {isEn ? 'Killed by' : 'Morto por'}
-                  </span>
-                  <span className="text-base leading-none">
-                    {FOREST_MONSTER_MAP.get(defeatSnapshot.killerMonsterType)?.emoji ?? '⚔'}
-                  </span>
-                  <span className={cn(
-                    'text-sm font-bold',
-                    MONSTER_RARITY_COLOR[
-                      (FOREST_MONSTER_MAP.get(defeatSnapshot.killerMonsterType) ? 'normal' : 'normal') as 'normal'
-                    ] || 'text-slate-200',
-                  )}>
-                    {defeatSnapshot.killerName}
-                  </span>
-                  <span className="text-xs text-red-400 font-semibold">
-                    Nv.{defeatSnapshot.killerLevel}
-                  </span>
-                </div>
-
-                {/* Battle log */}
-                {defeatSnapshot.log.length > 0 && (
-                  <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto scrollbar-thin">
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">
-                      {isEn ? 'Last battle log' : 'Último log de batalha'}
-                    </p>
-                    {defeatSnapshot.log.slice(0, 12).map((entry, i) => (
-                      <div key={i} className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded',
-                        entry.attacker === heroName
-                          ? 'text-blue-400/80 bg-blue-950/20'
-                          : 'text-red-400/80 bg-red-950/20',
-                      )}>
-                        {entry.missed
-                          ? (isEn
-                              ? `${entry.attacker} missed!`
-                              : `${entry.attacker} errou!`)
-                          : (isEn
-                              ? `${entry.attacker} → ${entry.defender}: ${entry.dmg} dmg`
-                              : `${entry.attacker} → ${entry.defender}: ${entry.dmg} de dano`)
-                        }
-                      </div>
-                    ))}
+            {defeatSnapshot && (() => {
+              const template   = FOREST_MONSTER_MAP.get(defeatSnapshot.killerMonsterType)
+              // Extract rarity from the killer's name prefix (e.g. "[Épico] Goblin")
+              const killerRarity: MonsterRarity =
+                defeatSnapshot.killerName.includes('[Único')   ? 'unique'   :
+                defeatSnapshot.killerName.includes('[Épico')   ? 'epic'     :
+                defeatSnapshot.killerName.includes('[Epic')    ? 'epic'     :
+                defeatSnapshot.killerName.includes('[Raro')    ? 'rare'     :
+                defeatSnapshot.killerName.includes('[Rare')    ? 'rare'     :
+                defeatSnapshot.killerName.includes('[Incomum') ? 'uncommon' :
+                defeatSnapshot.killerName.includes('[Uncommon')? 'uncommon' : 'normal'
+              const rarityLabel = MONSTER_RARITY_LABEL[killerRarity]
+              const rarityColor = MONSTER_RARITY_COLOR[killerRarity] || 'text-slate-300'
+              return (
+                <div className="w-full rounded-xl border border-red-900/40 bg-slate-950/60 p-3 flex flex-col gap-2">
+                  {/* Killer info */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] text-red-400/60 uppercase tracking-widest font-semibold shrink-0">
+                      {isEn ? 'Killed by' : 'Morto por'}
+                    </span>
+                    <span className="text-xl leading-none">{template?.emoji ?? '⚔'}</span>
+                    <span className={cn('text-sm font-bold', rarityColor)}>
+                      {rarityLabel && <span className="text-[10px] mr-1 opacity-80">[{rarityLabel}]</span>}
+                      {template?.name ?? defeatSnapshot.killerName}
+                    </span>
+                    <span className="text-xs text-red-400 font-bold bg-red-950/50 px-1.5 py-0.5 rounded-full">
+                      Nv.{defeatSnapshot.killerLevel}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Battle log */}
+                  {defeatSnapshot.log.length > 0 && (
+                    <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
+                      <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1 font-bold">
+                        {isEn ? 'Last battle log' : 'Último log de batalha'}
+                      </p>
+                      {defeatSnapshot.log.slice(0, 12).map((entry, i) => {
+                        const isHero = entry.attacker === heroName
+                        return (
+                          <div key={i} className={cn(
+                            'text-[10px] px-2 py-0.5 rounded flex items-center gap-1',
+                            isHero
+                              ? 'text-blue-400/80 bg-blue-950/20'
+                              : 'text-red-400/80 bg-red-950/20',
+                          )}>
+                            {entry.missed
+                              ? <span className="italic">{entry.attacker} <span className="font-bold">MISS</span></span>
+                              : <>
+                                  <span className="font-semibold">{entry.attacker}</span>
+                                  <span className="opacity-40">→</span>
+                                  <span>{entry.defender}</span>
+                                  <span className="ml-auto font-bold">{entry.dmg}</span>
+                                </>
+                            }
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="w-full flex justify-center gap-6 text-3xl select-none opacity-50 grayscale">
               <span>🔥</span><span>🪑</span><span>🪵</span><span>🕯️</span><span>📚</span>

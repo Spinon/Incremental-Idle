@@ -36,8 +36,12 @@ function GameRoot() {
 
   // On every app start, rebuild the battle enemy from the persisted queue so
   // we never fight the "initial goblin lvl 1" after a page refresh.
+  // Skip when defeatPending=true — calling reset() there would wipe defeatSnapshot
+  // before HouseInterior can display the recap.
   useEffect(() => {
-    useBattleStore.getState().reset()
+    if (!useMapStore.getState().defeatPending) {
+      useBattleStore.getState().reset()
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply/remove dark class on <html>

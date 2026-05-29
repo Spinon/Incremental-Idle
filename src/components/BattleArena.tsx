@@ -98,6 +98,26 @@ export default function BattleArena() {
   const timerC     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [impact, setImpact] = useState(false)
 
+  // Floating damage number state
+  interface DmgFloat { id: number; dmg: number; missed: boolean; side: 'player' | 'enemy' }
+  const [floats, setFloats] = useState<DmgFloat[]>([])
+  const floatId = useRef(0)
+  const lastLogLen = useRef(0)
+
+  // Watch the battle log for new entries and spawn a float
+  const logLen = store.log.length
+  useEffect(() => {
+    if (logLen > lastLogLen.current && store.log.length > 0 && !store.skipAnim) {
+      const entry  = store.log[0]   // newest entry (unshifted to front)
+      const target = entry.attacker === store.player.name ? 'player' : 'enemy'
+      const id     = ++floatId.current
+      setFloats(prev => [...prev.slice(-6), { id, dmg: entry.dmg, missed: !!entry.missed, side: target }])
+      // clean up after animation
+      setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1150)
+    }
+    lastLogLen.current = logLen
+  }, [logLen]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function clearTimers() {
     ;[timerA, timerB, timerC].forEach((r) => {
       if (r.current !== null) { clearTimeout(r.current); r.current = null }
@@ -193,10 +213,11 @@ export default function BattleArena() {
         <div className="absolute bottom-0 left-0 right-0 h-24 arena-ground" />
         <div className="absolute bottom-20 left-0 right-0 h-px arena-ground-line" />
 
-        {/* VS */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-8
-          text-slate-400/30 dark:text-slate-600/50 font-black text-2xl tracking-widest pointer-events-none">
-          VS
+        {/* VS divider */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-10 pointer-events-none flex flex-col items-center gap-1">
+          <div className="h-10 w-px bg-slate-300/20 dark:bg-slate-600/30" />
+          <span className="text-slate-400/25 dark:text-slate-500/40 font-black text-xl tracking-widest">VS</span>
+          <div className="h-10 w-px bg-slate-300/20 dark:bg-slate-600/30" />
         </div>
 
         {/* Combo dots — shown above the attacker when comboSize > 1 */}
@@ -215,6 +236,26 @@ export default function BattleArena() {
           </div>
         )}
 
+        {/* Floating damage numbers */}
+        {floats.map(f => (
+          <div
+            key={f.id}
+            className={cn(
+              'absolute anim-dmg-float font-black text-lg drop-shadow-md pointer-events-none',
+              f.side === 'player'
+                ? 'left-20 bottom-28'
+                : 'right-20 bottom-28',
+              f.missed
+                ? 'text-slate-400 dark:text-slate-500 text-base italic'
+                : f.side === 'player'
+                  ? 'text-red-500 dark:text-red-400'
+                  : 'text-yellow-400 dark:text-yellow-300',
+            )}
+          >
+            {f.missed ? 'MISS' : `-${f.dmg}`}
+          </div>
+        ))}
+
         {/* Player */}
         <div className="absolute left-10 bottom-[72px] flex flex-col items-start gap-2">
           <HpBar name={store.player.name} current={store.player.hp} max={store.player.maxHp} side="player" />
@@ -229,7 +270,20 @@ export default function BattleArena() {
 
         {/* Enemy */}
         <div className="absolute right-10 bottom-[72px] flex flex-col items-end gap-2">
-          <HpBar name={store.enemy.name} level={store.enemy.level} current={store.enemy.hp} max={store.enemy.maxHp} side="enemy" />
+          <HpBar
+            name={store.enemy.name}
+            level={store.enemy.level}
+            current={store.enemy.hp}
+            max={store.enemy.maxHp}
+            side="enemy"
+            rarityColor={
+              store.enemy.rarity === 'unique'   ? 'text-orange-400' :
+              store.enemy.rarity === 'epic'     ? 'text-purple-400' :
+              store.enemy.rarity === 'rare'     ? 'text-blue-400'   :
+              store.enemy.rarity === 'uncommon' ? 'text-green-400'  :
+              undefined
+            }
+          />
           <div
             key={`enemy-${store.turn}`}
             className={isEnemyAttacking ? 'anim-attack-left' : ''}
@@ -241,16 +295,25 @@ export default function BattleArena() {
 
         {/* Battle over overlay */}
         {store.phase === 'over' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 dark:bg-black/65 backdrop-blur-[2px]">
-            <p className={`text-5xl font-black mb-3 tracking-tight drop-shadow-lg
-              ${store.winner === 'player' ? 'text-yellow-500 dark:text-yellow-400' : 'text-red-500 dark:text-red-400'}`}>
+          <div className={cn(
+            'absolute inset-0 flex flex-col items-center justify-center backdrop-blur-[2px]',
+            store.winner === 'player'
+              ? 'bg-amber-50/80 dark:bg-amber-950/60'
+              : 'bg-red-50/80 dark:bg-red-950/60',
+          )}>
+            <p className={cn(
+              'text-5xl font-black mb-1 tracking-tight',
+              store.winner === 'player'
+                ? 'text-yellow-500 dark:text-yellow-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                : 'text-red-500 dark:text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.5)]',
+            )}>
               {store.winner === 'player' ? t.victory : t.defeat}
             </p>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">{t.nextBattle}</p>
-            <div className="w-48 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <p className="text-slate-500 dark:text-slate-400 text-xs mb-4 tracking-wide">{t.nextBattle}</p>
+            <div className="w-40 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 key={store.turn}
-                className="h-full rounded-full bg-indigo-500 anim-fill-bar"
+                className={cn('h-full rounded-full anim-fill-bar', store.winner === 'player' ? 'bg-yellow-400' : 'bg-red-500')}
                 style={{ animationDuration: `${1800 / store.speed}ms` }}
               />
             </div>
@@ -474,21 +537,37 @@ export default function BattleArena() {
       </div>
 
       {/* Battle log */}
-      <div className="mt-3 h-28 overflow-y-auto bg-slate-50 dark:bg-slate-900/70 rounded-xl px-4 py-3 border border-slate-200 dark:border-slate-800">
-        <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">{t.log}</p>
+      <div className="mt-3 h-28 overflow-y-auto bg-slate-50 dark:bg-slate-900/60 rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-800/80">
+        <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1.5 font-bold">{t.log}</p>
         {store.log.length === 0
-          ? <p className="text-sm text-slate-400 dark:text-slate-600 italic">{t.awaiting}</p>
-          : store.log.map((entry, i) => (
-              <p key={i} className={`text-sm leading-snug ${
-                i === 0
-                  ? entry.missed
-                    ? 'text-slate-400 dark:text-slate-500 italic'
-                    : 'text-slate-700 dark:text-slate-200'
-                  : 'text-slate-400 dark:text-slate-500'
-              }`}>
-                {t.strike(entry.attacker, entry.defender, entry.dmg, entry.missed)}
-              </p>
-            ))
+          ? <p className="text-xs text-slate-400 dark:text-slate-600 italic">{t.awaiting}</p>
+          : store.log.map((entry, i) => {
+              const isPlayerAttacker = entry.attacker === store.player.name
+              return (
+                <div key={i} className={cn(
+                  'text-[11px] leading-tight py-0.5 px-1.5 rounded mb-0.5 flex items-center gap-1',
+                  i === 0
+                    ? entry.missed
+                      ? 'text-slate-500 dark:text-slate-400 italic bg-slate-100/50 dark:bg-slate-800/40'
+                      : isPlayerAttacker
+                        ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/30'
+                        : 'text-red-700 dark:text-red-300 bg-red-50/60 dark:bg-red-950/30'
+                    : 'text-slate-400 dark:text-slate-600',
+                )}>
+                  {entry.missed
+                    ? <span>{entry.attacker} <span className="font-bold">MISS</span></span>
+                    : <>
+                        <span className={i === 0 ? 'font-semibold' : ''}>{entry.attacker}</span>
+                        <span className="opacity-50">→</span>
+                        <span className={i === 0 ? 'font-semibold' : ''}>{entry.defender}</span>
+                        <span className={cn('ml-auto font-bold tabular-nums', i === 0 && (isPlayerAttacker ? 'text-indigo-600 dark:text-indigo-300' : 'text-red-600 dark:text-red-300'))}>
+                          -{entry.dmg}
+                        </span>
+                      </>
+                  }
+                </div>
+              )
+            })
         }
       </div>
     </div>
