@@ -46,6 +46,8 @@ export interface LogEntry {
   dmg: number
   /** true when the defender dodged the hit (dmg will be 0) */
   missed?: boolean
+  /** true when this hit was a critical strike */
+  isCrit?: boolean
   /** Present when this entry was produced by a spell cast, not a physical attack. */
   spell?: SpellLogData
 }
@@ -119,18 +121,20 @@ function makeInitialEnemy(): Unit {
  *
  * Variance ±15 % last.
  */
-function calcDmg(a: Unit, d: Unit): number {
+function calcDmg(a: Unit, d: Unit): { dmg: number; isCrit: boolean } {
   const K = 20
   const armor  = K / (d.def + K)
   const defEff = 1 - d.damageReduction
   let base = Math.max(1, Math.round(a.atk * armor * defEff))
 
+  let isCrit = false
   if (a.critChance > 0 && Math.random() < a.critChance) {
-    base = Math.round(base * a.critDamage)
+    base   = Math.round(base * a.critDamage)
+    isCrit = true
   }
 
   const variance = 0.85 + Math.random() * 0.3
-  return Math.max(1, Math.round(base * variance))
+  return { dmg: Math.max(1, Math.round(base * variance)), isCrit }
 }
 
 /** Returns true when the defender dodges the hit. */
@@ -202,13 +206,13 @@ export const useBattleStore = create<BattleStore>()(
         return
       }
 
-      const dmg   = calcDmg(atkUnit, defUnit)
+      const { dmg, isCrit } = calcDmg(atkUnit, defUnit)
       const newHp = Math.max(0, defUnit.hp - dmg)
 
       if (st.attacker === 'player') st.enemy.hp  = newHp
       else                          st.player.hp = newHp
 
-      st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg })
+      st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg, isCrit })
       st.hitsLeft -= 1
 
       if (newHp === 0) { st.winner = st.attacker; st.phase = 'over' }
@@ -238,17 +242,17 @@ export const useBattleStore = create<BattleStore>()(
           if (checkDodge(st.enemy)) {
             st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg: 0, missed: true })
           } else {
-            const dmg = calcDmg(st.player, st.enemy)
+            const { dmg, isCrit } = calcDmg(st.player, st.enemy)
             eHp = Math.max(0, eHp - dmg)
-            st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg })
+            st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg, isCrit })
           }
         } else {
           if (checkDodge(st.player)) {
             st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg: 0, missed: true })
           } else {
-            const dmg = calcDmg(st.enemy, st.player)
+            const { dmg, isCrit } = calcDmg(st.enemy, st.player)
             pHp = Math.max(0, pHp - dmg)
-            st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg })
+            st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg, isCrit })
           }
         }
         hitsLeft--

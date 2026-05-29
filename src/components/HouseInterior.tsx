@@ -164,7 +164,13 @@ export default function HouseInterior() {
                                   <span className="font-semibold">{entry.attacker}</span>
                                   <span className="opacity-40">→</span>
                                   <span>{entry.defender}</span>
-                                  <span className="ml-auto font-bold">{entry.dmg}</span>
+                                  <span className={cn(
+                                    'ml-auto font-bold flex items-center gap-0.5',
+                                    entry.isCrit && 'text-amber-300',
+                                  )}>
+                                    {entry.isCrit && <span className="text-[8px]">⚡</span>}
+                                    {entry.dmg}
+                                  </span>
                                 </>
                             }
                           </div>

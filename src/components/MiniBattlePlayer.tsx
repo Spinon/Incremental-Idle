@@ -126,6 +126,11 @@ export default function MiniBattlePlayer() {
         text  = spell.icon
         color = 'text-blue-300'
       }
+    } else if (entry.isCrit) {
+      text  = `⚡-${entry.dmg}`
+      color = 'text-amber-300 text-[13px]'
+      if (hitsPlayer) setPlayerHitKey(k => k + 1)
+      else            setEnemyHitKey(k => k + 1)
     } else {
       text  = `-${entry.dmg}`
       color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'

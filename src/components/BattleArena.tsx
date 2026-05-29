@@ -103,7 +103,7 @@ export default function BattleArena() {
   const [impact, setImpact] = useState(false)
 
   // Floating number state — positive value = heal (green), negative = damage
-  interface DmgFloat { id: number; value: number; missed: boolean; side: 'player' | 'enemy'; icon?: string }
+  interface DmgFloat { id: number; value: number; missed: boolean; isCrit: boolean; side: 'player' | 'enemy'; icon?: string }
   const [floats, setFloats] = useState<DmgFloat[]>([])
   const floatId = useRef(0)
   const lastLogLen = useRef(0)
@@ -112,31 +112,30 @@ export default function BattleArena() {
   const logLen = store.log.length
   useEffect(() => {
     if (logLen > lastLogLen.current && store.log.length > 0 && !store.skipAnim) {
-      const entry = store.log[0]  // newest entry (unshifted to front)
+      const entry = store.log[0]
 
       // Float appears on the DEFENDER's side (the unit taking the hit/effect)
       const side: 'player' | 'enemy' = entry.defender === store.player.name ? 'player' : 'enemy'
 
       let floatValue = 0
       let floatIcon: string | undefined
+      const isCrit = !!entry.isCrit
 
       if (entry.missed) {
-        floatValue = 0  // "MISS" handled separately
+        floatValue = 0
       } else if (entry.spell) {
-        if (entry.spell.effectType === 'damage')  floatValue = -(entry.spell.value)
+        if (entry.spell.effectType === 'damage')   floatValue = -(entry.spell.value)
         else if (entry.spell.effectType === 'heal') floatValue = entry.spell.value
-        // buff/debuff/utility: show spell icon without a number
         else floatIcon = entry.spell.icon
       } else {
         floatValue = -entry.dmg
       }
 
-      // Skip utility floats that have no number or icon
       const shouldFloat = entry.missed || floatValue !== 0 || floatIcon !== undefined
       if (shouldFloat) {
         const id = ++floatId.current
-        setFloats(prev => [...prev.slice(-6), { id, value: floatValue, missed: !!entry.missed, side, icon: floatIcon }])
-        setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1150)
+        setFloats(prev => [...prev.slice(-6), { id, value: floatValue, missed: !!entry.missed, isCrit, side, icon: floatIcon }])
+        setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1300)
       }
     }
     lastLogLen.current = logLen
@@ -316,20 +315,30 @@ export default function BattleArena() {
           <div
             key={f.id}
             className={cn(
-              'absolute z-10 anim-dmg-float font-black drop-shadow-lg pointer-events-none',
-              f.side === 'player' ? 'left-16 bottom-28' : 'right-16 bottom-28',
+              'absolute z-10 anim-dmg-float font-black drop-shadow-lg pointer-events-none leading-none',
+              f.side === 'player' ? 'left-14 bottom-28' : 'right-14 bottom-28',
               f.missed
                 ? 'text-slate-400 dark:text-slate-500 text-sm italic'
                 : f.icon
                   ? 'text-2xl'
-                  : f.value > 0
-                    ? 'text-emerald-400 dark:text-emerald-300 text-lg'
-                    : f.side === 'player'
-                      ? 'text-red-500 dark:text-red-400 text-lg'
-                      : 'text-yellow-300 dark:text-yellow-200 text-xl',
+                  : f.isCrit
+                    ? 'text-amber-300 text-2xl drop-shadow-[0_0_10px_rgba(251,191,36,0.9)]'
+                    : f.value > 0
+                      ? 'text-emerald-400 dark:text-emerald-300 text-lg'
+                      : f.side === 'player'
+                        ? 'text-red-500 dark:text-red-400 text-lg'
+                        : 'text-yellow-300 dark:text-yellow-200 text-xl',
             )}
           >
-            {f.missed ? 'MISS' : f.icon ? f.icon : f.value > 0 ? `+${f.value}` : `${f.value}`}
+            {f.missed
+              ? 'MISS'
+              : f.icon
+                ? f.icon
+                : f.isCrit
+                  ? `⚡${f.value}`
+                  : f.value > 0
+                    ? `+${f.value}`
+                    : `${f.value}`}
           </div>
         ))}
 
@@ -628,7 +637,15 @@ export default function BattleArena() {
                         <span className={isNew ? 'font-semibold' : ''}>{entry.attacker}</span>
                         <span className="opacity-40">→</span>
                         <span className={isNew ? 'font-semibold' : ''}>{entry.defender}</span>
-                        <span className={cn('ml-auto font-bold tabular-nums shrink-0', isNew && (isPlayerAttacker ? 'text-indigo-600 dark:text-indigo-300' : 'text-red-600 dark:text-red-300'))}>
+                        <span className={cn(
+                          'ml-auto font-bold tabular-nums shrink-0 flex items-center gap-0.5',
+                          entry.isCrit
+                            ? 'text-amber-400 dark:text-amber-300'
+                            : isNew
+                              ? (isPlayerAttacker ? 'text-indigo-600 dark:text-indigo-300' : 'text-red-600 dark:text-red-300')
+                              : '',
+                        )}>
+                          {entry.isCrit && <span className="text-[9px]">⚡</span>}
                           -{entry.dmg}
                         </span>
                       </>
