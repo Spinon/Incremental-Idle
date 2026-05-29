@@ -25,8 +25,8 @@ export const FOREST_MONSTERS: MonsterTemplate[] = [
     emoji: '🫧',
     basePoints: 7,
     pointsPerLevel: 4,
-    // Extremely tanky, very slow, weak attack
-    preferences: { forca: 2, vitalidade: 10, agilidade: 1, destreza: 1, inteligencia: 1, sabedoria: 1 },
+    // Tanky but slippery — less raw HP, gains some speed, dodge and DR
+    preferences: { forca: 2, vitalidade: 7, agilidade: 3, destreza: 2, inteligencia: 1, sabedoria: 1 },
   },
   {
     id: 'bandit',
