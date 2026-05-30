@@ -179,7 +179,7 @@ export const ALL_SPELLS: Spell[] = [
   {
     id: 'abyssus_pluvia', name: 'Chuva do Abismo',
     word1Id: 'abyssus', word2Id: 'pluvia', rarity: 'epic',
-    manaCost: 44, cooldown: 10,
+    manaCost: 44, cooldown: 14,
     effect: { type: 'damage', base: 38, scaling: 4.2, scalingStat: 'magicDamage' },
     description: 'Invoca uma chuva de energia do abismo sobre o inimigo.',
   },
@@ -373,7 +373,7 @@ export const ALL_SPELLS: Spell[] = [
   {
     id: 'abyssus_manus', name: 'Mão do Abismo',
     word1Id: 'abyssus', word2Id: 'manus', rarity: 'epic',
-    manaCost: 40, cooldown: 12,
+    manaCost: 40, cooldown: 16,
     effect: { type: 'debuff', enemyAtkMult: 0.50, enemyAtkSpeedMult: 0.58, debuffDuration: 8 },
     description: 'A mão do abismo esmaga o inimigo — ATK e velocidade drasticamente reduzidos por 8 turnos.',
   },
@@ -679,7 +679,7 @@ export const ALL_SPELLS: Spell[] = [
   {
     id: 'abyssus_unda', name: 'Onda Abissal',
     word1Id: 'abyssus', word2Id: 'unda', rarity: 'epic',
-    manaCost: 56, cooldown: 11,
+    manaCost: 56, cooldown: 15,
     effect: { type: 'damage', base: 45, scaling: 5.0, scalingStat: 'magicDamage' },
     description: 'Uma onda do abismo carregada com energia inimaginável.',
   },

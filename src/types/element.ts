@@ -108,7 +108,8 @@ export const ELEMENT_DEFAULT_STATUS: Record<ElementType, StatusConfig> = {
   mortis:  { chance: 0.35, powerScale: 0,    basePower: 1, turns: 3 },
   vitae:   { chance: 0.80, powerScale: 0.30, basePower: 3, turns: 3 },
   caelum:  { chance: 0.50, powerScale: 0,    basePower: 1, turns: 2 },
-  abyssus: { chance: 0.40, powerScale: 0,    basePower: 1, turns: 2 },
+  // Gravity: single-turn stun (enemy loses turn) — lower chance, 1 turn
+  abyssus: { chance: 0.25, powerScale: 0,    basePower: 1, turns: 1 },
   eternum: { chance: 0.35, powerScale: 0,    basePower: 1, turns: 3 },
   tempus:  { chance: 0.45, powerScale: 0,    basePower: 1, turns: 3 },
 }

@@ -264,14 +264,33 @@ export const useBattleStore = create<BattleStore>()(
 
     switchAttacker: () => set((st) => {
       if (st.phase === 'over') return
-      st.attacker = st.attacker === 'player' ? 'enemy' : 'player'
-      st.phase    = 'idle'
-      st.turn    += 1
-      const next    = st.attacker === 'player' ? st.player : st.enemy
-      const opp     = st.attacker === 'player' ? st.enemy  : st.player
-      const hits    = calcHits(next.atkSpeed, opp.atkSpeed)
-      st.hitsLeft   = hits
-      st.comboSize  = hits
+
+      const candidate = st.attacker === 'player' ? 'enemy' : 'player'
+      st.phase = 'idle'
+      st.turn += 1
+
+      // Gravity: enemy loses their entire turn (stun)
+      if (candidate === 'enemy') {
+        const gIdx = st.enemyStatuses.findIndex(s => s.type === 'gravity')
+        if (gIdx >= 0) {
+          // Consume the gravity turn and skip back to player
+          st.enemyStatuses[gIdx].turnsLeft -= 1
+          if (st.enemyStatuses[gIdx].turnsLeft <= 0) {
+            st.enemyStatuses.splice(gIdx, 1)
+          }
+          // Enemy turn skipped — player attacks again
+          st.attacker = 'player'
+        } else {
+          st.attacker = 'enemy'
+        }
+      } else {
+        st.attacker = 'player'
+      }
+
+      const next = st.attacker === 'player' ? st.player : st.enemy
+      const opp  = st.attacker === 'player' ? st.enemy  : st.player
+      st.hitsLeft  = calcHits(next.atkSpeed, opp.atkSpeed)
+      st.comboSize = st.hitsLeft
     }),
 
     skipBattle: () => set((st) => {
