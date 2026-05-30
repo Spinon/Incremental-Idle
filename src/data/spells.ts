@@ -64,6 +64,13 @@ export const SPELL_ICONS: Record<string, string> = {
   glacies_pluvia: '❄',
   toxicum_manus:  '☠',
   umbra_aura:     '🌑',
+  // utility — new (tile/exploration)
+  ignis_pluvia:   '🌧',
+  arcanum_pluvia: '📜',
+  glacies_arcanum:'🧊',
+  tempus_arcanum: '⏳',
+  lux_manus:      '👁',
+  caelum_unda:    '🌊',
   // utility
   lux_aura:       '💡',
   tempus_unda:    '⏩',
@@ -346,7 +353,7 @@ export const ALL_SPELLS: Spell[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // UTILITY — exploration & out-of-battle boosts
+  // UTILITY — exploration & out-of-battle boosts (existing)
   // ═══════════════════════════════════════════════════════════════
 
   {
@@ -383,6 +390,53 @@ export const ALL_SPELLS: Spell[] = [
     manaCost: 44, cooldown: 60,
     effect: { type: 'utility', statAdds: { vision: 120, xpBonus: 0.35 }, duration: 100 },
     description: 'Claridade além da compreensão — visão e XP ampliados por 100 turnos.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // UTILITY — exploração e gerenciamento de tiles (novos)
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    id: 'lux_manus', name: 'Olho do Mago',
+    word1Id: 'lux', word2Id: 'manus', rarity: 'uncommon',
+    manaCost: 18, cooldown: 15,
+    effect: { type: 'utility', statAdds: { vision: 90 }, duration: 40 },
+    description: 'Toque de luz amplia drasticamente a visão do mago por 40 turnos.',
+  },
+  {
+    id: 'caelum_unda', name: 'Maré Celestial',
+    word1Id: 'caelum', word2Id: 'unda', rarity: 'epic',
+    manaCost: 46, cooldown: 25,
+    effect: { type: 'utility', statAdds: { moveSpeed: 0.80, vision: 40 }, duration: 50 },
+    description: 'Uma onda celestial impulsiona o herói — velocidade de movimento e visão ampliadas por 50 turnos.',
+  },
+  {
+    id: 'ignis_pluvia', name: 'Chispa Arcana',
+    word1Id: 'ignis', word2Id: 'pluvia', rarity: 'uncommon',
+    manaCost: 22, cooldown: 20,
+    effect: { type: 'utility', tileAction: 'create', tileCount: 2 },
+    description: 'Chamas e chuva reagem criando energia — gera 2 tiles novos no deck no nível do herói.',
+  },
+  {
+    id: 'arcanum_pluvia', name: 'Chuva Arcana',
+    word1Id: 'arcanum', word2Id: 'pluvia', rarity: 'rare',
+    manaCost: 38, cooldown: 28,
+    effect: { type: 'utility', tileAction: 'create', tileCount: 4 },
+    description: 'Magia arcana precipita energia em forma de tiles — gera 4 tiles no deck no nível do herói.',
+  },
+  {
+    id: 'glacies_arcanum', name: 'Purificação Glacial',
+    word1Id: 'glacies', word2Id: 'arcanum', rarity: 'rare',
+    manaCost: 35, cooldown: 30,
+    effect: { type: 'utility', tileAction: 'refresh', tileCount: 3 },
+    description: 'Gelo arcano congela e descarta os 3 tiles mais altos do deck, substituindo por 3 novos no nível do herói.',
+  },
+  {
+    id: 'tempus_arcanum', name: 'Reinício Temporal',
+    word1Id: 'tempus', word2Id: 'arcanum', rarity: 'rare',
+    manaCost: 44, cooldown: 40,
+    effect: { type: 'utility', tileAction: 'refresh', tileCount: 8 },
+    description: 'O tempo arcano descarta todo o deck e gera um conjunto completamente novo no nível do herói.',
   },
 
   // ═══════════════════════════════════════════════════════════════

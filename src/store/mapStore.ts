@@ -262,6 +262,17 @@ interface MapStore {
   canAutoPlace(): boolean
   /** Send the player home and mark the map as stuck (triggers auto-restart UI). */
   handleStuck(): void
+  /**
+   * Spell effect — add `count` tiles at exactly `heroLevel` to the deck,
+   * ignoring the normal deck-size cap (bonus tiles from magic).
+   */
+  generateSpellTiles(count: number, heroLevel: number): void
+  /**
+   * Spell effect — discard the `count` highest-level tiles from the deck
+   * (the ones most likely to be above the hero's auto-explore range) then
+   * generate that many fresh tiles at `heroLevel`.
+   */
+  refreshSpellDeck(count: number, heroLevel: number): void
   moveOneStep(heroLevel?: number): void
   resetMap(startLevel?: number): void
   tickMap(deltaMs: number, moveSpeed: number, maxDeck: number, vision: number, heroLevel: number): void
@@ -316,6 +327,27 @@ export const useMapStore = create<MapStore>()(
         st.scene        = 'home'
         st.destination  = null
         st.stuckPending = true
+      }),
+
+      generateSpellTiles: (count, heroLevel) => set((st) => {
+        for (let i = 0; i < count; i++) {
+          st.deck.push(generateTile(heroLevel))
+        }
+      }),
+
+      refreshSpellDeck: (count, heroLevel) => set((st) => {
+        if (st.deck.length === 0) {
+          // Deck already empty — just generate fresh tiles
+          for (let i = 0; i < count; i++) st.deck.push(generateTile(heroLevel))
+          return
+        }
+        // Remove the `count` highest-level tiles (the ones that are most likely
+        // to be stuck above the hero's auto-explore level cap)
+        const byLevelDesc = [...st.deck].sort((a, b) => b.level - a.level)
+        const remove = new Set(byLevelDesc.slice(0, Math.min(count, st.deck.length)).map(t => t.id))
+        st.deck = st.deck.filter(t => !remove.has(t.id))
+        // Replace with fresh tiles at hero level
+        for (let i = 0; i < count; i++) st.deck.push(generateTile(heroLevel))
       }),
 
       // Process the tile the hero is standing on after a market exit.

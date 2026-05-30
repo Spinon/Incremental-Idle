@@ -7,6 +7,7 @@ import { calcSpellDamage, calcSpellHeal } from '../formulas/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
+import { useMapStore } from './mapStore'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 
 export const SPELL_SLOT_COUNT = 6
@@ -102,6 +103,17 @@ export const useSpellStore = create<SpellStore>()(
 
       if (dmg  > 0) battleStore.applyMagicDamage(dmg)
       if (heal > 0) battleStore.healPlayer(heal)
+
+      // ── Out-of-combat tile actions ────────────────────────────────────
+      if (effect.tileAction) {
+        const mapStore = useMapStore.getState()
+        const lv = heroState.level
+        if (effect.tileAction === 'create') {
+          mapStore.generateSpellTiles(effect.tileCount ?? 2, lv)
+        } else if (effect.tileAction === 'refresh') {
+          mapStore.refreshSpellDeck(effect.tileCount ?? 3, lv)
+        }
+      }
 
       // ── Debuff: save current enemy stats, apply multipliers ───────────
       const savedAtk      = battleStore.enemy.atk

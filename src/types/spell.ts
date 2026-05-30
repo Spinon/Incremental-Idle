@@ -35,6 +35,9 @@ export interface SpellEffect {
   enemyAtkMult?: number
   enemyAtkSpeedMult?: number
   debuffDuration?: number
+  // out-of-combat tile actions
+  tileAction?: 'create' | 'refresh'   // create = add tiles to deck; refresh = replace deck
+  tileCount?:  number                  // how many tiles to create (default 2)
 }
 
 export interface Spell {
