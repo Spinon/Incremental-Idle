@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import { LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
+import { LEARNABLE_WORDS, WORD_MAP, getAutoWordSlots } from '../data/words'
 import { SPELL_MAP, SPELL_ICONS, getAvailableSpells } from '../data/spells'
 import { calcSpellDamage, calcSpellHeal } from '../formulas/spells'
 import { getDerivedStats } from '../formulas/derived'
@@ -9,6 +9,18 @@ import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
 import { useMapStore } from './mapStore'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
+import type { ElementType } from '../types/element'
+import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
+import type { Spell } from '../types/spell'
+
+/** Returns the primary element word from a spell (word1 first, then word2). */
+function getSpellElement(spell: Spell): ElementType | null {
+  const w1 = WORD_MAP.get(spell.word1Id)
+  if (w1?.category === 'element') return spell.word1Id as ElementType
+  const w2 = WORD_MAP.get(spell.word2Id)
+  if (w2?.category === 'element') return spell.word2Id as ElementType
+  return null
+}
 
 export const SPELL_SLOT_COUNT = 6
 
@@ -101,8 +113,23 @@ export const useSpellStore = create<SpellStore>()(
                   : 0,
       })
 
-      if (dmg  > 0) battleStore.applyMagicDamage(dmg)
+      // Determine the elemental nature of this spell
+      const spellElement = getSpellElement(spell)
+
+      if (dmg  > 0) battleStore.applyMagicDamage(dmg, spellElement ?? undefined)
       if (heal > 0) battleStore.healPlayer(heal)
+
+      // ── Elemental status application ──────────────────────────────────
+      if (spellElement) {
+        const cfg = ELEMENT_DEFAULT_STATUS[spellElement]
+        const chance = cfg.chance
+        if (Math.random() < chance) {
+          const status = makeStatus(spellElement, derived.magicDamage, heroState.level)
+          // Damage/debuff spells → apply to enemy; heal/buff → apply to hero
+          const target = (effect.type === 'damage' || effect.type === 'debuff') ? 'enemy' : 'hero'
+          battleStore.applyElementalStatus(status, target)
+        }
+      }
 
       // ── Out-of-combat tile actions ────────────────────────────────────
       if (effect.tileAction) {

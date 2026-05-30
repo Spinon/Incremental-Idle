@@ -81,11 +81,17 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
     vision:    BASE.vision    + fa.inteligencia * 8  + fa.sabedoria * 12  + (eq?.vision    ?? 0),
 
     // ── Economy & drops ──────────────────────────────────────────────────────
-    //  Carisma: more drops, more gold, market efficiency (discount/overcharge)
     dropChance:      Math.min(0.5, BASE.dropChance + fa.carisma * 0.005 + (eq?.dropChance ?? 0)),
     goldMultiplier:  BASE.goldMultiplier + fa.carisma * 0.05 + (eq?.goldMult   ?? 0),
-    goldEfficiency:  1 + fa.carisma * 0.02,   // 1.0 = neutral; >1 = cheaper to buy
+    goldEfficiency:  1 + fa.carisma * 0.02,
     xpBonus:         BASE.xpBonus       + fa.carisma * 0.03 + (eq?.xpBonus    ?? 0),
+
+    // ── Elemental resistances ─────────────────────────────────────────────
+    // 0.008 per attribute point → max 50 % at ~63 pts (full investment cap)
+    resIgnea:   Math.min(0.5, fa.vitalidade   * 0.008 + (eq?.resIgnea   ?? 0)),
+    resGlacial: Math.min(0.5, fa.destreza     * 0.008 + (eq?.resGlacial ?? 0)),
+    resSombria: Math.min(0.5, fa.inteligencia * 0.008 + (eq?.resSombria ?? 0)),
+    resVital:   Math.min(0.5, fa.sabedoria    * 0.008 + (eq?.resVital   ?? 0)),
   }
 }
 

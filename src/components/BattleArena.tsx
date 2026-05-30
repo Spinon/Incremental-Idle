@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { STATUS_ICONS, STATUS_COLOR, STATUS_LABEL_PT } from '../types/element'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
@@ -158,9 +159,9 @@ export default function BattleArena() {
     if (store.phase === 'over') {
       if (!xpGranted.current && store.winner === 'player') {
         xpGranted.current = true
-        // Only grant XP when enemy is within ±5 levels of the hero
         if (Math.abs(heroLevel - store.enemy.level) <= 5) {
-          gainXp(store.enemy.maxHp)
+          const doom = store.enemyStatuses.some(s => s.type === 'doom')
+          gainXp(Math.round(store.enemy.maxHp * (doom ? 2 : 1)))
         }
       }
       timerA.current = setTimeout(() => {
@@ -276,6 +277,24 @@ export default function BattleArena() {
         {/* Player */}
         <div className="absolute left-10 bottom-[72px] flex flex-col items-start gap-2">
           <HpBar name={store.player.name} current={store.player.hp} max={store.player.maxHp} side="player" />
+          {/* Hero elemental statuses (regen, blessed…) */}
+          {store.heroStatuses.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {store.heroStatuses.map(s => (
+                <span
+                  key={s.element}
+                  title={`${STATUS_LABEL_PT[s.type]}${s.power > 1 ? ` (${s.power})` : ''}`}
+                  className={cn(
+                    'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                    'bg-slate-900/70 border border-slate-700/50',
+                    STATUS_COLOR[s.type],
+                  )}
+                >
+                  {STATUS_ICONS[s.type]}<span className="text-[9px] opacity-80">{s.turnsLeft}</span>
+                </span>
+              ))}
+            </div>
+          )}
           <div
             key={`player-${store.turn}`}
             className={isPlayerAttacking ? 'anim-attack-right' : ''}
@@ -287,6 +306,26 @@ export default function BattleArena() {
 
         {/* Enemy */}
         <div className="absolute right-10 bottom-[72px] flex flex-col items-end gap-2">
+          {/* Enemy elemental statuses */}
+          {store.enemyStatuses.length > 0 && (
+            <div className="flex flex-wrap gap-1 justify-end">
+              {store.enemyStatuses.map(s => (
+                <span
+                  key={s.element}
+                  title={`${STATUS_LABEL_PT[s.type]}${s.power > 1 ? ` (${s.power}/t)` : ''} — ${s.turnsLeft}t`}
+                  className={cn(
+                    'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                    'bg-slate-900/80 border border-slate-700/50',
+                    STATUS_COLOR[s.type],
+                  )}
+                >
+                  {STATUS_ICONS[s.type]}
+                  {s.power > 1 && <span className="text-[9px]">{s.power}</span>}
+                  <span className="text-[9px] opacity-70">{s.turnsLeft}</span>
+                </span>
+              ))}
+            </div>
+          )}
           <HpBar
             name={store.enemy.name}
             level={store.enemy.level}

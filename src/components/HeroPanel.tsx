@@ -158,6 +158,14 @@ export default function HeroPanel() {
           <StatRow label={t.statNames.goldEfficiency}  value={`${((derived.goldEfficiency - 1) * 100).toFixed(0)}% desc.`} />
           <StatRow label={t.statNames.goldMult}        value={`${derived.goldMultiplier.toFixed(2)}×`} />
           <StatRow label={t.statNames.xpBonus}        value={`${derived.xpBonus.toFixed(2)}×`} />
+          {(derived.resIgnea > 0 || derived.resGlacial > 0 || derived.resSombria > 0 || derived.resVital > 0) && (
+            <>
+              <StatRow label={t.statNames.resIgnea}   value={`${(derived.resIgnea   * 100).toFixed(1)}%`} />
+              <StatRow label={t.statNames.resGlacial} value={`${(derived.resGlacial * 100).toFixed(1)}%`} />
+              <StatRow label={t.statNames.resSombria} value={`${(derived.resSombria * 100).toFixed(1)}%`} />
+              <StatRow label={t.statNames.resVital}   value={`${(derived.resVital   * 100).toFixed(1)}%`} />
+            </>
+          )}
         </div>
       </div>
     </div>

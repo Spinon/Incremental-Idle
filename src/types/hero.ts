@@ -36,4 +36,9 @@ export interface DerivedStats {
   goldMultiplier: number
   goldEfficiency: number      // Carisma — buy discount / sell overcharge in market
   xpBonus: number
+  // Elemental resistances (0–0.5)
+  resIgnea:   number   // vs ignis, caelum    — Vitalidade
+  resGlacial: number   // vs glacies, fulgur, tempus — Destreza
+  resSombria: number   // vs umbra, mortis, abyssus  — Inteligência
+  resVital:   number   // vs vitae, toxicum          — Sabedoria
 }

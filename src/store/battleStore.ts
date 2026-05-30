@@ -4,6 +4,10 @@ import { immer } from 'zustand/middleware/immer'
 import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../data/monsters'
 import type { MonsterRarity } from '../types/monster'
+import type { ElementType } from '../types/element'
+import { elementalModifier, makeStatus } from '../types/element'
+import type { ActiveStatus } from '../types/element'
+export type { ActiveStatus }
 
 export type Speed = number
 export type Phase = 'idle' | 'attacking' | 'over'
@@ -17,10 +21,18 @@ export interface Unit {
   atk: number
   def: number
   atkSpeed: number
-  dodgeChance: number       // 0–1  (Agilidade for hero, destreza-derived for monsters)
-  critChance: number        // 0–0.5 probability of a critical hit
-  critDamage: number        // multiplier on crit (1.5 = 150% damage)
-  damageReduction: number   // 0–0.35 flat fraction of ALL incoming damage negated
+  dodgeChance: number
+  critChance: number
+  critDamage: number
+  damageReduction: number
+  // Elemental properties
+  element?:   ElementType        // physical attack element (monsters only)
+  statusChance?: number          // probability to apply element status on hit
+  weakTo:     ElementType[]      // takes 1.5× from these
+  resIgnea:   number             // resistance 0–0.5
+  resGlacial: number
+  resSombria: number
+  resVital:   number
   rarity?: MonsterRarity
   monsterType?: string
 }
@@ -55,6 +67,7 @@ export interface LogEntry {
 interface HeroSync {
   atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number
   critChance: number; critDamage: number; damageReduction: number
+  resIgnea: number; resGlacial: number; resSombria: number; resVital: number
 }
 
 interface BattleStore {
@@ -74,6 +87,8 @@ interface BattleStore {
   hitsLeft: number
   comboSize: number
   defeatSnapshot: DefeatSnapshot | null
+  enemyStatuses: ActiveStatus[]
+  heroStatuses:  ActiveStatus[]
 
   setSpeed(s: Speed): void
   setSkipAnim(v: boolean): void
@@ -86,8 +101,11 @@ interface BattleStore {
   skipBattle(): void
   reset(): void
   logSpell(data: SpellLogData & { casterName: string }): void
-  applyMagicDamage(dmg: number): void
+  applyMagicDamage(dmg: number, element?: ElementType): void
   healPlayer(hp: number): void
+  applyElementalStatus(status: ActiveStatus, target: 'enemy' | 'hero'): void
+  tickStatuses(): void
+  clearStatuses(): void
   applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
   restoreEnemyStats(savedAtk: number, savedAtkSpeed: number): void
 }
@@ -96,6 +114,7 @@ const INITIAL_PLAYER: Unit = {
   name: 'Hero', level: 0, hp: 30, maxHp: 30,
   atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
   critChance: 0, critDamage: 1.5, damageReduction: 0,
+  weakTo: [], resIgnea: 0, resGlacial: 0, resSombria: 0, resVital: 0,
 }
 
 function makeInitialEnemy(): Unit {
@@ -127,6 +146,12 @@ function calcDmg(a: Unit, d: Unit): { dmg: number; isCrit: boolean } {
   const armor  = K / (d.def + K)
   const defEff = 1 - d.damageReduction
   let base = Math.max(1, Math.round(a.atk * armor * defEff))
+
+  // Elemental modifier for physical attacks (e.g. monster with element)
+  if (a.element) {
+    const mod = elementalModifier(a.element, d.weakTo, d.resIgnea, d.resGlacial, d.resSombria, d.resVital)
+    base = Math.max(1, Math.round(base * mod))
+  }
 
   let isCrit = false
   if (a.critChance > 0 && Math.random() < a.critChance) {
@@ -166,6 +191,8 @@ export const useBattleStore = create<BattleStore>()(
     hitsLeft: 1,
     comboSize: 1,
     defeatSnapshot: null,
+    enemyStatuses: [],
+    heroStatuses:  [],
 
     setSpeed:    (s) => set((st) => { st.speed    = s }),
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
@@ -187,7 +214,8 @@ export const useBattleStore = create<BattleStore>()(
       }
     }),
 
-    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, damageReduction }) => set((st) => {
+    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, damageReduction,
+                     resIgnea, resGlacial, resSombria, resVital }) => set((st) => {
       st.player.atk             = Math.round(atk)
       st.player.def             = def
       st.player.maxHp           = Math.round(maxHp)
@@ -196,6 +224,10 @@ export const useBattleStore = create<BattleStore>()(
       st.player.critChance      = critChance
       st.player.critDamage      = critDamage
       st.player.damageReduction = damageReduction
+      st.player.resIgnea        = resIgnea
+      st.player.resGlacial      = resGlacial
+      st.player.resSombria      = resSombria
+      st.player.resVital        = resVital
       if (st.player.hp > st.player.maxHp) st.player.hp = st.player.maxHp
     }),
 
@@ -219,6 +251,15 @@ export const useBattleStore = create<BattleStore>()(
       st.hitsLeft -= 1
 
       if (newHp === 0) { st.winner = st.attacker; st.phase = 'over' }
+
+      // Elemental status from physical attack (e.g. venomous monster)
+      if (atkUnit.element && atkUnit.statusChance && Math.random() < atkUnit.statusChance) {
+        const status = makeStatus(atkUnit.element, 0, atkUnit.level)
+        const arr = st.attacker === 'player' ? st.enemyStatuses : st.heroStatuses
+        const idx = arr.findIndex(s => s.element === status.element)
+        if (idx >= 0) { if (status.power >= arr[idx].power) arr[idx] = { ...status } }
+        else arr.push({ ...status })
+      }
     }),
 
     switchAttacker: () => set((st) => {
@@ -285,11 +326,72 @@ export const useBattleStore = create<BattleStore>()(
       })
     }),
 
-    applyMagicDamage: (dmg) => set((st) => {
+    applyMagicDamage: (dmg, element) => set((st) => {
       if (st.phase === 'over') return
-      const newHp = Math.max(0, st.enemy.hp - dmg)
+      let effective = dmg
+      if (element) {
+        const mod = elementalModifier(
+          element, st.enemy.weakTo,
+          st.enemy.resIgnea, st.enemy.resGlacial, st.enemy.resSombria, st.enemy.resVital,
+        )
+        effective = Math.max(1, Math.round(dmg * mod))
+      }
+      const newHp = Math.max(0, st.enemy.hp - effective)
       st.enemy.hp = newHp
       if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
+    }),
+
+    applyElementalStatus: (status, target) => set((st) => {
+      const arr = target === 'enemy' ? st.enemyStatuses : st.heroStatuses
+      const idx = arr.findIndex(s => s.element === status.element)
+      if (idx >= 0) {
+        // Replace only if same or stronger power ("fire replaces with the strongest")
+        if (status.power >= arr[idx].power) arr[idx] = { ...status }
+      } else {
+        arr.push({ ...status })
+      }
+    }),
+
+    tickStatuses: () => set((st) => {
+      if (st.phase === 'over') return
+
+      // ── DoTs on enemy ─────────────────────────────────────────────────────
+      for (const s of st.enemyStatuses) {
+        if (s.type === 'burn') {
+          const dmg = Math.max(1, Math.round(s.power))
+          const newHp = Math.max(0, st.enemy.hp - dmg)
+          st.enemy.hp = newHp
+          if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
+        }
+        if (s.type === 'poison') {
+          const dmg = Math.max(1, Math.round(s.power))
+          const newHp = Math.max(0, st.enemy.hp - dmg)
+          st.enemy.hp = newHp
+          if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
+          // Poison grows each tick
+          s.power = Math.round(s.power * 1.3)
+        }
+      }
+
+      // ── Regen on hero ──────────────────────────────────────────────────────
+      for (const s of st.heroStatuses) {
+        if (s.type === 'regen') {
+          st.player.hp = Math.min(st.player.maxHp, st.player.hp + s.power)
+        }
+      }
+
+      // ── Decrement all statuses, remove expired ─────────────────────────────
+      st.enemyStatuses = st.enemyStatuses
+        .map(s => ({ ...s, turnsLeft: s.turnsLeft - 1 }))
+        .filter(s => s.turnsLeft > 0)
+      st.heroStatuses = st.heroStatuses
+        .map(s => ({ ...s, turnsLeft: s.turnsLeft - 1 }))
+        .filter(s => s.turnsLeft > 0)
+    }),
+
+    clearStatuses: () => set((st) => {
+      st.enemyStatuses = []
+      st.heroStatuses  = []
     }),
 
     healPlayer: (hp) => set((st) => {
@@ -317,6 +419,8 @@ export const useBattleStore = create<BattleStore>()(
       st.turn         = 0
       st.skipAnim     = false
       st.defeatSnapshot = null
+      st.enemyStatuses  = []
+      st.heroStatuses   = []
       const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
       st.hitsLeft     = hits
       st.comboSize    = hits

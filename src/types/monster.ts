@@ -9,6 +9,8 @@ export interface MonsterPreferences {
   sabedoria:    number
 }
 
+import type { ElementType } from './element'
+
 export interface MonsterTemplate {
   id:             string
   name:           string
@@ -18,4 +20,10 @@ export interface MonsterTemplate {
   /** Attribute points gained per level */
   pointsPerLevel: number
   preferences:    MonsterPreferences
+  /** Physical attack element — applies elemental status on hits */
+  element?:       ElementType
+  /** Probability of applying the element's status per physical hit */
+  statusChance?:  number
+  /** Takes 1.5× damage from these elements */
+  weakTo?:        ElementType[]
 }

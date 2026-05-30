@@ -69,6 +69,8 @@ function GameRoot() {
       atkSpeed: d.attackSpeed, dodgeChance: d.dodgeChance,
       critChance: d.critChance, critDamage: d.critDamage,
       damageReduction: d.damageReduction,
+      resIgnea: d.resIgnea, resGlacial: d.resGlacial,
+      resSombria: d.resSombria, resVital: d.resVital,
     })
   }, [attributes, equipment, heroLevel, syncFromHero])
 

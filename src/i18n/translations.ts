@@ -61,6 +61,8 @@ const pt = {
     critChance: 'Chance Crítico', critDamage: 'Dano Crítico',
     damageReduction: 'Redução de Dano', healBonus: 'Efet. Cura',
     goldEfficiency: 'Efic. Ouro (compra)',
+    resIgnea: 'Res. Ígnea 🔥', resGlacial: 'Res. Glacial ❄',
+    resSombria: 'Res. Sombria 🌑', resVital: 'Res. Vital 🧪',
   },
   presets: {
     label: 'Guia rápido',
@@ -132,6 +134,8 @@ const en = {
     critChance: 'Crit Chance', critDamage: 'Crit Damage',
     damageReduction: 'Dmg Reduction', healBonus: 'Heal Eff.',
     goldEfficiency: 'Gold Eff. (buy)',
+    resIgnea: 'Fire Res. 🔥', resGlacial: 'Cold Res. ❄',
+    resSombria: 'Dark Res. 🌑', resVital: 'Bio Res. 🧪',
   },
   presets: {
     label: 'Quick build',

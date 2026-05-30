@@ -100,6 +100,10 @@ export interface EquipBonuses {
   dropChance: number
   goldMult: number
   xpBonus: number
+  resIgnea?:   number
+  resGlacial?: number
+  resSombria?: number
+  resVital?:   number
   /** From unique items: flat bonuses to primary attributes, applied before deriving stats */
   attrBonus: Partial<Record<AttributeKey, number>>
 }

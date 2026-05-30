@@ -125,6 +125,12 @@ export function buildMonster(
   const label  = MONSTER_RARITY_LABEL[rarity]
   const prefix = label ? `[${label}] ` : ''
 
+  // Elemental resistances derived from attributes (same formula as hero)
+  const resIgnea   = Math.min(0.5, attrs.vitalidade   * 0.008)
+  const resGlacial = Math.min(0.5, attrs.destreza     * 0.008)
+  const resSombria = Math.min(0.5, attrs.inteligencia * 0.008)
+  const resVital   = Math.min(0.5, attrs.sabedoria    * 0.008)
+
   return {
     name:            prefix + template.name,
     level,
@@ -137,6 +143,10 @@ export function buildMonster(
     critChance:      s.critChance,
     critDamage:      s.critDamage,
     damageReduction: s.damageReduction,
+    element:         template.element,
+    statusChance:    template.statusChance,
+    weakTo:          template.weakTo ?? [],
+    resIgnea, resGlacial, resSombria, resVital,
     rarity,
     monsterType:     template.id,
   }

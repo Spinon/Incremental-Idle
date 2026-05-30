@@ -63,6 +63,8 @@ export function useGameLoop() {
         // (switchAttacker just ran → attacker is now 'enemy')
         if (attacker === 'enemy') {
           useSpellStore.getState().onBattleTurn()
+          // Elemental DoTs (burn, poison) and regen tick every turn
+          useBattleStore.getState().tickStatuses()
         }
       }
 
