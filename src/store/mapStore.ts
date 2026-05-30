@@ -233,10 +233,16 @@ interface MapStore {
    * so the player can't immediately face a too-strong enemy after a defeat.
    */
   easyTilesRemaining: number
+  /**
+   * When true, auto-explore ignores the hero-level cap and paths into tiles
+   * above the hero's level.  Persisted so the choice survives page reloads.
+   */
+  riskMode: boolean
 
   placeTile(tileId: string, x: number, y: number): void
   setDestination(x: number, y: number): void
   setAutoExplore(v: 'manual' | 'move' | 'full'): void
+  toggleRiskMode(): void
   drainXp(): number
   drainGold(): number
   drainMonsterXp(): { xp: number; monsterLevel: number } | null
@@ -297,8 +303,10 @@ export const useMapStore = create<MapStore>()(
       stuckPending: false,
       levelOffset: 0,
       easyTilesRemaining: 5,
+      riskMode: false,
 
-      setAutoExplore: (v) => set((st) => { st.autoExplore = v }),
+      setAutoExplore:  (v) => set((st) => { st.autoExplore = v }),
+      toggleRiskMode:  ()  => set((st) => { st.riskMode = !st.riskMode }),
 
       goHome:     () => set((st) => { st.scene = 'home'; st.destination = null }),
       leaveScene: () => set((st) => { st.scene = 'map'; st.stuckPending = false }),
@@ -543,7 +551,11 @@ export const useMapStore = create<MapStore>()(
 
         set((st) => {
           if (!st.destination && st.autoExplore !== 'manual') {
-            const target = findNearestUnexplored(st.grid, st.playerPos, heroLevel)
+            // In risk mode the level cap is lifted — the hero willingly enters
+            // tiles above its level.  In safe mode the cap prevents pathing
+            // into unexplored tiles above heroLevel.
+            const cap    = (heroLevel !== undefined && !st.riskMode) ? heroLevel : undefined
+            const target = findNearestUnexplored(st.grid, st.playerPos, cap)
             if (target) st.destination = target
           }
 

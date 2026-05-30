@@ -52,10 +52,12 @@ export default function MapSection() {
   const deckAccum      = useMapStore(s => s.deckAccum)
   const sightedCells   = useMapStore(s => s.sightedCells)
   const autoExplore    = useMapStore(s => s.autoExplore)
+  const riskMode       = useMapStore(s => s.riskMode)
   const tilesPlaced    = useMapStore(s => s.tilesPlaced)
   const placeTile      = useMapStore(s => s.placeTile)
   const setDestination = useMapStore(s => s.setDestination)
   const setAutoExplore = useMapStore(s => s.setAutoExplore)
+  const toggleRiskMode = useMapStore(s => s.toggleRiskMode)
   const goHome         = useMapStore(s => s.goHome)
 
   const attrs     = useHeroStore(s => s.attributes)
@@ -128,6 +130,24 @@ export default function MapSection() {
               </button>
             )
           })()}
+
+          {/* Risk mode toggle — only relevant when auto-exploring */}
+          {autoExplore !== 'manual' && (
+            <button
+              onClick={toggleRiskMode}
+              title={riskMode
+                ? 'Arriscado: explora tiles acima do nível. Clique para Seguro'
+                : 'Seguro: respeita limite de nível. Clique para Arriscado'}
+              className={cn(
+                'h-6 px-2 rounded text-[10px] font-semibold border transition-colors',
+                riskMode
+                  ? 'bg-orange-600 border-orange-500 text-white hover:bg-orange-500'
+                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
+              )}
+            >
+              {riskMode ? '⚔ Arriscado' : '🛡 Seguro'}
+            </button>
+          )}
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
