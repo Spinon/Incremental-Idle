@@ -234,25 +234,61 @@ export const useBattleStore = create<BattleStore>()(
     applyHit: () => set((st) => {
       const atkUnit = st.attacker === 'player' ? st.player : st.enemy
       const defUnit = st.attacker === 'player' ? st.enemy  : st.player
+      // Statuses active on the attacker and defender
+      const atkSt = st.attacker === 'player' ? st.heroStatuses  : st.enemyStatuses
+      const defSt = st.attacker === 'player' ? st.enemyStatuses : st.heroStatuses
 
-      if (checkDodge(defUnit)) {
+      // ── Blind: 10 % miss chance for the attacker ──────────────────────────
+      if (atkSt.some(s => s.type === 'blind') && Math.random() < 0.10) {
         st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, missed: true })
         st.hitsLeft -= 1
         return
       }
 
-      const { dmg, isCrit } = calcDmg(atkUnit, defUnit)
-      const newHp = Math.max(0, defUnit.hp - dmg)
+      // ── Shock: defender cannot dodge ─────────────────────────────────────
+      const shocked = defSt.some(s => s.type === 'shock')
+      if (!shocked && checkDodge(defUnit)) {
+        st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, missed: true })
+        st.hitsLeft -= 1
+        return
+      }
 
+      // ── Build effective copies with status modifiers ──────────────────────
+      const effAtk = { ...atkUnit }
+      const effDef = { ...defUnit }
+
+      // Blind → attacker cannot crit
+      if (atkSt.some(s => s.type === 'blind')) effAtk.critChance = 0
+
+      // Distortion → attacker's ATK swapped with destreza-equivalent
+      // (critChance + damageReduction) × 100 replaces raw ATK:
+      //   forca-dominant monsters (high ATK, low dex) become very weak
+      //   destreza-dominant monsters (spider) are barely affected
+      if (atkSt.some(s => s.type === 'distortion')) {
+        effAtk.atk = Math.max(1, Math.round((atkUnit.critChance + atkUnit.damageReduction) * 100))
+      }
+
+      // Curse → defender's damage reduction zeroed
+      if (defSt.some(s => s.type === 'curse')) effDef.damageReduction = 0
+
+      // ── Compute base damage ───────────────────────────────────────────────
+      const { dmg: rawDmg, isCrit } = calcDmg(effAtk, effDef)
+
+      // Marked  → defender takes 1.5× damage (eternum brands the target)
+      // Blessed → defender takes 0.5× damage (caelum protects the hero)
+      const marked  = defSt.some(s => s.type === 'marked')  ? 1.5 : 1.0
+      const blessed = defSt.some(s => s.type === 'blessed') ? 0.5 : 1.0
+      const dmg = Math.max(1, Math.round(rawDmg * marked * blessed))
+
+      const newHp = Math.max(0, defUnit.hp - dmg)
       if (st.attacker === 'player') st.enemy.hp  = newHp
       else                          st.player.hp = newHp
 
       st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg, isCrit })
       st.hitsLeft -= 1
-
       if (newHp === 0) { st.winner = st.attacker; st.phase = 'over' }
 
-      // Elemental status from physical attack (e.g. venomous monster)
+      // ── Elemental status from physical attack (e.g. venomous monster) ─────
       if (atkUnit.element && atkUnit.statusChance && Math.random() < atkUnit.statusChance) {
         const status = makeStatus(atkUnit.element, 0, atkUnit.level)
         const arr = st.attacker === 'player' ? st.enemyStatuses : st.heroStatuses
@@ -289,7 +325,12 @@ export const useBattleStore = create<BattleStore>()(
 
       const next = st.attacker === 'player' ? st.player : st.enemy
       const opp  = st.attacker === 'player' ? st.enemy  : st.player
-      st.hitsLeft  = calcHits(next.atkSpeed, opp.atkSpeed)
+      // Freeze: attacker's atkSpeed reduced to 35 % while frozen
+      // Makes fast enemies lose their combo advantage (e.g. goblin 2→1 hits/turn)
+      const nextSt = st.attacker === 'player' ? st.heroStatuses : st.enemyStatuses
+      const frozen = nextSt.some(s => s.type === 'freeze')
+      const effSpeed = frozen ? Math.max(0.1, next.atkSpeed * 0.35) : next.atkSpeed
+      st.hitsLeft  = calcHits(effSpeed, opp.atkSpeed)
       st.comboSize = st.hitsLeft
     }),
 

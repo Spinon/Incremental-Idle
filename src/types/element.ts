@@ -107,11 +107,11 @@ export const ELEMENT_DEFAULT_STATUS: Record<ElementType, StatusConfig> = {
   toxicum: { chance: 0.45, powerScale: 0.40, basePower: 2, turns: 4 },
   mortis:  { chance: 0.35, powerScale: 0,    basePower: 1, turns: 3 },
   vitae:   { chance: 0.80, powerScale: 0.30, basePower: 3, turns: 3 },
-  caelum:  { chance: 0.50, powerScale: 0,    basePower: 1, turns: 2 },
+  caelum:  { chance: 0.50, powerScale: 0,    basePower: 1, turns: 3 },  // blessed 3t
   // Gravity: single-turn stun (enemy loses turn) — lower chance, 1 turn
   abyssus: { chance: 0.25, powerScale: 0,    basePower: 1, turns: 1 },
-  eternum: { chance: 0.35, powerScale: 0,    basePower: 1, turns: 3 },
-  tempus:  { chance: 0.45, powerScale: 0,    basePower: 1, turns: 3 },
+  eternum: { chance: 0.35, powerScale: 0,    basePower: 1, turns: 4 },  // marked 4t
+  tempus:  { chance: 0.40, powerScale: 0,    basePower: 1, turns: 3 },  // distortion 3t
 }
 
 /**
@@ -184,16 +184,16 @@ export const STATUS_COLOR: Record<StatusType, string> = {
 }
 
 export const STATUS_LABEL_PT: Record<StatusType, string> = {
-  burn:       'Queimando',
-  freeze:     'Congelado',
-  shock:      'Eletrocutado',
-  curse:      'Amaldiçoado',
-  blind:      'Ofuscado',
-  poison:     'Envenenado',
-  doom:       'Sentenciado',
-  regen:      'Regenerando',
-  blessed:    'Abençoado',
-  gravity:    'Gravitação',
-  marked:     'Marcado',
-  distortion: 'Distorção',
+  burn:       'Queimando',        // ignis:   dano/turno
+  freeze:     'Congelado',        // glacies: velocidade de ataque −65%
+  shock:      'Eletrocutado',     // fulgur:  dodge = 0
+  curse:      'Amaldiçoado',      // umbra:   redução de dano = 0
+  blind:      'Ofuscado',         // lux:     crit = 0, 10 % miss
+  poison:     'Envenenado',       // toxicum: dano crescente/turno
+  doom:       'Sentenciado',      // mortis:  ×2 XP ao morrer
+  regen:      'Regenerando',      // vitae:   cura o herói/turno
+  blessed:    'Abençoado',        // caelum:  recebe 50 % menos dano
+  gravity:    'Gravitação',       // abyssus: perde o próximo turno
+  marked:     'Marcado',          // eternum: recebe 1.5× dano
+  distortion: 'Distorção',        // tempus:  força e destreza trocadas
 }
