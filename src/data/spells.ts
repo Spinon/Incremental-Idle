@@ -16,12 +16,27 @@ export const SPELL_ICONS: Record<string, string> = {
   caelum_fulgur:  '✨',
   chaos_sagitta:  '🎲',
   eternum_mortis: '💀',
+  // damage — new
+  ignis_unda:     '🌊',
+  ignis_fulgur:   '⛈',
+  ignis_lux:      '💥',
+  fulgur_pluvia:  '⛈',
+  toxicum_unda:   '☣',
+  ignis_vortex:   '🌪',
+  umbra_mortis:   '⚫',
+  mortis_vortex:  '💀',
+  abyssus_unda:   '🌊',
+  caelum_abyssus: '🌌',
+  caelum_mortis:  '⚖',
   // heal
   vitae_manus:    '💚',
   lux_unda:       '☀',
   vitae_aura:     '🌿',
   caelum_vitae:   '🌟',
   eternum_vitae:  '💎',
+  // heal — new
+  vitae_lux:      '✨',
+  vitae_vortex:   '💖',
   // buff
   glacies_scutum: '🧊',
   vitae_scutum:   '🌱',
@@ -32,6 +47,12 @@ export const SPELL_ICONS: Record<string, string> = {
   fortis_scutum:  '🔰',
   caelum_scutum:  '⭐',
   eternum_scutum: '♾',
+  // buff — new
+  ignis_aura:     '🔥',
+  umbra_scutum:   '🛡',
+  tempus_scutum:  '⏰',
+  lux_fortis:     '🌟',
+  fulgur_fortis:  '⚡',
   // debuff
   glacies_manus:  '❄',
   umbra_unda:     '🌑',
@@ -39,6 +60,10 @@ export const SPELL_ICONS: Record<string, string> = {
   mortis_aura:    '💀',
   tempus_manus:   '⌛',
   abyssus_manus:  '🌀',
+  // debuff — new
+  glacies_pluvia: '❄',
+  toxicum_manus:  '☠',
+  umbra_aura:     '🌑',
   // utility
   lux_aura:       '💡',
   tempus_unda:    '⏩',
@@ -358,6 +383,185 @@ export const ALL_SPELLS: Spell[] = [
     manaCost: 44, cooldown: 60,
     effect: { type: 'utility', statAdds: { vision: 120, xpBonus: 0.35 }, duration: 100 },
     description: 'Claridade além da compreensão — visão e XP ampliados por 100 turnos.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAMAGE — novos (combinações elemento+elemento e elemento+forma)
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    id: 'ignis_unda', name: 'Onda de Fogo',
+    word1Id: 'ignis', word2Id: 'unda', rarity: 'common',
+    manaCost: 16, cooldown: 4,
+    effect: { type: 'damage', base: 9, scaling: 1.4, scalingStat: 'magicDamage' },
+    description: 'Uma onda rasteira de chamas que varre o inimigo.',
+  },
+  {
+    id: 'ignis_fulgur', name: 'Tempestade Ígnea',
+    word1Id: 'ignis', word2Id: 'fulgur', rarity: 'common',
+    manaCost: 22, cooldown: 5,
+    effect: { type: 'damage', base: 13, scaling: 2.0, scalingStat: 'magicDamage' },
+    description: 'Fogo e relâmpago colidem em uma descarga explosiva.',
+  },
+  {
+    id: 'ignis_lux', name: 'Explosão Solar',
+    word1Id: 'ignis', word2Id: 'lux', rarity: 'uncommon',
+    manaCost: 28, cooldown: 6,
+    effect: { type: 'damage', base: 18, scaling: 2.5, scalingStat: 'magicDamage' },
+    description: 'Uma explosão de luz e fogo que queima e encandeia.',
+  },
+  {
+    id: 'fulgur_pluvia', name: 'Chuva Elétrica',
+    word1Id: 'fulgur', word2Id: 'pluvia', rarity: 'uncommon',
+    manaCost: 24, cooldown: 5,
+    effect: {
+      type: 'damage', base: 10, scaling: 1.6, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.80, debuffDuration: 3,
+    },
+    description: 'Chuva de relâmpagos causa dano e retarda o inimigo por 3 turnos.',
+  },
+  {
+    id: 'toxicum_unda', name: 'Onda Venenosa',
+    word1Id: 'toxicum', word2Id: 'unda', rarity: 'uncommon',
+    manaCost: 25, cooldown: 6,
+    effect: {
+      type: 'damage', base: 12, scaling: 1.8, scalingStat: 'magicDamage',
+      enemyAtkMult: 0.82, debuffDuration: 4,
+    },
+    description: 'Uma onda de veneno que envenena e enfraquece o inimigo por 4 turnos.',
+  },
+  {
+    id: 'ignis_vortex', name: 'Vórtice de Fogo',
+    word1Id: 'ignis', word2Id: 'vortex', rarity: 'rare',
+    manaCost: 35, cooldown: 8,
+    effect: {
+      type: 'damage', base: 22, scaling: 3.0, scalingStat: 'magicDamage',
+      enemyAtkMult: 0.85, debuffDuration: 4,
+    },
+    description: 'Um furacão de chamas que esmaga e intimida o inimigo.',
+  },
+  {
+    id: 'umbra_mortis', name: 'Toque do Vazio',
+    word1Id: 'umbra', word2Id: 'mortis', rarity: 'rare',
+    manaCost: 40, cooldown: 8,
+    effect: { type: 'damage', base: 28, scaling: 3.5, scalingStat: 'magicDamage', lifesteal: 0.5 },
+    description: 'Sombra e morte se unem: causa dano massivo e drena 50% como HP.',
+  },
+  {
+    id: 'mortis_vortex', name: 'Vórtice Mortal',
+    word1Id: 'mortis', word2Id: 'vortex', rarity: 'rare',
+    manaCost: 48, cooldown: 9,
+    effect: { type: 'damage', base: 38, scaling: 4.2, scalingStat: 'magicDamage' },
+    description: 'Um redemoinho de energia mortal devasta tudo em seu caminho.',
+  },
+  {
+    id: 'abyssus_unda', name: 'Onda Abissal',
+    word1Id: 'abyssus', word2Id: 'unda', rarity: 'epic',
+    manaCost: 56, cooldown: 11,
+    effect: { type: 'damage', base: 45, scaling: 5.0, scalingStat: 'magicDamage' },
+    description: 'Uma onda do abismo carregada com energia inimaginável.',
+  },
+  {
+    id: 'caelum_abyssus', name: 'Colapso Cósmico',
+    word1Id: 'caelum', word2Id: 'abyssus', rarity: 'epic',
+    manaCost: 70, cooldown: 15,
+    effect: { type: 'damage', base: 60, scaling: 7.0, scalingStat: 'magicDamage' },
+    description: 'Céu e abismo colidem em uma explosão de proporções cósmicas.',
+  },
+  {
+    id: 'caelum_mortis', name: 'Julgamento Divino',
+    word1Id: 'caelum', word2Id: 'mortis', rarity: 'epic',
+    manaCost: 63, cooldown: 13,
+    effect: {
+      type: 'damage', base: 48, scaling: 5.5, scalingStat: 'magicDamage',
+      enemyAtkMult: 0.55, enemyAtkSpeedMult: 0.65, debuffDuration: 7,
+    },
+    description: 'Poder celestial condena o inimigo: dano massivo e enfraquecimento severo por 7 turnos.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // HEAL — novos
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    id: 'vitae_lux', name: 'Cura Divina',
+    word1Id: 'vitae', word2Id: 'lux', rarity: 'uncommon',
+    manaCost: 29, cooldown: 7,
+    effect: { type: 'heal', base: 25, scaling: 3.2, scalingStat: 'magicDamage' },
+    description: 'Luz e vida combinadas em uma cura pura e poderosa.',
+  },
+  {
+    id: 'vitae_vortex', name: 'Vórtice da Vida',
+    word1Id: 'vitae', word2Id: 'vortex', rarity: 'rare',
+    manaCost: 44, cooldown: 10,
+    effect: { type: 'heal', base: 35, scaling: 4.5, scalingStat: 'magicDamage' },
+    description: 'Um vórtice de energia vital restaura ferimentos profundos.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUFF — novos
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    id: 'ignis_aura', name: 'Aura Ardente',
+    word1Id: 'ignis', word2Id: 'aura', rarity: 'uncommon',
+    manaCost: 24, cooldown: 9,
+    effect: { type: 'buff', statAdds: { magicDamage: 8, atk: 4 }, duration: 10 },
+    description: 'Aura de fogo amplifica dano físico e mágico por 10 turnos.',
+  },
+  {
+    id: 'umbra_scutum', name: 'Escudo Sombrio',
+    word1Id: 'umbra', word2Id: 'scutum', rarity: 'uncommon',
+    manaCost: 20, cooldown: 8,
+    effect: { type: 'buff', statAdds: { damageReduction: 0.10, dodgeChance: 0.04 }, duration: 8 },
+    description: 'Sombras envolvem o herói, reduzindo danos recebidos e aumentando esquiva por 8 turnos.',
+  },
+  {
+    id: 'tempus_scutum', name: 'Escudo Temporal',
+    word1Id: 'tempus', word2Id: 'scutum', rarity: 'rare',
+    manaCost: 38, cooldown: 12,
+    effect: { type: 'buff', statAdds: { def: 15, damageReduction: 0.08 }, duration: 9 },
+    description: 'O tempo congela ao redor do herói, criando uma barreira impenetrável por 9 turnos.',
+  },
+  {
+    id: 'lux_fortis', name: 'Bênção do Guerreiro',
+    word1Id: 'lux', word2Id: 'fortis', rarity: 'epic',
+    manaCost: 48, cooldown: 12,
+    effect: { type: 'buff', statAdds: { atk: 15, critDamage: 0.30 }, duration: 8 },
+    description: 'Bênção divina empodera o herói com força e dano crítico devastadores por 8 turnos.',
+  },
+  {
+    id: 'fulgur_fortis', name: 'Surto Elétrico',
+    word1Id: 'fulgur', word2Id: 'fortis', rarity: 'epic',
+    manaCost: 44, cooldown: 11,
+    effect: { type: 'buff', statAdds: { attackSpeed: 0.65, critChance: 0.08 }, duration: 7 },
+    description: 'Energia elétrica acelera os reflexos e aumenta chance de crítico por 7 turnos.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // DEBUFF — novos
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    id: 'glacies_pluvia', name: 'Chuva Gélida',
+    word1Id: 'glacies', word2Id: 'pluvia', rarity: 'uncommon',
+    manaCost: 25, cooldown: 7,
+    effect: { type: 'debuff', enemyAtkSpeedMult: 0.60, enemyAtkMult: 0.90, debuffDuration: 6 },
+    description: 'Chuva de gelo paralisa o inimigo, reduzindo drasticamente sua velocidade por 6 turnos.',
+  },
+  {
+    id: 'toxicum_manus', name: 'Toque Venenoso',
+    word1Id: 'toxicum', word2Id: 'manus', rarity: 'uncommon',
+    manaCost: 23, cooldown: 7,
+    effect: { type: 'debuff', enemyAtkMult: 0.70, enemyAtkSpeedMult: 0.85, debuffDuration: 6 },
+    description: 'Veneno injetado pelo toque corrói a força e os reflexos do inimigo por 6 turnos.',
+  },
+  {
+    id: 'umbra_aura', name: 'Aura Sombria',
+    word1Id: 'umbra', word2Id: 'aura', rarity: 'uncommon',
+    manaCost: 26, cooldown: 10,
+    effect: { type: 'debuff', enemyAtkMult: 0.75, enemyAtkSpeedMult: 0.75, debuffDuration: 8 },
+    description: 'Aura de sombras drena as forças do inimigo de forma persistente por 8 turnos.',
   },
 ]
 

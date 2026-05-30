@@ -14,7 +14,8 @@ export interface Word {
 }
 
 export type BuffableStat = Pick<DerivedStats,
-  | 'def' | 'attackSpeed' | 'dodgeChance' | 'magicDamage'
+  | 'atk' | 'def' | 'attackSpeed' | 'dodgeChance' | 'magicDamage'
+  | 'critChance' | 'critDamage' | 'damageReduction' | 'healBonus'
   | 'staminaRegen' | 'manaRegen'
   | 'vision' | 'moveSpeed' | 'dropChance' | 'xpBonus'
 >
