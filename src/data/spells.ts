@@ -17,7 +17,25 @@ export const SPELL_ICONS: Record<string, string> = {
   caelum_fulgur:  '✨',
   chaos_sagitta:  '🎲',
   eternum_mortis: '💀',
-  // damage — new
+  // damage — batch 2
+  ignis_glacies:  '💨',
+  fulgur_glacies: '⚡',
+  vitae_mortis:   '🩸',
+  fulgur_mortis:  '⚡',
+  caelum_umbra:   '🌑',
+  ignis_manus:    '🔥',
+  glacies_unda:   '🌊',
+  glacies_vortex: '🧊',
+  fulgur_vortex:  '⚡',
+  lux_sagitta:    '✨',
+  sagitta_pluvia: '🏹',
+  vitae_sagitta:  '💚',
+  vitae_pluvia:   '🌱',
+  ignis_scutum:   '🔥',
+  vortex_fortis:  '🌪',
+  mortis_manus:   '💀',
+  tempus_vortex:  '⌛',
+  // damage — batch 1
   ignis_unda:     '🌊',
   ignis_fulgur:   '⛈',
   ignis_lux:      '💥',
@@ -448,7 +466,149 @@ export const ALL_SPELLS: Spell[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // DAMAGE — novos (combinações elemento+elemento e elemento+forma)
+  // DAMAGE — lote 2 (elemento+elemento + formas clássicas)
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    id: 'ignis_glacies', name: 'Explosão de Vapor',
+    word1Id: 'ignis', word2Id: 'glacies', rarity: 'common',
+    manaCost: 18, cooldown: 4,
+    effect: { type: 'damage', base: 10, scaling: 1.6, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.82, debuffDuration: 2 },
+    description: 'Fogo e gelo colidem em uma explosão de vapor — dano e lentidão breve.',
+  },
+  {
+    id: 'fulgur_glacies', name: 'Choque Glacial',
+    word1Id: 'fulgur', word2Id: 'glacies', rarity: 'common',
+    manaCost: 20, cooldown: 5,
+    effect: { type: 'damage', base: 12, scaling: 1.8, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.70, debuffDuration: 3 },
+    description: 'Relâmpago congela o inimigo em pleno movimento — dano e lentidão severa.',
+  },
+  {
+    id: 'vitae_mortis', name: 'Dreno de Vida',
+    word1Id: 'vitae', word2Id: 'mortis', rarity: 'rare',
+    manaCost: 35, cooldown: 8,
+    effect: { type: 'damage', base: 18, scaling: 2.2, scalingStat: 'magicDamage', lifesteal: 0.60 },
+    description: 'A força vital flui do inimigo para o herói — causa dano e drena 60% como HP.',
+  },
+  {
+    id: 'fulgur_mortis', name: 'Raio Letal',
+    word1Id: 'fulgur', word2Id: 'mortis', rarity: 'rare',
+    manaCost: 38, cooldown: 8,
+    effect: { type: 'damage', base: 25, scaling: 3.2, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.72, debuffDuration: 4 },
+    description: 'Raio imbuído de energia mortal — dano alto e paralisa parcialmente o inimigo.',
+  },
+  {
+    id: 'caelum_umbra', name: 'Eclipse',
+    word1Id: 'caelum', word2Id: 'umbra', rarity: 'epic',
+    manaCost: 58, cooldown: 12,
+    effect: { type: 'damage', base: 35, scaling: 4.0, scalingStat: 'magicDamage',
+      enemyAtkMult: 0.65, enemyAtkSpeedMult: 0.65, debuffDuration: 6 },
+    description: 'Céu e sombra se unem num eclipse — dano massivo e enfraquecimento prolongado.',
+  },
+  {
+    id: 'ignis_manus', name: 'Golpe de Fogo',
+    word1Id: 'ignis', word2Id: 'manus', rarity: 'common',
+    manaCost: 15, cooldown: 4,
+    effect: { type: 'damage', base: 8, scaling: 1.3, scalingStat: 'magicDamage', lifesteal: 0.25 },
+    description: 'Soco imbuído de fogo — queima o inimigo e restaura 25% do dano como HP.',
+  },
+  {
+    id: 'glacies_unda', name: 'Onda Gélida',
+    word1Id: 'glacies', word2Id: 'unda', rarity: 'common',
+    manaCost: 16, cooldown: 4,
+    effect: { type: 'damage', base: 7, scaling: 1.2, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.75, debuffDuration: 4 },
+    description: 'Onda de gelo arrasta e congela o inimigo, reduzindo sua velocidade por 4 turnos.',
+  },
+  {
+    id: 'glacies_vortex', name: 'Vórtice de Gelo',
+    word1Id: 'glacies', word2Id: 'vortex', rarity: 'rare',
+    manaCost: 36, cooldown: 9,
+    effect: { type: 'damage', base: 22, scaling: 2.8, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.55, enemyAtkMult: 0.88, debuffDuration: 5 },
+    description: 'Redemoinho de gelo esmaga e paralisa o inimigo com força esmagadora.',
+  },
+  {
+    id: 'fulgur_vortex', name: 'Vórtice Elétrico',
+    word1Id: 'fulgur', word2Id: 'vortex', rarity: 'rare',
+    manaCost: 38, cooldown: 8,
+    effect: { type: 'damage', base: 24, scaling: 3.2, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.68, enemyAtkMult: 0.88, debuffDuration: 4 },
+    description: 'Tornado elétrico — dano massivo e reduz o poder ofensivo do inimigo.',
+  },
+  {
+    id: 'lux_sagitta', name: 'Flecha Sagrada',
+    word1Id: 'lux', word2Id: 'sagitta', rarity: 'uncommon',
+    manaCost: 25, cooldown: 5,
+    effect: { type: 'damage', base: 16, scaling: 2.2, scalingStat: 'magicDamage' },
+    description: 'Flecha de luz sagrada que perfura com precisão e brilho divinos.',
+  },
+  {
+    id: 'sagitta_pluvia', name: 'Chuva de Flechas',
+    word1Id: 'sagitta', word2Id: 'pluvia', rarity: 'uncommon',
+    manaCost: 22, cooldown: 5,
+    effect: { type: 'damage', base: 9, scaling: 1.5, scalingStat: 'magicDamage',
+      enemyAtkMult: 0.90, debuffDuration: 3 },
+    description: 'Rajada de projéteis cobre o inimigo, causando dano e reduzindo levemente sua força.',
+  },
+
+  // HEAL — lote 2
+
+  {
+    id: 'vitae_sagitta', name: 'Flecha Vital',
+    word1Id: 'vitae', word2Id: 'sagitta', rarity: 'common',
+    manaCost: 14, cooldown: 4,
+    effect: { type: 'heal', base: 12, scaling: 1.4, scalingStat: 'magicDamage' },
+    description: 'Flecha de energia vital se incorpora ao herói, restaurando ferimentos.',
+  },
+  {
+    id: 'vitae_pluvia', name: 'Chuva Vital',
+    word1Id: 'vitae', word2Id: 'pluvia', rarity: 'uncommon',
+    manaCost: 25, cooldown: 7,
+    effect: { type: 'heal', base: 18, scaling: 2.2, scalingStat: 'magicDamage',
+      statAdds: { healBonus: 0.20 }, duration: 8 },
+    description: 'Chuva de energia vital cura e amplifica a efetividade das curas por 8 turnos.',
+  },
+
+  // BUFF — lote 2
+
+  {
+    id: 'ignis_scutum', name: 'Escudo de Chamas',
+    word1Id: 'ignis', word2Id: 'scutum', rarity: 'common',
+    manaCost: 16, cooldown: 8,
+    effect: { type: 'buff', statAdds: { atk: 5, damageReduction: 0.06 }, duration: 9 },
+    description: 'Chamas envolvem o herói como escudo — aumenta ataque e reduz dano recebido por 9 turnos.',
+  },
+  {
+    id: 'vortex_fortis', name: 'Turbilhão Supremo',
+    word1Id: 'vortex', word2Id: 'fortis', rarity: 'epic',
+    manaCost: 46, cooldown: 12,
+    effect: { type: 'buff', statAdds: { atk: 10, attackSpeed: 0.40, critChance: 0.05 }, duration: 7 },
+    description: 'Turbilhão de força pura — amplifica ataque, velocidade e chance de crítico por 7 turnos.',
+  },
+
+  // DEBUFF — lote 2
+
+  {
+    id: 'mortis_manus', name: 'Mão da Morte',
+    word1Id: 'mortis', word2Id: 'manus', rarity: 'rare',
+    manaCost: 38, cooldown: 10,
+    effect: { type: 'debuff', enemyAtkMult: 0.50, enemyAtkSpeedMult: 0.58, debuffDuration: 7 },
+    description: 'O toque da morte drena as forças do inimigo — ATK e velocidade severamente reduzidos.',
+  },
+  {
+    id: 'tempus_vortex', name: 'Vórtice Temporal',
+    word1Id: 'tempus', word2Id: 'vortex', rarity: 'rare',
+    manaCost: 42, cooldown: 12,
+    effect: { type: 'debuff', enemyAtkSpeedMult: 0.38, debuffDuration: 8 },
+    description: 'Tempo manipulado ao redor do inimigo congela quase por completo sua velocidade por 8 turnos.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAMAGE — lote 1 (combinações elemento+elemento e elemento+forma)
   // ═══════════════════════════════════════════════════════════════
 
   {
