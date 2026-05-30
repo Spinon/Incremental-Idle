@@ -11,6 +11,7 @@ export const SPELL_ICONS: Record<string, string> = {
   umbra_manus:    '🌑',
   toxicum_sagitta:'🧪',
   mortis_sagitta: '☠',
+  arcanum_sagitta:'🔮',
   arcanum_vortex: '🔮',
   abyssus_pluvia: '🌀',
   caelum_fulgur:  '✨',
@@ -142,6 +143,13 @@ export const ALL_SPELLS: Spell[] = [
     manaCost: 30, cooldown: 6,
     effect: { type: 'damage', base: 28, scaling: 3.2, scalingStat: 'magicDamage' },
     description: 'Uma flecha imbuída da essência da morte causa dano massivo.',
+  },
+  {
+    id: 'arcanum_sagitta', name: 'Flecha Arcana',
+    word1Id: 'arcanum', word2Id: 'sagitta', rarity: 'rare',
+    manaCost: 32, cooldown: 7,
+    effect: { type: 'damage', base: 22, scaling: 3.0, scalingStat: 'magicDamage' },
+    description: 'Uma flecha de pura energia arcana perfura as defesas do inimigo.',
   },
   {
     id: 'arcanum_vortex', name: 'Vórtice Arcano',
