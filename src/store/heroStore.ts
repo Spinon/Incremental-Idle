@@ -108,7 +108,7 @@ export const useHeroStore = create<HeroStore>()(
       if (remaining > 0) st.attributes.vitalidade += remaining
 
       st.freePoints = 0
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
       if (st.mana    > derived.maxMana)    st.mana    = derived.maxMana
     }),
@@ -142,7 +142,7 @@ export const useHeroStore = create<HeroStore>()(
       }
 
       st.freePoints = 0
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
       if (st.mana    > derived.maxMana)    st.mana    = derived.maxMana
     }),
@@ -152,7 +152,7 @@ export const useHeroStore = create<HeroStore>()(
       st.attributes[attr] += 1
       st.freePoints -= 1
       // Cap current resources to new max when stats change
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
       if (st.mana > derived.maxMana) st.mana = derived.maxMana
     }),
@@ -170,12 +170,12 @@ export const useHeroStore = create<HeroStore>()(
     },
 
     restoreStamina: (amount) => set((st) => {
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       st.stamina = Math.min(derived.maxStamina, st.stamina + amount)
     }),
 
     restoreMana: (amount) => set((st) => {
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       st.mana = Math.min(derived.maxMana, st.mana + amount)
     }),
 
@@ -189,7 +189,7 @@ export const useHeroStore = create<HeroStore>()(
     }),
 
     gainXp: (amount) => set((st) => {
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       const actual = Math.round(amount * derived.xpBonus)
       st.lastXpGain = actual
       st.xpGainVersion += 1
@@ -203,7 +203,7 @@ export const useHeroStore = create<HeroStore>()(
     }),
 
     tickResources: (deltaMs, speed) => set((st) => {
-      const derived = getDerivedStats(st.attributes)
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
       const deltaS = deltaMs / 1000
 
       // Net stamina change: positive = regenerating, negative = draining.

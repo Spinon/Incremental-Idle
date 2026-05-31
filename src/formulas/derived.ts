@@ -73,7 +73,11 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
 
     // ── Mana ─────────────────────────────────────────────────────────────────
       maxMana:        BASE.maxMana        + fa.sabedoria    * 20  + fa.inteligencia * 8,
-    manaRegen:      BASE.manaRegen      + fa.sabedoria    * 0.2 + fa.inteligencia * 0.05,
+    // manaRegen: base + passive level contribution + sabedoria (determines
+    // how many spells are sustainably castable — each ~6 SAB ≈ +1 spell tier)
+    // + a small inteligencia bonus.
+    // Level adds ~0.04/s per level so at Lv30 you get ≈1 free spell baseline.
+    manaRegen:      BASE.manaRegen + lvl * 0.04 + fa.sabedoria * 0.2 + fa.inteligencia * 0.05,
     manaEfficiency: BASE.manaEfficiency + fa.inteligencia * 0.04,
 
     // ── Exploration ──────────────────────────────────────────────────────────
