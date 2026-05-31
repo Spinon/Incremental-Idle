@@ -108,6 +108,13 @@ interface BattleStore {
   clearStatuses(): void
   applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
   restoreEnemyStats(savedAtk: number, savedAtkSpeed: number): void
+  /** Restore mid-fight HP fractions + statuses after a page reload. */
+  restoreMidFight(
+    playerHpRatio: number,
+    enemyHpRatio:  number,
+    enemyStatuses: ActiveStatus[],
+    heroStatuses:  ActiveStatus[],
+  ): void
 }
 
 const INITIAL_PLAYER: Unit = {
@@ -469,6 +476,14 @@ export const useBattleStore = create<BattleStore>()(
     clearStatuses: () => set((st) => {
       st.enemyStatuses = []
       st.heroStatuses  = []
+    }),
+
+    restoreMidFight: (playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses) => set((st) => {
+      // Clamp to [1, maxHp] so stale data never produces invalid HP
+      st.player.hp     = Math.max(1, Math.min(st.player.maxHp, Math.round(st.player.maxHp * playerHpRatio)))
+      st.enemy.hp      = Math.max(1, Math.min(st.enemy.maxHp,  Math.round(st.enemy.maxHp  * enemyHpRatio)))
+      st.enemyStatuses = enemyStatuses
+      st.heroStatuses  = heroStatuses
     }),
 
     healPlayer: (hp) => set((st) => {

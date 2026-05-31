@@ -35,14 +35,48 @@ function GameRoot() {
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
 
-  // On every app start, rebuild the battle enemy from the persisted queue so
-  // we never fight the "initial goblin lvl 1" after a page refresh.
-  // Skip when defeatPending=true — calling reset() there would wipe defeatSnapshot
-  // before HouseInterior can display the recap.
+  // ── Mid-fight persistence ────────────────────────────────────────────────
+  // Save HP fractions + elemental statuses just before the page closes/reloads.
+  // Using beforeunload avoids expensive per-hit localStorage writes.
   useEffect(() => {
-    if (!useMapStore.getState().defeatPending) {
-      useBattleStore.getState().reset()
+    const MID_FIGHT_KEY = 'ii-mid-fight'
+
+    const save = () => {
+      const { player, enemy, phase, enemyStatuses, heroStatuses } = useBattleStore.getState()
+      if (phase !== 'over' && enemy.hp > 0 && player.hp > 0) {
+        localStorage.setItem(MID_FIGHT_KEY, JSON.stringify({
+          playerHpRatio: player.hp / player.maxHp,
+          enemyHpRatio:  enemy.hp  / enemy.maxHp,
+          enemyStatuses,
+          heroStatuses,
+        }))
+      } else {
+        localStorage.removeItem(MID_FIGHT_KEY)
+      }
     }
+
+    window.addEventListener('beforeunload', save)
+
+    // On startup: restore mid-fight snapshot if one exists
+    if (!useMapStore.getState().defeatPending) {
+      useBattleStore.getState().reset()   // always rebuild enemy first
+
+      const raw = localStorage.getItem(MID_FIGHT_KEY)
+      if (raw) {
+        localStorage.removeItem(MID_FIGHT_KEY)
+        try {
+          const { playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses } = JSON.parse(raw)
+          // Only restore if the enemy was genuinely mid-fight (HP between 1–99 %)
+          if (enemyHpRatio > 0.01 && enemyHpRatio < 0.99) {
+            useBattleStore.getState().restoreMidFight(
+              playerHpRatio, enemyHpRatio, enemyStatuses ?? [], heroStatuses ?? [],
+            )
+          }
+        } catch { /* malformed snapshot — ignore */ }
+      }
+    }
+
+    return () => window.removeEventListener('beforeunload', save)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply/remove dark class on <html>
