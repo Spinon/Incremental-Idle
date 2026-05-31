@@ -5,7 +5,7 @@ import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../data/monsters'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
-import { elementalModifier, makeStatus } from '../types/element'
+import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT } from '../types/element'
 import type { ActiveStatus } from '../types/element'
 export type { ActiveStatus }
 
@@ -417,26 +417,43 @@ export const useBattleStore = create<BattleStore>()(
 
       // ── DoTs on enemy ─────────────────────────────────────────────────────
       for (const s of st.enemyStatuses) {
-        if (s.type === 'burn') {
-          const dmg = Math.max(1, Math.round(s.power))
+        if (s.type === 'burn' || s.type === 'poison') {
+          const dmg   = Math.max(1, Math.round(s.power))
           const newHp = Math.max(0, st.enemy.hp - dmg)
           st.enemy.hp = newHp
-          if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
-        }
-        if (s.type === 'poison') {
-          const dmg = Math.max(1, Math.round(s.power))
-          const newHp = Math.max(0, st.enemy.hp - dmg)
-          st.enemy.hp = newHp
+          st.log.unshift({
+            attacker: STATUS_ICONS[s.type] + ' ' + STATUS_LABEL_PT[s.type],
+            defender: st.enemy.name,
+            dmg,
+            spell: {
+              name: STATUS_LABEL_PT[s.type],
+              icon: STATUS_ICONS[s.type],
+              effectType: 'damage',
+              value: dmg,
+            },
+          })
           if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
           // Poison grows each tick
-          s.power = Math.round(s.power * 1.3)
+          if (s.type === 'poison') s.power = Math.round(s.power * 1.3)
         }
       }
 
       // ── Regen on hero ──────────────────────────────────────────────────────
       for (const s of st.heroStatuses) {
         if (s.type === 'regen') {
-          st.player.hp = Math.min(st.player.maxHp, st.player.hp + s.power)
+          const healed = Math.max(1, s.power)
+          st.player.hp = Math.min(st.player.maxHp, st.player.hp + healed)
+          st.log.unshift({
+            attacker: STATUS_ICONS.regen + ' ' + STATUS_LABEL_PT.regen,
+            defender: st.player.name,
+            dmg: 0,
+            spell: {
+              name: STATUS_LABEL_PT.regen,
+              icon: STATUS_ICONS.regen,
+              effectType: 'heal',
+              value: healed,
+            },
+          })
         }
       }
 
