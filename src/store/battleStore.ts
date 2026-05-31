@@ -89,6 +89,13 @@ interface BattleStore {
   defeatSnapshot: DefeatSnapshot | null
   enemyStatuses: ActiveStatus[]
   heroStatuses:  ActiveStatus[]
+  // ── Mid-fight snapshot (persisted, updated on every hit / DoT tick) ────────
+  // reset() reads these to restore HP after a reload. Values are reset to
+  // "not mid-fight" defaults at the end of each reset() call.
+  _savedPlayerHp:       number
+  _savedEnemyHpRatio:   number   // 1.0 = full HP / not mid-fight
+  _savedEnemyStatuses:  ActiveStatus[]
+  _savedHeroStatuses:   ActiveStatus[]
 
   setSpeed(s: Speed): void
   setSkipAnim(v: boolean): void
@@ -108,13 +115,6 @@ interface BattleStore {
   clearStatuses(): void
   applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
   restoreEnemyStats(savedAtk: number, savedAtkSpeed: number): void
-  /** Restore mid-fight HP fractions + statuses after a page reload. */
-  restoreMidFight(
-    playerHpRatio: number,
-    enemyHpRatio:  number,
-    enemyStatuses: ActiveStatus[],
-    heroStatuses:  ActiveStatus[],
-  ): void
 }
 
 const INITIAL_PLAYER: Unit = {
@@ -200,6 +200,10 @@ export const useBattleStore = create<BattleStore>()(
     defeatSnapshot: null,
     enemyStatuses: [],
     heroStatuses:  [],
+    _savedPlayerHp:      30,
+    _savedEnemyHpRatio:  1.0,
+    _savedEnemyStatuses: [],
+    _savedHeroStatuses:  [],
 
     setSpeed:    (s) => set((st) => { st.speed    = s }),
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
@@ -303,6 +307,12 @@ export const useBattleStore = create<BattleStore>()(
         if (idx >= 0) { if (status.power >= arr[idx].power) arr[idx] = { ...status } }
         else arr.push({ ...status })
       }
+
+      // ── Update mid-fight snapshot for persist ─────────────────────────────
+      st._savedPlayerHp      = st.player.hp
+      st._savedEnemyHpRatio  = st.enemy.maxHp > 0 ? st.enemy.hp / st.enemy.maxHp : 0
+      st._savedEnemyStatuses = st.enemyStatuses.map(s => ({ ...s }))
+      st._savedHeroStatuses  = st.heroStatuses.map(s => ({ ...s }))
     }),
 
     switchAttacker: () => set((st) => {
@@ -471,6 +481,12 @@ export const useBattleStore = create<BattleStore>()(
       st.heroStatuses = st.heroStatuses
         .map(s => ({ ...s, turnsLeft: s.turnsLeft - 1 }))
         .filter(s => s.turnsLeft > 0)
+
+      // ── Update snapshot after DoT/regen changes ───────────────────────────
+      st._savedPlayerHp      = st.player.hp
+      st._savedEnemyHpRatio  = st.enemy.maxHp > 0 ? st.enemy.hp / st.enemy.maxHp : 0
+      st._savedEnemyStatuses = st.enemyStatuses.map(s => ({ ...s }))
+      st._savedHeroStatuses  = st.heroStatuses.map(s => ({ ...s }))
     }),
 
     clearStatuses: () => set((st) => {
@@ -478,13 +494,6 @@ export const useBattleStore = create<BattleStore>()(
       st.heroStatuses  = []
     }),
 
-    restoreMidFight: (playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses) => set((st) => {
-      // Clamp to [1, maxHp] so stale data never produces invalid HP
-      st.player.hp     = Math.max(1, Math.min(st.player.maxHp, Math.round(st.player.maxHp * playerHpRatio)))
-      st.enemy.hp      = Math.max(1, Math.min(st.enemy.maxHp,  Math.round(st.enemy.maxHp  * enemyHpRatio)))
-      st.enemyStatuses = enemyStatuses
-      st.heroStatuses  = heroStatuses
-    }),
 
     healPlayer: (hp) => set((st) => {
       st.player.hp = Math.min(st.player.maxHp, st.player.hp + hp)
@@ -501,9 +510,31 @@ export const useBattleStore = create<BattleStore>()(
     }),
 
     reset: () => set((st) => {
-      const template = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
-      st.player.hp    = st.player.maxHp
-      st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
+      const template  = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
+      const newEnemy  = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
+
+      // ── Mid-fight restore check ───────────────────────────────────────────
+      // Snapshot is written by applyHit/tickStatuses and persisted by Zustand.
+      // Restores only when enemy was genuinely mid-fight (1 %–99 % HP).
+      const ratio = st._savedEnemyHpRatio
+      const midFight = ratio > 0.01 && ratio < 0.99
+
+      st.player.hp    = midFight
+        ? Math.max(1, Math.min(st.player.maxHp, st._savedPlayerHp))
+        : st.player.maxHp
+      st.enemy        = newEnemy
+      if (midFight) {
+        st.enemy.hp   = Math.max(1, Math.round(newEnemy.maxHp * ratio))
+      }
+      st.enemyStatuses = midFight ? st._savedEnemyStatuses.map(s => ({ ...s })) : []
+      st.heroStatuses  = midFight ? st._savedHeroStatuses.map(s => ({ ...s }))  : []
+
+      // Reset snapshot to "not mid-fight" so the next reload starts fresh
+      st._savedPlayerHp      = st.player.maxHp
+      st._savedEnemyHpRatio  = 1.0
+      st._savedEnemyStatuses = []
+      st._savedHeroStatuses  = []
+
       st.phase        = 'idle'
       st.attacker     = 'player'
       st.winner       = null
@@ -511,8 +542,6 @@ export const useBattleStore = create<BattleStore>()(
       st.turn         = 0
       st.skipAnim     = false
       st.defeatSnapshot = null
-      st.enemyStatuses  = []
-      st.heroStatuses   = []
       const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
       st.hitsLeft     = hits
       st.comboSize    = hits
@@ -521,12 +550,17 @@ export const useBattleStore = create<BattleStore>()(
   {
     name: 'incremental-idle-battle',
     partialize: (state) => ({
-      speed:            state.speed,
-      nextEnemyLevel:   state.nextEnemyLevel,
-      nextEnemyType:    state.nextEnemyType,
-      nextEnemyRarity:  state.nextEnemyRarity,
-      nextTilesPlaced:  state.nextTilesPlaced,
-      defeatSnapshot:   state.defeatSnapshot,
+      speed:                state.speed,
+      nextEnemyLevel:       state.nextEnemyLevel,
+      nextEnemyType:        state.nextEnemyType,
+      nextEnemyRarity:      state.nextEnemyRarity,
+      nextTilesPlaced:      state.nextTilesPlaced,
+      defeatSnapshot:       state.defeatSnapshot,
+      // Mid-fight snapshot — written every hit/tick, read by reset() on reload
+      _savedPlayerHp:       state._savedPlayerHp,
+      _savedEnemyHpRatio:   state._savedEnemyHpRatio,
+      _savedEnemyStatuses:  state._savedEnemyStatuses,
+      _savedHeroStatuses:   state._savedHeroStatuses,
     }),
   }
   )

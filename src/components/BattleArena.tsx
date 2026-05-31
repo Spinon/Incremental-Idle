@@ -81,12 +81,18 @@ export default function BattleArena() {
   useEffect(() => {
     const el = arenaRef.current
     if (!el) return
+    // Debounce prevents rapid toggling from micro-viewport-changes (e.g. when
+    // the browser shows toolbar tooltips on hover over the reload button).
+    let timer: ReturnType<typeof setTimeout> | null = null
     const obs = new IntersectionObserver(
-      ([entry]) => setShowMini(!entry.isIntersecting),
-      { threshold: 0.1 },   // trigger when <10 % of the arena is visible
+      ([entry]) => {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => setShowMini(!entry.isIntersecting), 200)
+      },
+      { threshold: 0.1 },
     )
     obs.observe(el)
-    return () => obs.disconnect()
+    return () => { obs.disconnect(); if (timer) clearTimeout(timer) }
   }, [setShowMini])
 
   const [showAutoConfig, setShowAutoConfig] = useState(false)
