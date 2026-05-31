@@ -4,7 +4,7 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
-import { generateMarketOffer, wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses } from '../formulas/items'
+import { wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable } from '../formulas/items'
 import { getDerivedStats } from '../formulas/derived'
 import { DROP_WORDS, WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
@@ -114,11 +114,12 @@ export default function MarketInterior() {
   const lang       = useSettingsStore(s => s.lang)
   const isEn       = lang === 'en'
 
-  // Tile level at player's current position
-  const tileLevel = useMapStore(s => {
-    const pos = s.playerPos
-    return s.grid[gridKey(pos.x, pos.y)]?.level ?? 1
-  })
+  // Tile level and position — shop is generated at the tile's level
+  const marketPos = useMapStore(s => s.playerPos)
+  const marketKey = gridKey(marketPos.x, marketPos.y)
+  const tileLevel = useMapStore(s =>
+    s.grid[marketKey]?.level ?? 1
+  )
 
   const gold      = useHeroStore(s => s.gold)
   const spendGold = useHeroStore(s => s.spendGold)
@@ -132,34 +133,49 @@ export default function MarketInterior() {
   const heroAttrs     = useHeroStore(s => s.attributes)
   const equipment     = useInventoryStore(s => s.equipment)
   const tilesPlaced   = useMapStore(s => s.tilesPlaced)
+  const savedOffer    = useMapStore(s => s.marketOffers[marketKey])
+  const saveOffer     = useMapStore(s => s.saveMarketOffer)
 
   // Carisma-based market discount: prices divided by goldEfficiency
   const goldEfficiency = getDerivedStats(heroAttrs, getEquipmentBonuses(equipment), heroLevel).goldEfficiency
   /** Effective buy price after Carisma discount. */
   const eff = (base: number) => Math.max(1, Math.round(base / goldEfficiency))
 
-  // Generate offer once on mount
-  const [offer] = useState<MarketOffer>(() => generateMarketOffer(tileLevel))
-
-  // Generate word offers once on mount — filtered by progression and known words
-  const [wordOffers] = useState<WordOffer[]>(() => {
+  // Use the saved offer for this tile, or generate one on first visit.
+  // This prevents refresh-to-reroll exploits — the same shop persists
+  // until the player starts a new journey.
+  const [offer] = useState<MarketOffer>(() => {
+    if (savedOffer) return savedOffer
+    // First visit: generate at the tile's level (items scale with tile difficulty)
     const knownIds = new Set(getKnownWordIds(
       heroLevel, heroAttrs.inteligencia, heroAttrs.sabedoria, earnedWordIds,
     ))
-    const available = DROP_WORDS.filter(w => {
+    const availableWords = DROP_WORDS.filter(w => {
       if (knownIds.has(w.id)) return false
       if (w.rarity === 'unique' && tilesPlaced < 80) return false
       if (w.rarity === 'epic'   && tilesPlaced < 60) return false
       if (w.rarity === 'rare'   && tilesPlaced < 40) return false
       return true
     })
-    // Shuffle and take up to 2
-    const shuffled = [...available].sort(() => Math.random() - 0.5)
-    return shuffled.slice(0, 2).map(w => ({
-      wordId: w.id,
-      price:  wordPrice(w.rarity as 'rare' | 'epic' | 'unique', tileLevel),
-    }))
+    const wordOffersList = [...availableWords]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 2)
+      .map(w => ({ wordId: w.id, price: wordPrice(w.rarity as 'rare' | 'epic' | 'unique', tileLevel) }))
+
+    return {
+      consumables: [generateConsumable(tileLevel), generateConsumable(tileLevel)],
+      equipment:   [generateItem(tileLevel, true),  generateItem(tileLevel, true)],
+      words:       wordOffersList,
+    }
   })
+
+  // Persist the offer so re-entering shows the same shop
+  useEffect(() => {
+    if (!savedOffer) saveOffer(marketKey, offer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep a separate alias for clarity in word-offer JSX
+  const wordOffers = offer.words
 
   // Track what was bought (id-set)
   const [bought, setBought]   = useState<Set<string>>(new Set())
