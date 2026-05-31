@@ -73,6 +73,21 @@ export default function BattleArena() {
 
   const showMini       = useUIStore(s => s.showMiniPlayer)
   const toggleMini     = useUIStore(s => s.toggleMiniPlayer)
+  const setShowMini    = useUIStore(s => s.setShowMiniPlayer)
+
+  // Auto-open mini player when the arena scrolls out of view;
+  // auto-close it when the arena returns to view.
+  const arenaRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = arenaRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => setShowMini(!entry.isIntersecting),
+      { threshold: 0.1 },   // trigger when <10 % of the arena is visible
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [setShowMini])
 
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const autoConfigRef = useRef<HTMLDivElement>(null)
@@ -219,7 +234,7 @@ export default function BattleArena() {
   const comboAttacker = store.attacker
 
   return (
-    <div className="w-full">
+    <div className="w-full" ref={arenaRef}>
       {/* ── Arena ─────────────────────────────────────────── */}
       <div className="relative h-80 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xl select-none arena-bg">
 
