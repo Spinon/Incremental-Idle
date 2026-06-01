@@ -35,13 +35,56 @@ function GameRoot() {
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
 
-  // Rebuild enemy from persisted queue on startup.
-  // reset() automatically restores mid-fight HP/statuses from the snapshot
-  // persisted by battleStore's partialize (written on every applyHit/tickStatuses).
   useEffect(() => {
+    const KEY = 'ii-mid-fight'
+
+    // ── Subscribe: write snapshot to localStorage on every HP change ─────────
+    // Much more reliable than beforeunload (which may not complete) and avoids
+    // Zustand rehydration-timing issues with the partialize approach.
+    const unsub = useBattleStore.subscribe((state, prev) => {
+      const hpChanged = state.player.hp !== prev.player.hp || state.enemy.hp !== prev.enemy.hp
+      const statusChanged = state.enemyStatuses !== prev.enemyStatuses || state.heroStatuses !== prev.heroStatuses
+      if (!hpChanged && !statusChanged) return
+
+      if (state.phase !== 'over' && state.enemy.hp > 0 && state.player.hp > 0) {
+        localStorage.setItem(KEY, JSON.stringify({
+          playerHpRatio: state.player.hp / state.player.maxHp,
+          enemyHpRatio:  state.enemy.hp  / state.enemy.maxHp,
+          enemyStatuses: state.enemyStatuses,
+          heroStatuses:  state.heroStatuses,
+        }))
+      } else {
+        // Fight ended — remove so next reload doesn't restore a finished fight
+        localStorage.removeItem(KEY)
+      }
+    })
+
+    // ── Startup: read snapshot BEFORE reset(), apply AFTER ───────────────────
     if (!useMapStore.getState().defeatPending) {
-      useBattleStore.getState().reset()
+      const raw = localStorage.getItem(KEY)
+      localStorage.removeItem(KEY)          // consume immediately
+
+      useBattleStore.getState().reset()     // rebuilds enemy from nextEnemy*
+
+      if (raw) {
+        try {
+          const snap = JSON.parse(raw) as {
+            playerHpRatio: number; enemyHpRatio: number
+            enemyStatuses: unknown; heroStatuses: unknown
+          }
+          if (snap.enemyHpRatio > 0.01 && snap.enemyHpRatio < 0.99) {
+            useBattleStore.getState().restoreMidFight(
+              snap.playerHpRatio,
+              snap.enemyHpRatio,
+              Array.isArray(snap.enemyStatuses) ? snap.enemyStatuses : [],
+              Array.isArray(snap.heroStatuses)  ? snap.heroStatuses  : [],
+            )
+          }
+        } catch { /* malformed snapshot — ignore */ }
+      }
     }
+
+    return unsub
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply/remove dark class on <html>
