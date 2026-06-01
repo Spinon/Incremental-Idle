@@ -366,7 +366,13 @@ export default function BattleArena() {
             className={isEnemyAttacking ? 'anim-attack-left' : ''}
             style={isEnemyAttacking ? { animationDuration: attackDur } : undefined}
           >
-            <UnitSprite side="enemy" isHit={enemyHit} hitDuration={hitDur} monsterType={store.enemy.monsterType} />
+            <UnitSprite
+              side="enemy"
+              isHit={enemyHit}
+              hitDuration={hitDur}
+              monsterType={store.enemy.monsterType}
+              monsterRarity={store.enemy.rarity}
+            />
           </div>
         </div>
 

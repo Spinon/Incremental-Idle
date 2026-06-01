@@ -3,12 +3,15 @@ import { cn } from '../lib/utils'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { useHeroStore } from '../store/heroStore'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
+import type { MonsterRarity } from '../types/monster'
 
 interface Props {
   side: 'player' | 'enemy'
   isHit: boolean
   hitDuration: string
-  monsterType?: string  // template id — only used when side === 'enemy'
+  monsterType?: string
+  monsterRarity?: MonsterRarity
+  enraged?: boolean
 }
 
 // ─── Player sprite — reads heroConfig from store ──────────────────────────────
@@ -18,14 +21,13 @@ function HeroSvg() {
   return <HeroSprite config={config} size={72} />
 }
 
-
-// ─── Emoji fallback (for monster types without a pixel sprite) ───────────────
+// ─── Emoji fallback ───────────────────────────────────────────────────────────
 
 function EnemyEmoji({ emoji }: { emoji: string }) {
   return (
-    <div style={{ width: 72, height: 108 }} className="flex items-end justify-center pb-1">
+    <div style={{ width: 80, height: 80 }} className="flex items-center justify-center">
       <span
-        style={{ fontSize: 64, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))' }}
+        style={{ fontSize: 56, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))' }}
         role="img"
       >
         {emoji}
@@ -34,16 +36,22 @@ function EnemyEmoji({ emoji }: { emoji: string }) {
   )
 }
 
-export default function UnitSprite({ side, isHit, hitDuration, monsterType }: Props) {
+export default function UnitSprite({ side, isHit, hitDuration, monsterType, monsterRarity, enraged }: Props) {
   function renderSprite() {
     if (side === 'player') return <HeroSvg />
 
     const template = monsterType ? FOREST_MONSTER_MAP.get(monsterType) : null
-    if (!template) return <MonsterSprite monsterId="goblin" size={72} />
+    if (!template) return <MonsterSprite monsterId="goblin" size={80} />
 
-    // Use pixel sprite if available, otherwise fall back to emoji
     if (MONSTER_PIXEL_SPRITES[template.id]) {
-      return <MonsterSprite monsterId={template.id} size={72} />
+      return (
+        <MonsterSprite
+          monsterId={template.id}
+          rarity={monsterRarity}
+          enraged={enraged}
+          size={80}
+        />
+      )
     }
     return <EnemyEmoji emoji={template.emoji} />
   }
