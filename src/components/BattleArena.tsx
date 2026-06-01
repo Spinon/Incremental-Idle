@@ -372,6 +372,7 @@ export default function BattleArena() {
               hitDuration={hitDur}
               monsterType={store.enemy.monsterType}
               monsterRarity={store.enemy.rarity}
+              enraged={store.enemy.enraged}
             />
           </div>
         </div>

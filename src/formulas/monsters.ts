@@ -149,5 +149,6 @@ export function buildMonster(
     resIgnea, resGlacial, resSombria, resVital,
     rarity,
     monsterType:     template.id,
+    enraged:         false,   // set to true by battleStore.reset() when nextEnemyEnraged is true
   }
 }

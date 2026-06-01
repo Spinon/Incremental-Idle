@@ -377,6 +377,7 @@ export const useMapStore = create<MapStore>()(
         let queueType:        string | undefined
         let queueRarity:      MonsterRarity | undefined
         let queueTilesPlaced  = 0
+        let queueEnraged      = false
 
         set((st) => {
           const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
@@ -392,6 +393,7 @@ export const useMapStore = create<MapStore>()(
           queueType        = tile.content.monsterType
           queueRarity      = tile.content.monsterRarity as MonsterRarity | undefined
           queueTilesPlaced = st.tilesPlaced
+          queueEnraged     = isFirstEncounter
 
           if (isFirstEncounter) {
             st.pendingGold += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
@@ -411,7 +413,7 @@ export const useMapStore = create<MapStore>()(
         })
 
         if (queueLevel !== null) {
-          useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity, queueTilesPlaced)
+          useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity, queueTilesPlaced, queueEnraged)
         }
       },
 
@@ -558,6 +560,7 @@ export const useMapStore = create<MapStore>()(
         let queueType:        string | undefined
         let queueRarity:      MonsterRarity | undefined
         let queueTilesPlaced  = 0
+        let queueEnraged      = false
 
         set((st) => {
           if (!st.destination && st.autoExplore !== 'manual') {
@@ -592,6 +595,7 @@ export const useMapStore = create<MapStore>()(
                 queueType        = tile.content.monsterType
                 queueRarity      = tile.content.monsterRarity as MonsterRarity | undefined
                 queueTilesPlaced = st.tilesPlaced
+                queueEnraged     = isFirstEncounter
 
                 if (isFirstEncounter) {
                   st.pendingGold     += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
@@ -616,7 +620,7 @@ export const useMapStore = create<MapStore>()(
         })
 
         if (queueLevel !== null) {
-          useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity, queueTilesPlaced)
+          useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity, queueTilesPlaced, queueEnraged)
         }
       },
 

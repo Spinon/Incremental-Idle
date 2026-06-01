@@ -6,6 +6,7 @@ import { useUIStore } from '../store/uiStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { HeroSprite } from './icons/hero/HeroComposer'
+import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
 
 // ─── Mini HP bar ──────────────────────────────────────────────────────────────
@@ -150,12 +151,26 @@ export default function MiniBattlePlayer() {
   // ── Don't render until shown ───────────────────────────────────────────────
   if (!show) return null
 
-  const enemyEmoji = FOREST_MONSTER_MAP.get(enemy.monsterType ?? '')?.emoji ?? '👾'
+  const enemyTemplate = FOREST_MONSTER_MAP.get(enemy.monsterType ?? '')
   const playerFloats = floats.filter(f => f.side === 'player')
   const enemyFloats  = floats.filter(f => f.side === 'enemy')
 
   const playerLabel = player.name
   const enemyLabel  = `${enemy.name}  Nv.${enemy.level}`
+  const enemyVisual = enemyTemplate && MONSTER_PIXEL_SPRITES[enemyTemplate.id]
+    ? (
+      <MonsterSprite
+        monsterId={enemyTemplate.id}
+        rarity={enemy.rarity}
+        enraged={enemy.enraged}
+        size={38}
+      />
+    )
+    : (
+      <span className="text-[38px] leading-none">
+        {enemyTemplate?.emoji ?? '👾'}
+      </span>
+    )
 
   return createPortal(
     <div
@@ -242,10 +257,10 @@ export default function MiniBattlePlayer() {
               ))}
               <span
                 key={`e-${enemyHitKey}`}
-                className={cn('text-[38px] leading-none', enemyHitKey > 0 && 'anim-flash')}
+                className={cn('leading-none', enemyHitKey > 0 && 'anim-flash')}
                 style={enemyHitKey > 0 ? { animationDuration: '280ms' } : undefined}
               >
-                {enemyEmoji}
+                {enemyVisual}
               </span>
             </div>
           </div>

@@ -35,6 +35,9 @@ export interface Unit {
   resVital:   number
   rarity?: MonsterRarity
   monsterType?: string
+  /** True for the first-encounter boss version of a monster tile
+   *  (spawned at tile.level + random 1–5 above normal). */
+  enraged: boolean
 }
 
 export interface DefeatSnapshot {
@@ -82,8 +85,15 @@ interface BattleStore {
   turn: number
   nextEnemyLevel: number
   nextEnemyType: string
-  nextEnemyRarity: MonsterRarity
-  nextTilesPlaced: number
+  nextEnemyRarity:  MonsterRarity
+  nextTilesPlaced:  number
+  /**
+   * True when the queued enemy is the "enraged" first-encounter boss
+   * (spawns at tile.level + random 1–5 above the tile's base level).
+   * Cleared back to false after the fight ends or the player moves to
+   * a non-enraged tile.
+   */
+  nextEnemyEnraged: boolean
   hitsLeft: number
   comboSize: number
   defeatSnapshot: DefeatSnapshot | null
@@ -94,7 +104,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number): void
+  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean): void
   captureDefeat(): void
   applyHit(): void
   switchAttacker(): void
@@ -116,6 +126,7 @@ const INITIAL_PLAYER: Unit = {
   atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
   critChance: 0, critDamage: 1.5, damageReduction: 0,
   weakTo: [], resIgnea: 0, resGlacial: 0, resSombria: 0, resVital: 0,
+  enraged: false,
 }
 
 function makeInitialEnemy(): Unit {
@@ -189,6 +200,7 @@ export const useBattleStore = create<BattleStore>()(
     nextEnemyType: 'goblin',
     nextEnemyRarity: 'normal' as MonsterRarity,
     nextTilesPlaced: 0,
+    nextEnemyEnraged: false,
     hitsLeft: 1,
     comboSize: 1,
     defeatSnapshot: null,
@@ -199,11 +211,12 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced) => set((st) => {
+    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged) => set((st) => {
       st.nextEnemyLevel   = level
       st.nextEnemyType    = monsterType   ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
       st.nextEnemyRarity  = monsterRarity ?? pickMonsterRarity()
       st.nextTilesPlaced  = tilesPlaced   ?? st.nextTilesPlaced
+      st.nextEnemyEnraged = enraged       ?? false
     }),
 
     captureDefeat: () => set((st) => {
@@ -500,6 +513,8 @@ export const useBattleStore = create<BattleStore>()(
       const template = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
       st.player.hp    = st.player.maxHp
       st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
+      st.enemy.enraged = st.nextEnemyEnraged
+      st.nextEnemyEnraged = false   // consume the flag — next reset starts fresh
       st.phase        = 'idle'
       st.attacker     = 'player'
       st.winner       = null
@@ -522,6 +537,7 @@ export const useBattleStore = create<BattleStore>()(
       nextEnemyType:        state.nextEnemyType,
       nextEnemyRarity:      state.nextEnemyRarity,
       nextTilesPlaced:      state.nextTilesPlaced,
+      nextEnemyEnraged:     state.nextEnemyEnraged,
       defeatSnapshot:       state.defeatSnapshot,
     }),
   }
