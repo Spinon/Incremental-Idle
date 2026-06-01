@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import type { PlacedTile, Direction, TileContent } from '../../types/map'
 import { gridKey, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
+import { MonsterIcon, TreasureIcon, MarketIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
 const VP_W = 676
@@ -185,14 +186,14 @@ export default function MapViewport({
               } : undefined}
             >
               {sight && sight.type !== 'empty' && (
-                <span className={cn(
-                  'absolute inset-0 flex items-center justify-center text-sm pointer-events-none z-10',
+                <div className={cn(
+                  'absolute inset-0 flex items-center justify-center pointer-events-none z-10',
                   vis === 'clear' ? 'opacity-60' : 'opacity-30',
-                  sight.type === 'treasure' ? 'text-yellow-400' :
-                  sight.type === 'market'   ? 'text-indigo-400' : 'text-red-400',
                 )}>
-                  {sight.type === 'treasure' ? '✦' : sight.type === 'market' ? '⚑' : '⚔'}
-                </span>
+                  {sight.type === 'monster'  && <MonsterIcon  size={20} />}
+                  {sight.type === 'treasure' && <TreasureIcon size={20} />}
+                  {sight.type === 'market'   && <MarketIcon   size={20} />}
+                </div>
               )}
               {vis === 'penumbra' && (
                 <div className="absolute inset-0 bg-slate-950/65 rounded pointer-events-none z-20" />

@@ -1,3 +1,17 @@
+// ─── Hero appearance ──────────────────────────────────────────────────────────
+
+export interface HeroConfig {
+  head:   1 | 2 | 3
+  hair:   1 | 2 | 3 | 4
+  body:   1 | 2 | 3
+  weapon: 0 | 1 | 2 | 3
+  legs:   1 | 2 | 3
+}
+
+export const DEFAULT_HERO_CONFIG: HeroConfig = {
+  head: 1, hair: 1, body: 1, weapon: 1, legs: 1,
+}
+
 export interface Attributes {
   forca: number
   agilidade: number

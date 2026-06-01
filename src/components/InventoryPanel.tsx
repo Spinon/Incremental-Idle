@@ -7,6 +7,9 @@ import { getDerivedStats } from '../formulas/derived'
 import { cn } from '../lib/utils'
 import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, Consumable } from '../types/item'
 import SpellbookPanel from './SpellbookPanel'
+import {
+  HeadIcon, ShoulderIcon, ChestIcon, GlovesIcon, LegsIcon, FeetIcon, AccIcon,
+} from './icons/EquipIcons'
 
 const ALL_RARITIES: ItemRarity[] = ['common', 'uncommon', 'rare', 'epic', 'set', 'unique']
 
@@ -187,31 +190,55 @@ function ItemCell({
   )
 }
 
+// ── Slot icon map ──────────────────────────────────────────────────────────────
+type SlotIconComp = React.ComponentType<{ size?: number; className?: string }>
+const SLOT_ICON: Partial<Record<string, SlotIconComp>> = {
+  head:     HeadIcon,
+  shoulder: ShoulderIcon,
+  chest:    ChestIcon,
+  gloves:   GlovesIcon,
+  legs:     LegsIcon,
+  feet:     FeetIcon,
+  acc:      AccIcon,
+  acc1:     AccIcon,
+  acc2:     AccIcon,
+  acc3:     AccIcon,
+}
+
 function EmptyEquipSlot({
+  slot,
   label,
   title,
   onClick,
   isTarget,
 }: {
+  slot?: string
   label: string
   title?: string
   onClick: () => void
   isTarget?: boolean
 }) {
+  const Icon = slot ? SLOT_ICON[slot] : undefined
   return (
     <button
       onClick={onClick}
       title={title ?? label}
       style={{ width: 52, height: 52 }}
       className={cn(
-        'rounded-lg border-2 border-dashed flex items-center justify-center transition-colors shrink-0',
+        'rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-0.5 transition-colors shrink-0',
         isTarget
           ? 'border-indigo-400 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
           : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50',
       )}
     >
+      {Icon && (
+        <Icon
+          size={22}
+          className={isTarget ? 'opacity-80' : 'opacity-30'}
+        />
+      )}
       <span className={cn(
-        'text-[8px] font-semibold uppercase tracking-wide',
+        'text-[7px] font-semibold uppercase tracking-wide',
         isTarget ? 'text-indigo-400' : 'text-slate-400 dark:text-slate-600',
       )}>
         {label}
@@ -266,6 +293,7 @@ function EquipmentBody({
                   onClick={() => onSlotClick(key)}
                 />
               : <EmptyEquipSlot
+                  slot={key}
                   label={slotLabels[key]}
                   title={slotFull[key]}
                   isTarget={!!selInv}

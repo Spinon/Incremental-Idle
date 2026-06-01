@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useBattleStore } from '../store/battleStore'
+import { useHeroStore } from '../store/heroStore'
 import { useUIStore } from '../store/uiStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
+import { HeroSprite } from './icons/hero/HeroComposer'
 import { cn } from '../lib/utils'
-
-const PLAYER_EMOJI = '🦸'
 
 // ─── Mini HP bar ──────────────────────────────────────────────────────────────
 
@@ -52,6 +52,7 @@ export default function MiniBattlePlayer() {
   const attacker = useBattleStore(s => s.attacker)
   const log      = useBattleStore(s => s.log)
 
+  const heroConfig = useHeroStore(s => s.heroConfig)
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
 
@@ -199,10 +200,10 @@ export default function MiniBattlePlayer() {
               ))}
               <span
                 key={`p-${playerHitKey}`}
-                className={cn('text-[38px] leading-none', playerHitKey > 0 && 'anim-flash')}
+                className={cn('leading-none', playerHitKey > 0 && 'anim-flash')}
                 style={playerHitKey > 0 ? { animationDuration: '280ms' } : undefined}
               >
-                {PLAYER_EMOJI}
+                <HeroSprite config={heroConfig} size={38} />
               </span>
             </div>
 

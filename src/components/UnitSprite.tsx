@@ -1,6 +1,8 @@
 import React from 'react'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { cn } from '../lib/utils'
+import { HeroSprite } from './icons/hero/HeroComposer'
+import { useHeroStore } from '../store/heroStore'
 
 interface Props {
   side: 'player' | 'enemy'
@@ -9,60 +11,13 @@ interface Props {
   monsterType?: string  // template id — only used when side === 'enemy'
 }
 
-// ─── Player sprite ────────────────────────────────────────────────────────────
+// ─── Player sprite — reads heroConfig from store ──────────────────────────────
 
-function KnightSvg() {
-  return (
-    <svg viewBox="0 0 52 80" width="72" height="112" aria-label="Knight">
-      {/* Helmet plume */}
-      <rect x="21" y="1" width="10" height="7" rx="3" fill="#e74c3c" />
-      <rect x="24" y="0" width="4" height="10" rx="2" fill="#c0392b" />
-      {/* Helmet */}
-      <rect x="13" y="6" width="26" height="20" rx="5" fill="#8395a7" />
-      {/* Helmet highlight */}
-      <rect x="15" y="8" width="10" height="6" rx="3" fill="#a9b8c3" opacity="0.6" />
-      {/* Visor slit */}
-      <rect x="13" y="17" width="26" height="5" rx="1.5" fill="#1e272e" />
-      {/* Chin guard */}
-      <rect x="15" y="24" width="22" height="6" rx="3" fill="#6c7a89" />
-      {/* Neck */}
-      <rect x="20" y="30" width="12" height="4" fill="#5f6f7e" />
-      {/* Shoulders */}
-      <ellipse cx="10" cy="36" rx="7" ry="5" fill="#2980b9" />
-      <ellipse cx="42" cy="36" rx="7" ry="5" fill="#2980b9" />
-      {/* Breastplate */}
-      <rect x="11" y="34" width="30" height="24" rx="4" fill="#2980b9" />
-      {/* Breastplate ridge */}
-      <rect x="24" y="34" width="4" height="22" rx="2" fill="#3498db" />
-      {/* Breastplate highlight */}
-      <rect x="14" y="37" width="12" height="8" rx="3" fill="#3498db" opacity="0.5" />
-      {/* Shield */}
-      <rect x="1" y="32" width="11" height="20" rx="5" fill="#c0392b" />
-      <rect x="3" y="35" width="7" height="14" rx="3" fill="#a93226" />
-      <rect x="6" y="40" width="1.5" height="6" rx="1" fill="#e74c3c" />
-      <rect x="3" y="42" width="7" height="1.5" rx="1" fill="#e74c3c" />
-      {/* Sword arm */}
-      <rect x="40" y="30" width="9" height="22" rx="4" fill="#2980b9" />
-      {/* Sword crossguard */}
-      <rect x="35" y="27" width="18" height="5" rx="2.5" fill="#95a5a6" />
-      {/* Sword blade */}
-      <rect x="42" y="4" width="6" height="26" rx="2" fill="#dce3e8" />
-      <rect x="43" y="4" width="3" height="24" rx="1.5" fill="#ecf0f1" />
-      <polygon points="42,4 48,4 45,0" fill="#dce3e8" />
-      {/* Tassets */}
-      <rect x="12" y="58" width="12" height="7" rx="3" fill="#1f618d" />
-      <rect x="28" y="58" width="12" height="7" rx="3" fill="#1f618d" />
-      {/* Legs */}
-      <rect x="13" y="63" width="11" height="13" rx="3" fill="#1f618d" />
-      <rect x="28" y="63" width="11" height="13" rx="3" fill="#1f618d" />
-      {/* Boots */}
-      <rect x="11" y="72" width="15" height="8" rx="4" fill="#154360" />
-      <rect x="26" y="72" width="15" height="8" rx="4" fill="#154360" />
-      <rect x="13" y="73" width="6" height="3" rx="2" fill="#1a5276" opacity="0.7" />
-      <rect x="28" y="73" width="6" height="3" rx="2" fill="#1a5276" opacity="0.7" />
-    </svg>
-  )
+function HeroSvg() {
+  const config = useHeroStore(s => s.heroConfig)
+  return <HeroSprite config={config} size={72} />
 }
+
 
 // ─── Goblin ───────────────────────────────────────────────────────────────────
 
@@ -322,7 +277,7 @@ const MONSTER_SVGS: Record<string, SvgComponent> = {
 
 export default function UnitSprite({ side, isHit, hitDuration, monsterType }: Props) {
   function renderSprite() {
-    if (side === 'player') return <KnightSvg />
+    if (side === 'player') return <HeroSvg />
 
     const template = monsterType ? FOREST_MONSTER_MAP.get(monsterType) : null
     if (!template) return <GoblinSvg />

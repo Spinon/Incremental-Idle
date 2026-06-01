@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import type { Attributes } from '../types/hero'
+import type { Attributes, HeroConfig } from '../types/hero'
+import { DEFAULT_HERO_CONFIG } from '../types/hero'
 import { getDerivedStats, staminaDrainAt } from '../formulas/derived'
 import type { Speed } from './battleStore'
 
@@ -21,8 +22,10 @@ interface HeroStore {
   xpGainVersion: number
   lastGoldGain: number
   goldGainVersion: number
+  heroConfig: HeroConfig
 
   spendPoint(attr: keyof Attributes): void
+  setHeroConfig(config: HeroConfig): void
   optimizePoints(): void
   applyPreset(preset: 'combat' | 'explorer' | 'mage'): void
   gainXp(amount: number): void
@@ -64,6 +67,9 @@ export const useHeroStore = create<HeroStore>()(
     xpGainVersion: 0,
     lastGoldGain: 0,
     goldGainVersion: 0,
+    heroConfig: { ...DEFAULT_HERO_CONFIG },
+
+    setHeroConfig: (config) => set((st) => { st.heroConfig = config }),
 
     optimizePoints: () => set((st) => {
       if (st.freePoints <= 0) return

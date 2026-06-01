@@ -1,8 +1,11 @@
 import type { MapTile } from '../../types/map'
 import { TILE_GEN_BASE_MS } from '../../store/mapStore'
+import { MonsterIcon, TreasureIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
-const PIPE = '#4ade80'
+// ── Path colour (stone/dirt) ─────────────────────────────────────────────────
+const PIPE_NORMAL  = '#3a3228'
+const PIPE_MONSTER = '#3a2828'
 
 interface Props {
   deck: MapTile[]
@@ -14,8 +17,9 @@ interface Props {
   onDragEnd(): void
 }
 
-export default function TileDeck({ deck, deckAccum, moveSpeed, maxDeck, tilesPlaced, onDragStart, onDragEnd }: Props) {
-  // Must match tickMap exactly: earlyFactor slows generation at game start
+export default function TileDeck({
+  deck, deckAccum, moveSpeed, maxDeck, tilesPlaced, onDragStart, onDragEnd,
+}: Props) {
   const earlyFactor = Math.min(1, 0.4 + tilesPlaced * 0.03)
   const interval    = TILE_GEN_BASE_MS / (Math.max(0.5, moveSpeed) * earlyFactor)
   const isFull      = deck.length >= maxDeck
@@ -66,14 +70,14 @@ function TileCard({
   onDragStart,
   onDragEnd,
 }: { tile: MapTile; onDragStart(id: string): void; onDragEnd(): void }) {
-  const hasContent = tile.content.type !== 'empty'
-  const icon =
-    tile.content.type === 'treasure' ? '✦'
-    : tile.content.type === 'monster' ? '⚔'
-    : ''
-  const iconColor =
-    tile.content.type === 'treasure' ? 'text-yellow-400'
-    : 'text-red-400'
+  const isMonster  = tile.content.type === 'monster'
+  const isTreasure = tile.content.type === 'treasure'
+
+  const pipe    = isMonster ? PIPE_MONSTER : PIPE_NORMAL
+  const node    = isMonster ? '#4a3535' : '#4a4035'
+  const baseBg  = isMonster ? '#1a0d0d' : '#0d1a0d'
+  const border  = isMonster ? '#3a1a1a' : '#1e3a1e'
+  const hoverBg = isMonster ? '#1e1010' : '#0f1e0f'
 
   return (
     <div
@@ -84,41 +88,61 @@ function TileCard({
         onDragStart(tile.id)
       }}
       onDragEnd={onDragEnd}
-      className={cn(
-        'relative w-[52px] h-[52px] rounded-lg cursor-grab active:cursor-grabbing select-none',
-        'bg-green-950/70 border border-green-800/50 text-green-400',
-        'hover:border-green-600 hover:bg-green-900/60 transition-colors',
-      )}
+      className="relative w-[52px] h-[52px] rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors"
+      style={{ backgroundColor: baseBg, border: `1px solid ${border}` }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = hoverBg }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = baseBg  }}
       title={`Tile Nível ${tile.level} — ${
         tile.content.type === 'treasure' ? 'Tesouro' :
         tile.content.type === 'monster'  ? `Monstro L${tile.content.monsterLevel}` :
         'Vazio'
       }`}
     >
+      {/* Paths + junction node */}
       <svg viewBox="0 0 52 52" className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
         {tile.connections.includes('N') && (
-          <line x1="26" y1="26" x2="26" y2="2" stroke={PIPE} strokeWidth="7" strokeLinecap="round" />
+          <rect x="21" y="0"  width="10" height="26" rx="2" fill={pipe} />
         )}
         {tile.connections.includes('S') && (
-          <line x1="26" y1="26" x2="26" y2="50" stroke={PIPE} strokeWidth="7" strokeLinecap="round" />
+          <rect x="21" y="26" width="10" height="26" rx="2" fill={pipe} />
         )}
         {tile.connections.includes('E') && (
-          <line x1="26" y1="26" x2="50" y2="26" stroke={PIPE} strokeWidth="7" strokeLinecap="round" />
+          <rect x="26" y="21" width="26" height="10" rx="2" fill={pipe} />
         )}
         {tile.connections.includes('W') && (
-          <line x1="26" y1="26" x2="2"  y2="26" stroke={PIPE} strokeWidth="7" strokeLinecap="round" />
+          <rect x="0"  y="21" width="26" height="10" rx="2" fill={pipe} />
         )}
-        <circle cx="26" cy="26" r="5" fill={PIPE} />
+        <circle cx="26" cy="26" r="5" fill={node} />
       </svg>
 
-      {hasContent && (
-        <span className={cn('absolute top-0.5 right-0.5 text-[10px] leading-none font-bold z-10', iconColor)}>
-          {icon}
-        </span>
+      {/* Content icon — top-right */}
+      {(isMonster || isTreasure) && (
+        <div className="absolute top-0.5 right-0.5 z-10" style={{ width: 16, height: 16 }}>
+          {isMonster  && <MonsterIcon  size={16} />}
+          {isTreasure && <TreasureIcon size={16} />}
+        </div>
       )}
-      <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none text-green-700/70 z-10">
-        L{tile.level}
-      </span>
+
+      {/* Level badge — bottom-left */}
+      <div
+        className="absolute bottom-0.5 left-0.5 z-10 rounded px-1"
+        style={{
+          backgroundColor: isMonster ? '#1a0808' : '#0a1a0a',
+          lineHeight: 1,
+          paddingTop: 2,
+          paddingBottom: 2,
+        }}
+      >
+        <span
+          className="text-[9px] font-black tabular-nums"
+          style={{
+            color: isMonster ? '#cc4444' : '#4a8a4a',
+            fontFamily: 'monospace',
+          }}
+        >
+          {tile.level}
+        </span>
+      </div>
     </div>
   )
 }
