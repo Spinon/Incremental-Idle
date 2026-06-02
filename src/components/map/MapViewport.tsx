@@ -4,6 +4,7 @@ import { gridKey, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
 import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
+import type { QuestMapMarker, QuestDifficulty } from '../../types/quest'
 
 const VP_W = 676
 const VP_H = 468
@@ -19,10 +20,33 @@ interface Props {
   zoom: number
   cameraPos: { x: number; y: number }  // grid units (float); camera centre
   draggingId: string | null
+  questMarkers: QuestMapMarker[]
   onDrop(tileId: string, x: number, y: number): void
   onTileClick(x: number, y: number): void
   onCameraChange(x: number, y: number): void
   onZoom(dir: 1 | -1): void
+}
+
+// ── Marker colours by difficulty ──────────────────────────────────────────────
+const DIFF_RING: Record<QuestDifficulty, string> = {
+  easy:   'border-green-400  bg-green-900/60',
+  medium: 'border-amber-400  bg-amber-900/60',
+  hard:   'border-red-400    bg-red-900/60',
+}
+const DIFF_TEXT: Record<QuestDifficulty, string> = {
+  easy:   'text-green-300',
+  medium: 'text-amber-300',
+  hard:   'text-red-300',
+}
+
+function MarkerIcon({ kind }: { kind: QuestMapMarker['kind'] }) {
+  switch (kind) {
+    case 'escort':              return <span>🚩</span>
+    case 'delivery':            return <span>📦</span>
+    case 'bounty':              return <span>⚠</span>
+    case 'extermination_center':return <span>⚔</span>
+    default:                    return null
+  }
 }
 
 function ghostBg(content: TileContent): string {
@@ -33,7 +57,7 @@ function ghostBg(content: TileContent): string {
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, onDrop, onTileClick, onCameraChange, onZoom,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, questMarkers, onDrop, onTileClick, onCameraChange, onZoom,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
@@ -153,6 +177,22 @@ export default function MapViewport({
         }}
       />
 
+      {/* Quest area tints — rendered below tiles so they don't block clicks */}
+      {questMarkers.filter(m => m.kind === 'extermination_area').map(m => {
+        const left = tileLeft(m.x)
+        const top  = tileTop(m.y)
+        if (left < -tilePx || left > VP_W || top < -tilePx || top > VP_H) return null
+        return (
+          <div
+            key={`qa-${m.x},${m.y}`}
+            className="absolute pointer-events-none z-10"
+            style={{ left, top, width: tilePx, height: tilePx }}
+          >
+            <div className="absolute inset-1 rounded bg-red-600/10 border border-red-600/15" />
+          </div>
+        )
+      })}
+
       {cells.map(({ gx, gy, left, top, tile, sight, vis, isValidTarget }) => (
         <div
           key={`${gx},${gy}`}
@@ -205,6 +245,43 @@ export default function MapViewport({
           ) : null}
         </div>
       ))}
+
+      {/* Quest pin markers — rendered above tiles */}
+      {questMarkers.filter(m => m.kind !== 'extermination_area').map((m, i) => {
+        const left = tileLeft(m.x)
+        const top  = tileTop(m.y)
+        if (left < -tilePx || left > VP_W || top < -tilePx || top > VP_H) return null
+        const pinSize = Math.max(18, Math.min(28, Math.round(tilePx * 0.48)))
+        const isBounty = m.kind === 'bounty'
+        return (
+          <div
+            key={`qm-${i}-${m.x},${m.y}`}
+            className="absolute pointer-events-none z-50"
+            style={{ left: left + tilePx / 2, top: top + tilePx / 2, transform: 'translate(-50%, -50%)' }}
+            title={m.label}
+          >
+            <div
+              className={cn(
+                'flex items-center justify-center rounded-full border-2 shadow-lg',
+                DIFF_RING[m.difficulty],
+                isBounty && 'anim-hp-pulse',
+              )}
+              style={{ width: pinSize, height: pinSize, fontSize: Math.max(10, pinSize * 0.55) }}
+            >
+              <MarkerIcon kind={m.kind} />
+            </div>
+            {/* Coordinate label */}
+            <div className={cn(
+              'absolute top-full left-1/2 -translate-x-1/2 mt-0.5',
+              'text-[7px] font-bold tabular-nums whitespace-nowrap leading-none',
+              DIFF_TEXT[m.difficulty],
+              'drop-shadow-[0_0_3px_rgba(0,0,0,1)]',
+            )}>
+              {m.x},{m.y}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

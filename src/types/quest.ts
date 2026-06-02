@@ -77,3 +77,18 @@ export interface Quest {
   objective: QuestObjective
   rewards: QuestRewards
 }
+
+export type QuestMarkerKind =
+  | 'escort'
+  | 'delivery'
+  | 'bounty'
+  | 'extermination_center'
+  | 'extermination_area'
+
+export interface QuestMapMarker {
+  x: number
+  y: number
+  kind: QuestMarkerKind
+  difficulty: QuestDifficulty
+  label: string
+}

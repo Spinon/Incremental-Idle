@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
+import { useQuestStore } from '../../store/questStore'
 import { getDerivedStats } from '../../formulas/derived'
 import { buildMonster } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
@@ -12,6 +13,7 @@ import TileDeck from './TileDeck'
 import { cn } from '../../lib/utils'
 import type { PlacedTile } from '../../types/map'
 import type { MonsterRarity } from '../../types/monster'
+import type { QuestMapMarker, QuestObjectiveExtermination } from '../../types/quest'
 
 const ZOOM_MIN = 0.30
 const ZOOM_MAX = 2.50
@@ -67,6 +69,36 @@ export default function MapSection() {
   const t       = useT()
 
   const maxDeck = Math.min(8, 3 + Math.floor(derived.vision / 50))
+
+  const activeQuests = useQuestStore(s => s.quests.filter(q => q.status === 'active'))
+  const questMarkers = useMemo<QuestMapMarker[]>(() => {
+    const markers: QuestMapMarker[] = []
+    for (const q of activeQuests) {
+      const obj = q.objective
+      if (obj.type === 'escort') {
+        if (!obj.reached)
+          markers.push({ x: obj.targetX, y: obj.targetY, kind: 'escort', difficulty: q.difficulty, label: q.title })
+      } else if (obj.type === 'delivery') {
+        if (!obj.reached)
+          markers.push({ x: obj.targetX, y: obj.targetY, kind: 'delivery', difficulty: q.difficulty, label: q.title })
+      } else if (obj.type === 'bounty') {
+        if (!obj.defeated)
+          markers.push({ x: obj.targetX, y: obj.targetY, kind: 'bounty', difficulty: q.difficulty, label: obj.targetName })
+      } else if (obj.type === 'extermination') {
+        const o = obj as QuestObjectiveExtermination
+        if (o.killed < o.required) {
+          markers.push({ x: o.centerX, y: o.centerY, kind: 'extermination_center', difficulty: q.difficulty, label: q.title })
+          for (let dy = -o.radius; dy <= o.radius; dy++) {
+            for (let dx = -o.radius; dx <= o.radius; dx++) {
+              if ((dx !== 0 || dy !== 0) && Math.max(Math.abs(dx), Math.abs(dy)) <= o.radius)
+                markers.push({ x: o.centerX + dx, y: o.centerY + dy, kind: 'extermination_area', difficulty: q.difficulty, label: '' })
+            }
+          }
+        }
+      }
+    }
+    return markers
+  }, [activeQuests])
 
   const isPanned     = cameraPos.x !== playerPos.x || cameraPos.y !== playerPos.y
   const selectedTile = selectedPos ? (grid[gridKey(selectedPos.x, selectedPos.y)] ?? null) : null
@@ -223,6 +255,7 @@ export default function MapSection() {
             zoom={zoom}
             cameraPos={cameraPos}
             draggingId={draggingId}
+            questMarkers={questMarkers}
             onDrop={(tileId, x, y) => { placeTile(tileId, x, y); setDraggingId(null) }}
             onTileClick={handleTileClick}
             onCameraChange={(x, y) => setCameraPos({ x, y })}
