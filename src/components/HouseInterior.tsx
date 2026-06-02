@@ -48,7 +48,7 @@ export default function HouseInterior() {
 
   function startJourney() {
     // Reset battle to a weak enemy so the arena doesn't keep the previous goblin
-    queueEnemy(Math.max(1, heroLevel - 5))
+    queueEnemy(Math.max(1, heroLevel - 5), undefined, 'normal', 0)
     resetBattle()
     resetMap(heroLevel)
     leaveScene()
