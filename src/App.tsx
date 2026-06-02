@@ -52,6 +52,9 @@ function GameRoot() {
           enemyHpRatio:  state.enemy.hp  / state.enemy.maxHp,
           enemyStatuses: state.enemyStatuses,
           heroStatuses:  state.heroStatuses,
+          attacker:      state.attacker,
+          hitsLeft:      state.hitsLeft,
+          comboSize:     state.comboSize,
         }))
       } else {
         // Fight ended — remove so next reload doesn't restore a finished fight
@@ -71,13 +74,20 @@ function GameRoot() {
           const snap = JSON.parse(raw) as {
             playerHpRatio: number; enemyHpRatio: number
             enemyStatuses: unknown; heroStatuses: unknown
+            attacker: unknown; hitsLeft: unknown; comboSize: unknown
           }
           if (snap.enemyHpRatio > 0.01 && snap.enemyHpRatio < 0.99) {
+            const attacker  = snap.attacker  === 'enemy' ? 'enemy' : 'player'
+            const hitsLeft  = typeof snap.hitsLeft  === 'number' && snap.hitsLeft  >= 1 ? snap.hitsLeft  : 1
+            const comboSize = typeof snap.comboSize === 'number' && snap.comboSize >= 1 ? snap.comboSize : hitsLeft
             useBattleStore.getState().restoreMidFight(
               snap.playerHpRatio,
               snap.enemyHpRatio,
               Array.isArray(snap.enemyStatuses) ? snap.enemyStatuses : [],
               Array.isArray(snap.heroStatuses)  ? snap.heroStatuses  : [],
+              attacker,
+              hitsLeft,
+              comboSize,
             )
           }
         } catch { /* malformed snapshot — ignore */ }
