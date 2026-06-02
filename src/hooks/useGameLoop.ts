@@ -7,7 +7,7 @@ import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
-import { generateItem, getEquipmentBonuses } from '../formulas/items'
+import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
 import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
 import type { MonsterRarity } from '../types/monster'
@@ -189,15 +189,15 @@ export function useGameLoop() {
               useNotifStore.getState().push({
                 title:    '🎁 Item encontrado!',
                 titleEn:  '🎁 Item found!',
-                body:     `${rarityPt} — ${item.name}${isUpgrade ? ' ★ Upgrade!' : ''}`,
-                bodyEn:   `${rarityEn} — ${item.name}${isUpgrade ? ' ★ Upgrade!' : ''}`,
+                body:     `${rarityPt} — ${getItemDisplayName(item, false)}${isUpgrade ? ' ★ Upgrade!' : ''}`,
+                bodyEn:   `${rarityEn} — ${getItemDisplayName(item, true)}${isUpgrade ? ' ★ Upgrade!' : ''}`,
                 rarity:   item.rarity,
-                scrollTo: 'inventory-panel',
+                scrollTo: 'equips',
                 actions:  isUpgrade ? [
                   { label: 'Equipar', labelEn: 'Equip', kind: 'equip', payload: item.id },
-                  { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'inventory-panel' },
+                  { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'equips' },
                 ] : [
-                  { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'inventory-panel' },
+                  { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'equips' },
                 ],
               })
             }
@@ -235,8 +235,8 @@ export function useGameLoop() {
                 body:     `${rarityPt} — ${word.nameEn}${word.namePt !== word.nameEn ? ` (${word.namePt})` : ''}`,
                 bodyEn:   `${rarityEn} — ${word.nameEn}`,
                 rarity:   word.rarity as 'rare' | 'epic' | 'unique',
-                scrollTo: 'inventory-panel',
-                actions:  [{ label: 'Ver Grimório', labelEn: 'View Spellbook', kind: 'scroll', payload: 'inventory-panel' }],
+                scrollTo: 'spells',
+                actions:  [{ label: 'Ver Grimório', labelEn: 'View Spellbook', kind: 'scroll', payload: 'spells' }],
               })
             }
           }

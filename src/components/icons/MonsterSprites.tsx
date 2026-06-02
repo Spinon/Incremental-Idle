@@ -35,19 +35,88 @@ const RARITY_ACCENT: Partial<Record<MonsterRarity, string>> = {
   unique:   '#ffcc22',
 }
 
+// ─── Pixel-map engine ──────────────────────────────────────────────────────────
+// Cada sprite é uma grade de células (chars). O builder desenha formas com
+// rect/triângulo numa grade NxN; um passe de contorno adiciona borda preta
+// automática ao redor da silhueta. O renderizador agrupa runs horizontais
+// da mesma cor num único <rect> (mantém o DOM enxuto e pixels duros).
+
+type Grid = string[][]
+
+function mkGrid(n: number): Grid {
+  return Array.from({ length: n }, () => Array<string>(n).fill('.'))
+}
+
+/** Preenche um retângulo (x,y,w,h) com o char. '.' apaga. */
+function rect(g: Grid, x: number, y: number, w: number, h: number, ch: string) {
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      if (g[yy] && xx >= 0 && xx < g.length) g[yy][xx] = ch
+    }
+  }
+}
+
+/** Triângulo apontando para CIMA (estreito no topo). apex em (cx, yTop). */
+function triUp(g: Grid, cx: number, yTop: number, height: number, halfBaseMax: number, ch: string) {
+  for (let i = 0; i < height; i++) {
+    const half = Math.round((i / (height - 1)) * halfBaseMax)
+    rect(g, cx - half, yTop + i, half * 2 + 1, 1, ch)
+  }
+}
+
+/** Triângulo apontando para a DIREITA (ponta à direita). base em xLeft. */
+function triRight(g: Grid, xLeft: number, cy: number, length: number, halfBaseMax: number, ch: string) {
+  for (let i = 0; i < length; i++) {
+    const half = Math.round(((length - 1 - i) / (length - 1)) * halfBaseMax)
+    rect(g, xLeft + i, cy - half, 1, half * 2 + 1, ch)
+  }
+}
+
+/** Adiciona contorno (ch) em toda célula vazia adjacente a uma célula preenchida. */
+function outline(g: Grid, ch: string) {
+  const n = g.length
+  const filled = (x: number, y: number) =>
+    y >= 0 && y < n && x >= 0 && x < n && g[y][x] !== '.' && g[y][x] !== ch
+  const todo: [number, number][] = []
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      if (g[y][x] !== '.') continue
+      if (filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1)) {
+        todo.push([x, y])
+      }
+    }
+  }
+  for (const [x, y] of todo) g[y][x] = ch
+}
+
+function PixelMap({ grid, palette }: { grid: Grid; palette: Record<string, string> }) {
+  const cells: React.JSX.Element[] = []
+  for (let y = 0; y < grid.length; y++) {
+    const row = grid[y]
+    let x = 0
+    while (x < row.length) {
+      const ch = row[x]
+      if (ch === '.' || !palette[ch]) { x++; continue }
+      let w = 1
+      while (x + w < row.length && row[x + w] === ch) w++
+      cells.push(<rect key={`${x}-${y}`} x={x} y={y} width={w} height={1} fill={palette[ch]} />)
+      x += w
+    }
+  }
+  return <g shapeRendering="crispEdges">{cells}</g>
+}
+
 // ─── Shared: rage effect ──────────────────────────────────────────────────────
 
-function EnragedEffect() {
+function EnragedEffect({ g = 30 }: { g?: number } = {}) {
   return (
     <g>
-      <rect x="0"  y="3"  width="3" height="2" fill="#ff4422" opacity="0.80" />
-      <rect x="27" y="3"  width="3" height="2" fill="#ff4422" opacity="0.80" />
-      <rect x="0"  y="9"  width="2" height="3" fill="#ff6622" opacity="0.55" />
-      <rect x="28" y="9"  width="2" height="3" fill="#ff6622" opacity="0.55" />
-      <rect x="4"  y="0"  width="4" height="2" fill="#ff4422" opacity="0.45" />
-      <rect x="22" y="0"  width="4" height="2" fill="#ff4422" opacity="0.45" />
-      <rect x="1"  y="1"  width="2" height="1" fill="#ff8822" opacity="0.35" />
-      <rect x="27" y="1"  width="2" height="1" fill="#ff8822" opacity="0.35" />
+      <rect x="0"        y={g * 0.10} width={g * 0.10} height={g * 0.07} fill="#ff4422" opacity="0.80" />
+      <rect x={g * 0.90} y={g * 0.10} width={g * 0.10} height={g * 0.07} fill="#ff4422" opacity="0.80" />
+      <rect x="0"        y={g * 0.30} width={g * 0.07} height={g * 0.10} fill="#ff6622" opacity="0.55" />
+      <rect x={g * 0.93} y={g * 0.30} width={g * 0.07} height={g * 0.10} fill="#ff6622" opacity="0.55" />
+      <rect x={g * 0.13} y="0"        width={g * 0.13} height={g * 0.07} fill="#ff4422" opacity="0.45" />
+      <rect x={g * 0.73} y="0"        width={g * 0.13} height={g * 0.07} fill="#ff4422" opacity="0.45" />
     </g>
   )
 }
@@ -56,147 +125,177 @@ function EnragedEffect() {
 // GOBLIN
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const GOBLIN_PALETTE: Record<string, string> = {
+  B: '#52a83c',  // verde base
+  S: '#2e6e1e',  // verde sombra
+  L: '#74c258',  // verde brilho
+  H: '#8fd072',  // verde brilho forte
+  K: '#0e2b0b',  // contorno
+  E: '#e23030',  // olho
+  e: '#ff8a7a',  // brilho do olho
+  P: '#6a0a0a',  // pupila
+  M: '#170505',  // boca
+  F: '#f4ead0',  // presa
+  v: '#6a4818',  // couro
+  w: '#43290c',  // couro escuro
+  x: '#8a6224',  // couro brilho
+  Y: '#d8b13a',  // fivela
+  y: '#f2d878',  // fivela brilho
+  c: '#7a5420',  // madeira (clava)
+  k: '#4a3010',  // madeira escura
+}
+
+function buildGoblinGrid(): Grid {
+  const g = mkGrid(64)
+
+  // ════ Goblin de CORPO INTEIRO, de frente, postura agachada ════
+
+  // ── pernas (curtas, arqueadas) ──
+  rect(g, 19, 47, 10, 14, 'B')   // perna esquerda
+  rect(g, 35, 47, 10, 14, 'B')   // perna direita
+  rect(g, 19, 47, 3, 12, 'L')    // brilho
+  rect(g, 42, 49, 3, 10, 'S')    // sombra
+  rect(g, 19, 47, 10, 2, 'S'); rect(g, 35, 47, 10, 2, 'S')  // vinco da coxa
+  // pés com garras
+  rect(g, 15, 59, 15, 4, 'S'); rect(g, 34, 59, 15, 4, 'S')
+  rect(g, 15, 62, 2, 2, 'K'); rect(g, 20, 62, 2, 2, 'K'); rect(g, 25, 62, 2, 2, 'K')
+  rect(g, 35, 62, 2, 2, 'K'); rect(g, 40, 62, 2, 2, 'K'); rect(g, 45, 62, 2, 2, 'K')
+
+  // ── braço esquerdo (pendente) ──
+  rect(g, 9, 28, 9, 19, 'B')
+  rect(g, 9, 28, 2, 16, 'L')
+  rect(g, 8, 44, 10, 6, 'B')     // punho
+  rect(g, 8, 44, 10, 2, 'S')
+
+  // ── braço direito (segura a clava pra baixo) ──
+  rect(g, 46, 28, 9, 17, 'B')
+  rect(g, 52, 29, 2, 14, 'S')
+  rect(g, 46, 42, 11, 6, 'B')    // punho
+  rect(g, 46, 42, 11, 2, 'S')
+
+  // ── clava abaixada na mão direita (longe da cabeça) ──
+  rect(g, 49, 38, 5, 12, 'c')    // cabo
+  rect(g, 49, 38, 2, 12, 'k')
+  rect(g, 45, 48, 13, 11, 'c')   // cabeça da clava
+  rect(g, 46, 49, 11, 9, 'k')
+  rect(g, 48, 51, 2, 2, 'x'); rect(g, 53, 52, 2, 2, 'x'); rect(g, 50, 55, 2, 2, 'x')  // cravos
+
+  // ── tronco (barrigudo) + colete de couro ──
+  rect(g, 16, 27, 32, 21, 'B')
+  rect(g, 16, 27, 3, 3, '.'); rect(g, 45, 27, 3, 3, '.')   // ombros arredondados
+  rect(g, 16, 45, 3, 3, '.'); rect(g, 45, 45, 3, 3, '.')   // quadril arredondado
+  // colete sobre o peito
+  rect(g, 17, 27, 30, 10, 'v')
+  rect(g, 20, 29, 11, 5, 'x')    // brilho do peito
+  rect(g, 31, 28, 3, 9, 'w')     // costura central
+  rect(g, 41, 29, 5, 7, 'w')     // sombra direita
+  // barriga verde exposta
+  rect(g, 23, 38, 16, 6, 'L')
+  rect(g, 25, 40, 12, 3, 'H')
+  // cinto + tanga
+  rect(g, 16, 43, 32, 4, 'w')
+  rect(g, 28, 42, 9, 5, 'Y'); rect(g, 30, 43, 4, 3, 'y')   // fivela
+  rect(g, 27, 46, 11, 8, 'v'); rect(g, 29, 47, 7, 6, 'w')  // tanga
+
+  // ── pescoço ──
+  rect(g, 27, 24, 10, 5, 'B')
+  rect(g, 27, 24, 10, 2, 'S')
+
+  // ── cabeça (grande) ──
+  rect(g, 17, 3, 30, 23, 'B')
+  rect(g, 17, 3, 4, 4, '.'); rect(g, 43, 3, 4, 4, '.')   // topo arredondado
+  rect(g, 17, 22, 3, 4, '.'); rect(g, 44, 22, 3, 4, '.') // queixo arredondado
+  rect(g, 23, 6, 16, 3, 'L')     // testa brilho
+  rect(g, 27, 7, 8, 2, 'H')
+  rect(g, 20, 20, 24, 4, 'S')    // sombra do maxilar
+  rect(g, 40, 8, 5, 14, 'S')     // sombra lateral
+
+  // ── orelhas grandes pontudas (laterais, escalonadas) ──
+  rect(g, 11, 9, 8, 9, 'B'); rect(g, 6, 10, 7, 5, 'B'); rect(g, 3, 11, 5, 3, 'B')   // esq
+  rect(g, 9, 11, 6, 5, 'S')
+  rect(g, 45, 9, 8, 9, 'B'); rect(g, 51, 10, 7, 5, 'B'); rect(g, 56, 11, 5, 3, 'B') // dir
+  rect(g, 49, 11, 6, 5, 'S')
+
+  // ── sobrancelhas bravas + olhos vermelhos ──
+  rect(g, 20, 10, 11, 2, 'K'); rect(g, 33, 10, 11, 2, 'K')
+  rect(g, 28, 12, 8, 2, 'K')     // vinco entre as sobrancelhas
+  rect(g, 21, 12, 9, 6, 'E'); rect(g, 34, 12, 9, 6, 'E')
+  rect(g, 24, 14, 4, 4, 'P');  rect(g, 37, 14, 4, 4, 'P')
+  rect(g, 22, 13, 3, 2, 'e');  rect(g, 35, 13, 3, 2, 'e')
+
+  // ── nariz ──
+  rect(g, 29, 17, 6, 6, 'B')
+  rect(g, 29, 17, 6, 2, 'S')
+  rect(g, 30, 18, 2, 2, 'L')
+  rect(g, 30, 21, 1, 2, 'K'); rect(g, 33, 21, 1, 2, 'K')   // narinas
+
+  // ── boca larga + presas ──
+  rect(g, 22, 23, 20, 3, 'M')
+  rect(g, 24, 23, 2, 4, 'F'); rect(g, 38, 23, 2, 4, 'F')   // presas superiores
+  rect(g, 30, 25, 2, 2, 'F'); rect(g, 33, 25, 2, 2, 'F')   // inferiores
+
+  outline(g, 'K')
+  return g
+}
+
+const GOBLIN_GRID = buildGoblinGrid()
+
 function GoblinBase() {
-  const s   = '#52a83c'   // verde base
-  const d   = '#2e6e1e'   // verde sombra
-  const hi  = '#74c258'   // verde brilho
-  const out = '#1a3e10'   // contorno
-  const e   = '#e23030'   // olho
-  const ep  = '#7a0e0e'   // pupila
-  const b   = '#6a4818'   // couro
-  const bd  = '#43290c'   // couro escuro
-  const bh  = '#8a6224'   // couro brilho
-  const cl  = '#7a5420'   // madeira clava
-  const ch  = '#4a3010'   // madeira escura
-  const fang = '#f4ead0'
-  return (
-    <g>
-      {/* orelhas */}
-      <rect x="2"  y="3"  width="4" height="8" rx="2" fill={out} />
-      <rect x="2"  y="3"  width="3" height="7" rx="2" fill={s} />
-      <rect x="25" y="3"  width="4" height="8" rx="2" fill={out} />
-      <rect x="25" y="3"  width="3" height="7" rx="2" fill={s} />
-      <rect x="26" y="4"  width="2" height="5" fill={d} opacity="0.5" />
-      {/* cabeça — contorno + base */}
-      <rect x="4"  y="1"  width="22" height="15" rx="4" fill={out} />
-      <rect x="5"  y="1"  width="20" height="14" rx="3" fill={s} />
-      {/* testa brilho + sombra da sobrancelha */}
-      <rect x="8"  y="2"  width="9"  height="3" rx="1" fill={hi} opacity="0.4" />
-      <rect x="6"  y="2"  width="18" height="3" rx="2" fill={d} opacity="0.55" />
-      {/* sombra do lado direito */}
-      <rect x="22" y="3"  width="3"  height="11"      fill={d} opacity="0.4" />
-      {/* olhos */}
-      <rect x="6"  y="5"  width="7"  height="5" rx="2" fill={e} />
-      <rect x="17" y="5"  width="7"  height="5" rx="2" fill={e} />
-      <rect x="8"  y="6"  width="3"  height="3" rx="1" fill={ep} />
-      <rect x="19" y="6"  width="3"  height="3" rx="1" fill={ep} />
-      <rect x="8"  y="5"  width="2"  height="2" fill="#ff9a9a" opacity="0.8" />
-      <rect x="19" y="5"  width="2"  height="2" fill="#ff9a9a" opacity="0.8" />
-      {/* nariz */}
-      <rect x="12" y="9"  width="6"  height="3" rx="2" fill={d} />
-      <rect x="13" y="10" width="2"  height="2" rx="1" fill="#0a1a08" />
-      <rect x="16" y="10" width="2"  height="2" rx="1" fill="#0a1a08" />
-      {/* boca + presas */}
-      <rect x="7"  y="12" width="16" height="3" rx="1" fill="#180606" />
-      <rect x="9"  y="11" width="3"  height="3" rx="1" fill={fang} />
-      <rect x="18" y="11" width="3"  height="3" rx="1" fill={fang} />
-      <rect x="13" y="13" width="4"  height="2"      fill="#3a0c0c" />
-      {/* pescoço */}
-      <rect x="11" y="15" width="8"  height="3" fill={s} />
-      <rect x="11" y="15" width="8"  height="1" fill={d} opacity="0.4" />
-      {/* corpo — colete de couro */}
-      <rect x="4"  y="18" width="22" height="11" rx="3" fill={out} />
-      <rect x="5"  y="18" width="20" height="10" rx="2" fill={b} />
-      <rect x="7"  y="19" width="9"  height="5"  rx="1" fill={bh} opacity="0.5" />
-      <rect x="14" y="18" width="2"  height="10"      fill={bd} opacity="0.5" />
-      <rect x="22" y="19" width="3"  height="9"       fill={bd} opacity="0.4" />
-      {/* cinto */}
-      <rect x="5"  y="26" width="20" height="2"  fill={bd} />
-      <rect x="13" y="26" width="4"  height="2"  fill="#d8b13a" />
-      <rect x="14" y="26" width="1"  height="1"  fill="#f2d878" />
-      {/* braço esquerdo */}
-      <rect x="1"  y="18" width="5"  height="10" rx="2" fill={out} />
-      <rect x="1"  y="18" width="4"  height="9"  rx="2" fill={s} />
-      <rect x="1"  y="18" width="1"  height="9"        fill={hi} opacity="0.5" />
-      <rect x="1"  y="25" width="4"  height="2"  rx="1" fill={d} opacity="0.6" />
-      {/* braço direito */}
-      <rect x="24" y="18" width="5"  height="10" rx="2" fill={out} />
-      <rect x="24" y="18" width="4"  height="9"  rx="2" fill={s} />
-      <rect x="27" y="18" width="1"  height="9"        fill={d} />
-      {/* clava — cabo + cabeça com cravos */}
-      <rect x="25" y="3"  width="4"  height="16" rx="1" fill={ch} />
-      <rect x="25" y="3"  width="3"  height="16" rx="1" fill={cl} />
-      <rect x="25" y="9"  width="3"  height="1"  fill={ch} opacity="0.6" />
-      <rect x="25" y="14" width="3"  height="1"  fill={ch} opacity="0.6" />
-      <rect x="22" y="0"  width="8"  height="5"  rx="2" fill={ch} />
-      <rect x="23" y="0"  width="6"  height="4"  rx="2" fill={cl} />
-      <rect x="24" y="0"  width="2"  height="1"  fill={bh} opacity="0.6" />
-      <rect x="22" y="1"  width="1"  height="1"  fill={ch} />
-      <rect x="29" y="1"  width="1"  height="1"  fill={ch} />
-      {/* pernas */}
-      <rect x="7"  y="27" width="6"  height="3"  rx="1" fill={out} />
-      <rect x="7"  y="27" width="6"  height="2"  rx="1" fill={s} />
-      <rect x="17" y="27" width="6"  height="3"  rx="1" fill={out} />
-      <rect x="17" y="27" width="6"  height="2"  rx="1" fill={s} />
-      {/* pés */}
-      <rect x="6"  y="29" width="8"  height="1"  rx="1" fill={d} />
-      <rect x="16" y="29" width="8"  height="1"  rx="1" fill={d} />
-    </g>
-  )
+  return <PixelMap grid={GOBLIN_GRID} palette={GOBLIN_PALETTE} />
 }
 
 function GoblinAccessory({ rarity, enraged }: AccessoryProps) {
   const a = rarity ? (RARITY_ACCENT[rarity] ?? '#fff') : '#fff'
   if (enraged) return (
     <g>
-      <EnragedEffect />
-      <rect x="8"  y="3" width="4" height="1" fill="#ff2200" opacity="0.7" />
-      <rect x="18" y="3" width="4" height="1" fill="#ff2200" opacity="0.7" />
+      <EnragedEffect g={64} />
+      <rect x="20" y="6" width="11" height="2" fill="#ff2200" opacity="0.7" />
+      <rect x="33" y="6" width="11" height="2" fill="#ff2200" opacity="0.7" />
     </g>
   )
   if (!rarity || rarity === 'normal') return null
   if (rarity === 'uncommon') return (
     <g>
       {/* escudo de madeira no braço esquerdo */}
-      <rect x="0" y="17" width="5" height="9" rx="2" fill="#8a5a2a" />
-      <rect x="1" y="18" width="3" height="7" rx="1" fill="#6a3a10" />
-      <rect x="2" y="20" width="1" height="3" fill={a} opacity="0.7" />
+      <rect x="1"  y="30" width="14" height="20" rx="3" fill="#8a5a2a" />
+      <rect x="3"  y="32" width="10" height="16" rx="2" fill="#6a3a10" />
+      <rect x="7"  y="34" width="2"  height="12"     fill={a} opacity="0.7" />
+      <rect x="4"  y="38" width="8"  height="2"      fill={a} opacity="0.5" />
     </g>
   )
   if (rarity === 'rare') return (
     <g>
       {/* capacete de ferro */}
-      <rect x="5"  y="0" width="20" height="8" rx="3" fill="#7a8a9a" />
-      <rect x="7"  y="0" width="16" height="4" rx="2" fill="#9aaaba" opacity="0.6" />
-      <rect x="6"  y="5" width="18" height="3" rx="1" fill="#4a5a6a" />
-      <rect x="14" y="5" width="2"  height="3" fill="#5a6a7a" />
+      <rect x="16" y="0" width="32" height="10" rx="4" fill="#7a8a9a" />
+      <rect x="19" y="1" width="26" height="4"  rx="3" fill="#9aaaba" opacity="0.6" />
+      <rect x="17" y="8" width="30" height="2"       fill="#4a5a6a" />
+      <rect x="30" y="8" width="4"  height="6"       fill="#5a6a7a" />
     </g>
   )
   if (rarity === 'epic') return (
     <g>
       {/* capacete com chifres + olhos brilhantes */}
-      <rect x="5"  y="0" width="20" height="8" rx="3" fill="#5a4a7a" />
-      <rect x="7"  y="0" width="16" height="3" rx="2" fill="#7a6a9a" opacity="0.5" />
-      <rect x="6"  y="4" width="18" height="3" rx="1" fill="#3a2a5a" />
-      <rect x="7"  y="0" width="3"  height="6" rx="1" fill={a} opacity="0.9" />
-      <rect x="20" y="0" width="3"  height="6" rx="1" fill={a} opacity="0.9" />
-      <rect x="6"  y="5" width="7"  height="5" rx="2" fill={a} opacity="0.3" />
-      <rect x="17" y="5" width="7"  height="5" rx="2" fill={a} opacity="0.3" />
+      <rect x="16" y="1" width="32" height="9" rx="4" fill="#5a4a7a" />
+      <rect x="19" y="1" width="26" height="3" rx="2" fill="#7a6a9a" opacity="0.5" />
+      <rect x="9"  y="0" width="8"  height="9" rx="2" fill={a} opacity="0.9" />
+      <rect x="47" y="0" width="8"  height="9" rx="2" fill={a} opacity="0.9" />
+      <rect x="21" y="12" width="9" height="6" rx="2" fill={a} opacity="0.35" />
+      <rect x="34" y="12" width="9" height="6" rx="2" fill={a} opacity="0.35" />
     </g>
   )
   /* unique */
   return (
     <g>
+      <rect x="0"  y="0" width="64" height="64" fill={a} opacity="0.04" />
       {/* coroa */}
-      <rect x="8"  y="0" width="14" height="4" rx="1" fill={a} />
-      <rect x="9"  y="0" width="2"  height="3" fill={a} />
-      <rect x="14" y="0" width="2"  height="5" rx="1" fill={a} />
-      <rect x="19" y="0" width="2"  height="3" fill={a} />
-      <rect x="9"  y="0" width="12" height="2" fill="#fff8c0" opacity="0.5" />
-      {/* runas no corpo */}
-      <rect x="10" y="19" width="3" height="2" rx="1" fill={a} opacity="0.7" />
-      <rect x="17" y="19" width="3" height="2" rx="1" fill={a} opacity="0.7" />
-      <rect x="0"  y="0" width="30" height="30" fill={a} opacity="0.04" />
+      <rect x="21" y="0" width="22" height="6" rx="1" fill={a} />
+      <rect x="23" y="0" width="3"  height="5"      fill={a} />
+      <rect x="30" y="0" width="4"  height="7" rx="1" fill={a} />
+      <rect x="39" y="0" width="3"  height="5"      fill={a} />
+      <rect x="22" y="0" width="20" height="2"      fill="#fff8c0" opacity="0.5" />
+      {/* runas na barriga */}
+      <rect x="25" y="39" width="5" height="3" rx="1" fill={a} opacity="0.7" />
+      <rect x="34" y="39" width="5" height="3" rx="1" fill={a} opacity="0.7" />
     </g>
   )
 }
@@ -205,150 +304,145 @@ function GoblinAccessory({ rarity, enraged }: AccessoryProps) {
 // LOBO — quadrúpede de perfil (projetado virado à direita; scaleX(-1) → vira à esquerda)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const WOLF_PALETTE: Record<string, string> = {
+  B: '#2c313b',  // pelo base
+  S: '#1b2028',  // sombra
+  D: '#12151c',  // sombra profunda
+  L: '#3e4654',  // brilho
+  H: '#515b6b',  // brilho forte
+  G: '#14171e',  // pata escura / casco
+  R: '#d83030',  // olho vermelho
+  r: '#ff7058',  // brilho do olho
+  N: '#050507',  // nariz
+  F: '#e8e2cc',  // presa
+  i: '#5a2a2a',  // interior da orelha
+  K: '#090b10',  // contorno
+}
+
+function buildWolfGrid(): Grid {
+  const g = mkGrid(64)
+
+  // ── cauda peluda (rear esquerda, caída) ──
+  rect(g, 2, 26, 12, 9, 'B')
+  rect(g, 0, 33, 11, 9, 'B')
+  rect(g, 1, 41, 9, 9, 'B')
+  rect(g, 3, 27, 6, 5, 'L')
+  rect(g, 1, 45, 8, 5, 'S')
+  rect(g, 1, 48, 7, 2, 'D')
+
+  // ── corpo: anca + tronco + cernelha (longo, lombo arqueado) ──
+  rect(g, 6,  24, 22, 18, 'B')   // anca traseira
+  rect(g, 18, 25, 28, 14, 'B')   // tronco
+  rect(g, 38, 22, 13, 18, 'B')   // cernelha/peito (sobe pra cabeça)
+  // arredonda quinas do lombo/garupa
+  rect(g, 6,  24, 2, 2, '.')
+  rect(g, 6,  40, 2, 2, '.')
+  // brilho do lombo + sombra do ventre
+  rect(g, 8,  24, 38, 2, 'L')
+  rect(g, 12, 25, 28, 1, 'H')
+  rect(g, 10, 37, 34, 2, 'S')
+
+  // ── patas (longas, passada aberta; distantes mais escuras) ──
+  rect(g, 13, 39, 5, 20, 'S')   // traseira distante (recuada)
+  rect(g, 47, 41, 5, 18, 'S')   // dianteira distante (adiantada)
+  rect(g, 22, 39, 5, 20, 'B')   // traseira próxima (adiantada)
+  rect(g, 39, 41, 5, 18, 'B')   // dianteira próxima (recuada)
+  rect(g, 22, 39, 2, 16, 'L')
+  rect(g, 39, 41, 2, 14, 'L')
+  // cascos
+  rect(g, 13, 57, 5, 2, 'G')
+  rect(g, 22, 57, 5, 2, 'G')
+  rect(g, 39, 57, 5, 2, 'G')
+  rect(g, 47, 57, 5, 2, 'G')
+
+  // ── cabeça (direita, baixa) ──
+  rect(g, 45, 20, 16, 18, 'B')
+  rect(g, 60, 19, 1, 2, '.')    // suaviza topo-direita
+  rect(g, 46, 21, 9, 2, 'L')    // brilho da testa
+  rect(g, 46, 33, 14, 4, 'S')   // sombra da bochecha/mandíbula
+
+  // ── focinho — cunha afiada à direita ──
+  triRight(g, 56, 33, 8, 4, 'B')
+  rect(g, 60, 33, 3, 4, 'S')
+  rect(g, 62, 33, 2, 3, 'N')    // nariz
+  rect(g, 52, 35, 10, 2, 'D')   // linha da boca
+
+  // ── orelhas pontudas ──
+  triUp(g, 48, 9, 12, 4, 'B')   // próxima
+  rect(g, 47, 16, 3, 4, 'i')    // interior
+  triUp(g, 55, 10, 11, 3, 'S')  // distante (atrás)
+
+  // ── olho vermelho ──
+  rect(g, 49, 27, 4, 3, 'R')
+  rect(g, 49, 27, 2, 2, 'r')
+
+  // ── presas ──
+  rect(g, 57, 36, 2, 3, 'F')
+  rect(g, 61, 35, 1, 2, 'F')
+
+  // ── contorno automático ──
+  outline(g, 'K')
+  return g
+}
+
+const WOLF_GRID = buildWolfGrid()
+
 function WolfBase() {
-  const f   = '#76828f'  // pelo base
-  const d   = '#4a5560'  // pelo sombra
-  const li  = '#9aa6b2'  // pelo brilho
-  const out = '#252d36'  // contorno
-  const ey  = '#e8b830'  // olho âmbar
-  const ep  = '#1a1000'  // pupila
-  const mz  = '#3a3340'  // focinho
-  const fang = '#f4f0dc'
-  return (
-    <g>
-      {/* ── juba / pescoço (fundo) ─────────────────────────────── */}
-      <rect x="4"  y="22" width="22" height="8" rx="3" fill={out} />
-      <rect x="5"  y="22" width="20" height="7" rx="2" fill={f} />
-      <rect x="6"  y="23" width="18" height="2" rx="1" fill={d} opacity="0.45" />
-      {/* tufos de pelo na base */}
-      <rect x="6"  y="29" width="2" height="1" fill={d} />
-      <rect x="10" y="29" width="2" height="1" fill={d} />
-      <rect x="14" y="29" width="2" height="1" fill={d} />
-      <rect x="18" y="29" width="2" height="1" fill={d} />
-      <rect x="22" y="29" width="2" height="1" fill={d} />
-
-      {/* ── orelhas pontudas (triângulos escalonados) ──────────── */}
-      {/* esquerda */}
-      <rect x="3"  y="0" width="4" height="3" fill={out} />
-      <rect x="2"  y="2" width="6" height="3" fill={out} />
-      <rect x="2"  y="4" width="7" height="3" fill={out} />
-      <rect x="4"  y="1" width="2" height="2" fill={f} />
-      <rect x="3"  y="3" width="4" height="3" fill={f} />
-      <rect x="4"  y="3" width="2" height="2" fill="#c87878" opacity="0.5" />
-      {/* direita */}
-      <rect x="23" y="0" width="4" height="3" fill={out} />
-      <rect x="22" y="2" width="6" height="3" fill={out} />
-      <rect x="21" y="4" width="7" height="3" fill={out} />
-      <rect x="24" y="1" width="2" height="2" fill={f} />
-      <rect x="23" y="3" width="4" height="3" fill={f} />
-      <rect x="24" y="3" width="2" height="2" fill="#c87878" opacity="0.5" />
-
-      {/* ── cabeça ──────────────────────────────────────────────── */}
-      <rect x="4"  y="5"  width="22" height="17" rx="6" fill={out} />
-      <rect x="5"  y="6"  width="20" height="15" rx="5" fill={f} />
-      {/* testa — brilho central */}
-      <rect x="10" y="7"  width="10" height="2" rx="1" fill={li} opacity="0.4" />
-      {/* listra escura da testa (marca do lobo) */}
-      <rect x="13" y="7"  width="4"  height="7" rx="1" fill={d} opacity="0.4" />
-      {/* sombra lateral direita */}
-      <rect x="21" y="8"  width="3"  height="12"     fill={d} opacity="0.3" />
-
-      {/* ── tufos nas bochechas ─────────────────────────────────── */}
-      <rect x="1"  y="13" width="4" height="3" fill={out} />
-      <rect x="2"  y="13" width="3" height="2" fill={f} />
-      <rect x="0"  y="15" width="4" height="2" fill={out} />
-      <rect x="1"  y="15" width="2" height="1" fill={d} />
-      <rect x="25" y="13" width="4" height="3" fill={out} />
-      <rect x="25" y="13" width="3" height="2" fill={f} />
-      <rect x="26" y="15" width="4" height="2" fill={out} />
-      <rect x="27" y="15" width="2" height="1" fill={d} />
-
-      {/* ── sobrancelhas (anguladas = bravo) + olhos âmbar ──────── */}
-      <rect x="6"  y="9"  width="7" height="2" rx="1" fill={out} />
-      <rect x="17" y="9"  width="7" height="2" rx="1" fill={out} />
-      <rect x="7"  y="10" width="6" height="4" rx="1" fill={ey} />
-      <rect x="17" y="10" width="6" height="4" rx="1" fill={ey} />
-      <rect x="9"  y="11" width="2" height="3" rx="1" fill={ep} />
-      <rect x="19" y="11" width="2" height="3" rx="1" fill={ep} />
-      <rect x="7"  y="10" width="2" height="1" fill="#fff0b0" opacity="0.85" />
-      <rect x="17" y="10" width="2" height="1" fill="#fff0b0" opacity="0.85" />
-
-      {/* ── focinho (afunila pra baixo) ─────────────────────────── */}
-      <rect x="10" y="14" width="10" height="9" rx="3" fill={out} />
-      <rect x="11" y="14" width="8"  height="8" rx="2" fill={f} />
-      <rect x="12" y="15" width="6"  height="2" rx="1" fill={li} opacity="0.3" />
-      <rect x="11" y="17" width="2"  height="5"      fill={d} opacity="0.4" />
-      {/* nariz */}
-      <rect x="11" y="19" width="8" height="4" rx="2" fill={mz} />
-      <rect x="12" y="20" width="6" height="3" rx="2" fill="#0a0a0a" />
-      <rect x="13" y="20" width="2" height="1" fill="#6a5a6a" opacity="0.6" />
-
-      {/* ── boca rosnando + presas ──────────────────────────────── */}
-      <rect x="8"  y="23" width="14" height="3" rx="1" fill="#180606" />
-      <rect x="9"  y="23" width="2"  height="3" rx="1" fill={fang} />
-      <rect x="19" y="23" width="2"  height="3" rx="1" fill={fang} />
-      <rect x="12" y="24" width="1"  height="2"      fill={fang} opacity="0.75" />
-      <rect x="17" y="24" width="1"  height="2"      fill={fang} opacity="0.75" />
-      <rect x="14" y="24" width="2"  height="1"      fill="#3a0c0c" />
-    </g>
-  )
+  return <PixelMap grid={WOLF_GRID} palette={WOLF_PALETTE} />
 }
 
 function WolfAccessory({ rarity, enraged }: AccessoryProps) {
   const a = rarity ? (RARITY_ACCENT[rarity] ?? '#fff') : '#fff'
   if (enraged) return (
     <g>
-      <EnragedEffect />
-      {/* babas escorrendo da boca */}
-      <rect x="10" y="26" width="1" height="4" rx="1" fill="white" opacity="0.6" />
-      <rect x="19" y="26" width="1" height="3" rx="1" fill="white" opacity="0.45" />
-      <rect x="14" y="26" width="1" height="2" rx="1" fill="white" opacity="0.35" />
+      <EnragedEffect g={64} />
+      {/* babas escorrendo do focinho */}
+      <rect x="62" y="37" width="2" height="8"  rx="1" fill="white" opacity="0.6" />
+      <rect x="58" y="38" width="1" height="6"  rx="1" fill="white" opacity="0.4" />
     </g>
   )
   if (!rarity || rarity === 'normal') return null
   if (rarity === 'uncommon') return (
     <g>
-      {/* coleira com espinhos na juba */}
-      <rect x="6"  y="24" width="18" height="3" rx="1" fill="#4a3a2a" />
-      <rect x="8"  y="23" width="1"  height="2"      fill="#7a5a2a" />
-      <rect x="12" y="23" width="1"  height="2"      fill="#7a5a2a" />
-      <rect x="17" y="23" width="1"  height="2"      fill="#7a5a2a" />
-      <rect x="21" y="23" width="1"  height="2"      fill="#7a5a2a" />
+      {/* coleira com espinhos no pescoço */}
+      <rect x="44" y="27" width="6" height="13" rx="1" fill="#4a3a2a" />
+      <rect x="42" y="28" width="2" height="3"       fill="#7a5a2a" />
+      <rect x="42" y="33" width="2" height="3"       fill="#7a5a2a" />
+      <rect x="50" y="29" width="2" height="3"       fill="#7a5a2a" />
     </g>
   )
   if (rarity === 'rare') return (
     <g>
-      {/* colar de ossos / troféus */}
-      <rect x="6"  y="24" width="18" height="2" rx="1" fill="#3a2a10" />
-      <rect x="8"  y="25" width="2"  height="3" rx="1" fill="#c8aa80" />
-      <rect x="14" y="26" width="2"  height="3" rx="1" fill="#c8aa80" />
-      <rect x="20" y="25" width="2"  height="3" rx="1" fill="#c8aa80" />
+      {/* colar de ossos no peito */}
+      <rect x="42" y="28" width="7" height="3" rx="1" fill="#3a2a10" />
+      <rect x="42" y="31" width="4" height="6" rx="2" fill="#c8aa80" />
+      <rect x="46" y="33" width="4" height="6" rx="2" fill="#c8aa80" />
+      <rect x="39" y="34" width="4" height="6" rx="2" fill="#c8aa80" />
     </g>
   )
   if (rarity === 'epic') return (
     <g>
-      {/* olhos incandescentes */}
-      <rect x="7"  y="10" width="6" height="4" rx="1" fill={a} opacity="0.45" />
-      <rect x="17" y="10" width="6" height="4" rx="1" fill={a} opacity="0.45" />
-      {/* presas brilhantes */}
-      <rect x="9"  y="23" width="2" height="3" rx="1" fill={a} opacity="0.7" />
-      <rect x="19" y="23" width="2" height="3" rx="1" fill={a} opacity="0.7" />
-      {/* manchas no pelo */}
-      <rect x="7"  y="17" width="3" height="2" rx="1" fill={a} opacity="0.3" />
-      <rect x="20" y="17" width="3" height="2" rx="1" fill={a} opacity="0.25" />
+      {/* olho incandescente */}
+      <rect x="49" y="26" width="6" height="6" rx="1" fill={a} opacity="0.55" />
+      {/* patas brilhantes */}
+      <rect x="25" y="56" width="8" height="4" fill={a} opacity="0.8" />
+      <rect x="37" y="56" width="8" height="4" fill={a} opacity="0.8" />
+      {/* manchas no pelo do lombo */}
+      <rect x="12" y="24" width="8" height="3" rx="1" fill={a} opacity="0.3" />
+      <rect x="26" y="24" width="6" height="3" rx="1" fill={a} opacity="0.25" />
     </g>
   )
   /* unique */
   return (
     <g>
-      {/* runas na testa / bochechas */}
-      <rect x="13" y="8"  width="4" height="2" rx="1" fill={a} opacity="0.6" />
-      <rect x="7"  y="17" width="3" height="2" rx="1" fill={a} opacity="0.5" />
-      <rect x="20" y="17" width="3" height="2" rx="1" fill={a} opacity="0.5" />
-      {/* aura sombria nas orelhas */}
-      <rect x="1"  y="0"  width="8" height="7" rx="2" fill={a} opacity="0.18" />
-      <rect x="21" y="0"  width="8" height="7" rx="2" fill={a} opacity="0.18" />
-      <rect x="0"  y="0"  width="30" height="30" fill={a} opacity="0.04" />
+      {/* runas no lombo */}
+      <rect x="12" y="24" width="6" height="3" rx="1" fill={a} opacity="0.6" />
+      <rect x="26" y="24" width="6" height="3" rx="1" fill={a} opacity="0.6" />
+      <rect x="19" y="30" width="6" height="3" rx="1" fill={a} opacity="0.4" />
+      {/* rastro sombrio atrás da cauda */}
+      <rect x="0"  y="15" width="8" height="14" rx="3" fill={a} opacity="0.2" />
+      <rect x="0"  y="30" width="6" height="12" rx="3" fill={a} opacity="0.15" />
+      <rect x="0"  y="0"  width="64" height="64" fill={a} opacity="0.04" />
     </g>
   )
 }
@@ -725,11 +819,13 @@ interface MonsterDef {
   Accessory: AccComp
   /** Se true, usa recolor por raridade no Base (apenas Slime). */
   recolor?: boolean
+  /** Resolução nativa do grid (viewBox quadrado). Default 30. */
+  grid?: number
 }
 
 const MONSTERS: Record<string, MonsterDef> = {
-  goblin:       { Base: GoblinBase as BaseComp,  Accessory: GoblinAccessory },
-  wolf:         { Base: WolfBase as BaseComp,    Accessory: WolfAccessory   },
+  goblin:       { Base: GoblinBase as BaseComp,  Accessory: GoblinAccessory, grid: 64 },
+  wolf:         { Base: WolfBase as BaseComp,    Accessory: WolfAccessory,   grid: 64 },
   slime:        { Base: SlimeBase as BaseComp,   Accessory: SlimeAccessory, recolor: true },
   bandit:       { Base: BanditBase as BaseComp,  Accessory: BanditAccessory },
   giant_spider: { Base: SpiderBase as BaseComp,  Accessory: SpiderAccessory },
@@ -749,12 +845,13 @@ export function MonsterSprite({
   // Slime usa recolor; enraged sobrepõe a cor da raridade
   const slimeKey = enraged ? 'enraged' : (rarity ?? 'normal')
   const slimeColors = def.recolor ? (SLIME_COLORS[slimeKey] ?? SLIME_COLORS.normal) : undefined
+  const grid = def.grid ?? 30
 
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 30 30"
+      viewBox={`0 0 ${grid} ${grid}`}
       xmlns="http://www.w3.org/2000/svg"
       style={{ transform: 'scaleX(-1)' }}
       aria-label={monsterId}

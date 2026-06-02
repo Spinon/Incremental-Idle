@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { STATUS_ICONS, STATUS_COLOR, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
+import { STATUS_ICONS, STATUS_COLOR, STATUS_LABEL_PT, STATUS_LABEL_EN, type StatusType } from '../types/element'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
@@ -35,6 +35,34 @@ const EFFECT_COLOR: Record<string, string> = {
   buff:    'text-blue-400',
   debuff:  'text-purple-400',
   utility: 'text-amber-400',
+}
+
+const BUFF_STATUS_TYPES = new Set<StatusType>(['regen', 'blessed'])
+const PERCENT_BUFF_STATS = new Set([
+  'attackSpeed', 'dodgeChance', 'critChance', 'critDamage', 'damageReduction',
+  'healBonus', 'moveSpeed', 'dropChance', 'xpBonus',
+])
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
+}
+
+function formatBuffValue(stat: string, value: number): string {
+  return PERCENT_BUFF_STATS.has(stat)
+    ? `+${formatPercent(value)} ${stat}`
+    : `+${value} ${stat}`
+}
+
+function formatDebuffMultiplier(mult: number): string {
+  const diff = mult - 1
+  const sign = diff >= 0 ? '+' : ''
+  return `${sign}${formatPercent(diff)}`
+}
+
+function statusBadgeTone(type: StatusType) {
+  return BUFF_STATUS_TYPES.has(type)
+    ? 'bg-emerald-950/35 border-emerald-700/35'
+    : 'bg-red-950/35 border-red-800/35'
 }
 
 const ATTACK_MS = 2000
@@ -284,8 +312,8 @@ export default function BattleArena() {
   function useQuickslot(c: Consumable) {
     removeConsumable(c.id)
     switch (c.effect) {
-      case 'stamina': restoreStamina(derivedStats.maxStamina * c.magnitude); break
-      case 'mana':    restoreMana(derivedStats.maxMana * c.magnitude);        break
+      case 'stamina': restoreStamina(derivedStats.maxStamina * c.magnitude, derivedStats.maxStamina); break
+      case 'mana':    restoreMana(derivedStats.maxMana * c.magnitude, derivedStats.maxMana);           break
       case 'skip':    for (let i = 0; i < c.magnitude; i++) gainSkipCharge(); break
       case 'xp':      gainXp(Math.round(c.magnitude));                  break
     }
@@ -485,15 +513,16 @@ export default function BattleArena() {
             />
           </div>
           {/* Hero elemental statuses (regen, blessed…) */}
-          {store.heroStatuses.length > 0 && (
-            <div className="absolute left-[64px] top-[120px] w-[150px] flex flex-wrap gap-1 justify-start">
+          {(store.heroStatuses.length > 0 || activeBuffs.length > 0) && (
+            <div className="absolute left-[92px] top-[118px] z-0 w-[176px] flex flex-wrap gap-1 justify-start pointer-events-none">
               {store.heroStatuses.map(s => (
                 <span
                   key={s.element}
                   title={`${statusLabels[s.type]} — ${s.turnsLeft}t${isEn ? ' left' : ' restantes'}`}
                   className={cn(
                     'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                    'bg-slate-900/70 border border-slate-700/50',
+                    'border',
+                    statusBadgeTone(s.type),
                     STATUS_COLOR[s.type],
                   )}
                 >
@@ -504,11 +533,29 @@ export default function BattleArena() {
                   <span className="text-[8px] opacity-50 ml-0.5">{s.turnsLeft}t</span>
                 </span>
               ))}
+              {activeBuffs.map(b => {
+                const spell = SPELL_MAP.get(b.spellId)
+                const icon  = SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'
+                const label = spell
+                  ? Object.entries(b.statAdds ?? {}).map(([k, v]) => formatBuffValue(k, v)).join(' ')
+                  : b.spellId
+                return (
+                  <span
+                    key={b.spellId}
+                    title={spell?.name ?? b.spellId}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-950/35 border border-blue-700/35 text-blue-300"
+                  >
+                    <span>{icon}</span>
+                    <span>{label}</span>
+                    <span className="text-[8px] opacity-60 ml-0.5">{b.remaining}t</span>
+                  </span>
+                )
+              })}
             </div>
           )}
           <div
             key={`player-${store.turn}`}
-            className={cn('absolute left-0 top-[128px]', isPlayerAttacking && 'anim-attack-right')}
+            className={cn('absolute left-0 top-[128px] z-10', isPlayerAttacking && 'anim-attack-right')}
             style={isPlayerAttacking ? { animationDuration: attackDur } : undefined}
           >
             <UnitSprite side="player" isHit={playerHit} hitDuration={hitDur} />
@@ -551,15 +598,16 @@ export default function BattleArena() {
             />
           </div>
           {/* Enemy elemental statuses */}
-          {store.enemyStatuses.length > 0 && (
-            <div className="absolute right-[64px] top-[120px] w-[150px] flex flex-wrap gap-1 justify-end">
+          {(store.enemyStatuses.length > 0 || activeDebuff) && (
+            <div className="absolute right-[92px] top-[118px] z-0 w-[176px] flex flex-wrap gap-1 justify-end pointer-events-none">
               {store.enemyStatuses.map(s => (
                 <span
                   key={s.element}
                   title={`${statusLabels[s.type]}${s.power > 1 ? ` (${s.power}/t)` : ''} — ${s.turnsLeft}t${isEn ? ' left' : ''}`}
                   className={cn(
                     'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                    'bg-slate-900/80 border border-slate-700/50',
+                    'border',
+                    statusBadgeTone(s.type),
                     STATUS_COLOR[s.type],
                   )}
                 >
@@ -570,11 +618,28 @@ export default function BattleArena() {
                   <span className="text-[8px] opacity-50 ml-0.5">{s.turnsLeft}t</span>
                 </span>
               ))}
+              {activeDebuff && (() => {
+                const spell = SPELL_MAP.get(activeDebuff.spellId)
+                const icon  = SPELL_ICONS[activeDebuff.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▼'
+                const parts: string[] = []
+                if (activeDebuff.atkMult !== 1)      parts.push(`ATK ${formatDebuffMultiplier(activeDebuff.atkMult)}`)
+                if (activeDebuff.atkSpeedMult !== 1)  parts.push(`Vel ${formatDebuffMultiplier(activeDebuff.atkSpeedMult)}`)
+                return (
+                  <span
+                    title={spell?.name ?? activeDebuff.spellId}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-950/35 border border-purple-700/35 text-purple-300"
+                  >
+                    <span>{icon}</span>
+                    <span>{parts.join(' ') || (isEn ? 'Debuff' : 'Debuff')}</span>
+                    <span className="text-[8px] opacity-60 ml-0.5">{activeDebuff.remaining}t</span>
+                  </span>
+                )
+              })()}
             </div>
           )}
           <div
             key={`enemy-${store.turn}`}
-            className={cn('absolute right-0 top-[136px]', isEnemyAttacking && 'anim-attack-left')}
+            className={cn('absolute right-0 top-[136px] z-10', isEnemyAttacking && 'anim-attack-left')}
             style={isEnemyAttacking ? { animationDuration: attackDur } : undefined}
           >
             <UnitSprite
@@ -647,44 +712,6 @@ export default function BattleArena() {
           </div>
         )}
       </div>
-
-      {/* ── Active spell effects ────────────────────────────────────────── */}
-      {(activeBuffs.length > 0 || activeDebuff) && (
-        <div className="mt-1.5 flex flex-wrap gap-1 justify-center">
-          {activeBuffs.map(b => {
-            const spell = SPELL_MAP.get(b.spellId)
-            const icon  = SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'
-            const label = spell
-              ? Object.entries(b.statAdds ?? {}).map(([k, v]) => `+${v} ${k}`).join(' ')
-              : b.spellId
-            return (
-              <span key={b.spellId}
-                title={spell?.name ?? b.spellId}
-                className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700/60">
-                <span>{icon}</span>
-                <span>{label}</span>
-                <span className="opacity-60">{b.remaining}t</span>
-              </span>
-            )
-          })}
-          {activeDebuff && (() => {
-            const spell = SPELL_MAP.get(activeDebuff.spellId)
-            const icon  = SPELL_ICONS[activeDebuff.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▼'
-            const parts: string[] = []
-            if (activeDebuff.atkMult < 1)      parts.push(`ATK ×${activeDebuff.atkMult}`)
-            if (activeDebuff.atkSpeedMult < 1)  parts.push(`Vel ×${activeDebuff.atkSpeedMult}`)
-            return (
-              <span
-                title={spell?.name ?? activeDebuff.spellId}
-                className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700/60">
-                <span>{icon}</span>
-                <span>{isEn ? 'Enemy' : 'Inimigo'} {parts.join(' ')}</span>
-                <span className="opacity-60">{activeDebuff.remaining}t</span>
-              </span>
-            )
-          })()}
-        </div>
-      )}
 
       {/* ── Quickslot bar ───────────────────────────────────────────────── */}
       <div className="mt-2 flex items-center gap-2 justify-center">

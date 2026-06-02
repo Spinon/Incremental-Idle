@@ -147,9 +147,9 @@ function GameRoot() {
         titleEn:  `🎉 Level ${heroLevel}!`,
         body:     'Você subiu de nível! Distribua seus pontos de atributo.',
         bodyEn:   'You leveled up! Distribute your attribute points.',
-        scrollTo: 'hero-panel',
+        scrollTo: 'battle',
         actions:  [
-          { label: 'Ver Herói', labelEn: 'View Hero', kind: 'scroll', payload: 'hero-panel' },
+          { label: 'Ver Herói', labelEn: 'View Hero', kind: 'scroll', payload: 'battle' },
         ],
       })
     }

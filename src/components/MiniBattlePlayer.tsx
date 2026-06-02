@@ -2,13 +2,40 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
+import { useInventoryStore } from '../store/inventoryStore'
+import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
 import { useMapStore } from '../store/mapStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
+import { getDerivedStats } from '../formulas/derived'
+import { getEquipmentBonuses } from '../formulas/items'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
+import type { Consumable } from '../types/item'
+
+const MINI_RARITY_BORDER: Record<string, string> = {
+  common:   'border-slate-500/70',
+  uncommon: 'border-green-500/70',
+  rare:     'border-blue-500/70',
+  epic:     'border-purple-500/70',
+  set:      'border-yellow-400/70',
+  unique:   'border-orange-500/70',
+}
+
+const MINI_EFFECT_ICON: Record<string, string> = {
+  damage: '⚔',
+  heal: '✦',
+  buff: '▲',
+  debuff: '▼',
+  utility: '◎',
+}
+
+const MINI_PLAYER_WIDTH = 236
+const MINI_PLAYER_SAFE_HEIGHT = 270
+const MINI_PLAYER_EDGE_GAP = 20
 
 // ─── Mini HP bar ──────────────────────────────────────────────────────────────
 
@@ -20,7 +47,7 @@ function MiniHpBar({ label, current, max }: { label: string; current: number; ma
                '#ef4444'
 
   return (
-    <div className="relative w-full h-[22px] rounded overflow-hidden bg-slate-800">
+    <div className="relative w-full h-[18px] rounded overflow-hidden bg-slate-800">
       <div
         className="absolute inset-y-0 left-0 rounded transition-[width] duration-200"
         style={{ width: `${pct}%`, background: bg }}
@@ -30,11 +57,36 @@ function MiniHpBar({ label, current, max }: { label: string; current: number; ma
         style={{ background: 'linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 55%)' }} />
       {/* Labels */}
       <div className="absolute inset-0 flex items-center px-1.5 gap-1">
-        <span className="text-[9px] font-semibold text-white drop-shadow truncate flex-1 leading-none">
+        <span className="text-[8px] font-semibold text-white drop-shadow truncate flex-1 leading-none">
           {label}
         </span>
-        <span className="text-[9px] font-bold text-white/90 tabular-nums shrink-0 leading-none">
+        <span className="text-[8px] font-bold text-white/90 tabular-nums shrink-0 leading-none">
           {current}/{max}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function MiniManaBar({ current, max, label }: { current: number; max: number; label: string }) {
+  const pct = Math.max(0, Math.min(100, (current / max) * 100))
+
+  return (
+    <div className="relative w-full h-[14px] rounded overflow-hidden bg-slate-800">
+      <div
+        className="absolute inset-y-0 left-0 rounded transition-[width] duration-200 bg-blue-500"
+        style={{ width: `${pct}%` }}
+      />
+      <div
+        className="absolute inset-0 rounded pointer-events-none"
+        style={{ background: 'linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 55%)' }}
+      />
+      <div className="absolute inset-0 flex items-center px-1.5 gap-1">
+        <span className="text-[7px] font-semibold text-white drop-shadow truncate flex-1 leading-none">
+          {label}
+        </span>
+        <span className="text-[7px] font-bold text-white/90 tabular-nums shrink-0 leading-none">
+          {Math.floor(current)}/{Math.round(max)}
         </span>
       </div>
     </div>
@@ -83,18 +135,39 @@ export default function MiniBattlePlayer() {
   const log      = useBattleStore(s => s.log)
 
   const heroConfig = useHeroStore(s => s.heroConfig)
+  const heroLevel = useHeroStore(s => s.level)
+  const attrs = useHeroStore(s => s.attributes)
+  const mana = useHeroStore(s => s.mana)
+  const restoreStamina = useHeroStore(s => s.restoreStamina)
+  const restoreMana = useHeroStore(s => s.restoreMana)
+  const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
+  const gainXp = useHeroStore(s => s.gainXp)
   const gold = useHeroStore(s => s.gold)
+  const equipment = useInventoryStore(s => s.equipment)
+  const consumables = useInventoryStore(s => s.consumables)
+  const quickslots = useInventoryStore(s => s.quickslots)
+  const removeConsumable = useInventoryStore(s => s.removeConsumable)
+  const earnedWordIds = useSpellStore(s => s.earnedWordIds)
+  const spellSlots = useSpellStore(s => s.spellSlots)
+  const cooldowns = useSpellStore(s => s.cooldowns)
+  const autoSlots = useSpellStore(s => s.autoSlots)
+  const castSpell = useSpellStore(s => s.castSpell)
   const scene = useMapStore(s => s.scene)
   const defeatPending = useMapStore(s => s.defeatPending)
   const stuckPending = useMapStore(s => s.stuckPending)
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
+  const equipBonuses = getEquipmentBonuses(equipment)
+  const derivedStats = getDerivedStats(attrs, equipBonuses, heroLevel)
+  const knownWordIds = getKnownWordIds(heroLevel, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
+  const availableSpells = getPlayerSpells(knownWordIds)
 
   // ── Drag ──────────────────────────────────────────────────────────────────
   const [pos, setPos] = useState(() => ({
-    x: Math.max(0, window.innerWidth - 256),
-    y: Math.max(0, window.innerHeight - 190),
+    x: Math.max(MINI_PLAYER_EDGE_GAP, window.innerWidth - MINI_PLAYER_WIDTH - MINI_PLAYER_EDGE_GAP),
+    y: Math.max(MINI_PLAYER_EDGE_GAP, window.innerHeight - MINI_PLAYER_SAFE_HEIGHT - MINI_PLAYER_EDGE_GAP),
   }))
+  const [openQuickslots, setOpenQuickslots] = useState<'consumables' | 'spells' | null>(null)
   const drag = useRef<{ ox: number; oy: number; px: number; py: number } | null>(null)
 
   const onHeaderMouseDown = useCallback((e: React.MouseEvent) => {
@@ -105,11 +178,9 @@ export default function MiniBattlePlayer() {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!drag.current) return
-      const W = 236  // component width
-      const H = 160  // approximate height
       setPos({
-        x: Math.max(0, Math.min(window.innerWidth  - W, drag.current.px + e.clientX - drag.current.ox)),
-        y: Math.max(0, Math.min(window.innerHeight - H, drag.current.py + e.clientY - drag.current.oy)),
+        x: Math.max(MINI_PLAYER_EDGE_GAP, Math.min(window.innerWidth - MINI_PLAYER_WIDTH - MINI_PLAYER_EDGE_GAP, drag.current.px + e.clientX - drag.current.ox)),
+        y: Math.max(MINI_PLAYER_EDGE_GAP, Math.min(window.innerHeight - MINI_PLAYER_SAFE_HEIGHT - MINI_PLAYER_EDGE_GAP, drag.current.py + e.clientY - drag.current.oy)),
       })
     }
     const onUp = () => { drag.current = null }
@@ -188,6 +259,28 @@ export default function MiniBattlePlayer() {
     pauseSceneAuto()
     setActiveTab('battle')
     setShow(false)
+  }
+
+  function toggleQuickslotDrawer(kind: 'consumables' | 'spells') {
+    setOpenQuickslots(current => current === kind ? null : kind)
+  }
+
+  function useMiniConsumable(c: Consumable) {
+    removeConsumable(c.id)
+    switch (c.effect) {
+      case 'stamina':
+        restoreStamina(derivedStats.maxStamina * c.magnitude, derivedStats.maxStamina)
+        break
+      case 'mana':
+        restoreMana(derivedStats.maxMana * c.magnitude, derivedStats.maxMana)
+        break
+      case 'skip':
+        for (let i = 0; i < c.magnitude; i++) gainSkipCharge()
+        break
+      case 'xp':
+        gainXp(Math.round(c.magnitude))
+        break
+    }
   }
 
   function renderSceneMini() {
@@ -286,7 +379,7 @@ export default function MiniBattlePlayer() {
   return createPortal(
     <div
       className="fixed z-[9999] select-none"
-      style={{ left: pos.x, top: pos.y, width: 236 }}
+      style={{ left: pos.x, top: pos.y, width: MINI_PLAYER_WIDTH }}
     >
       <div className="rounded-xl overflow-hidden shadow-2xl ring-1 ring-slate-600/60 bg-slate-900/95 backdrop-blur-md">
 
@@ -330,13 +423,16 @@ export default function MiniBattlePlayer() {
                   {f.text}
                 </span>
               ))}
-              <span
+              <button
+                type="button"
+                onClick={openBattleTabAndPause}
+                title={isEn ? 'Open battle tab' : 'Abrir aba de batalha'}
                 key={`p-${playerHitKey}`}
-                className={cn('leading-none', playerHitKey > 0 && 'anim-flash')}
+                className={cn('leading-none rounded-md transition hover:brightness-125 active:scale-95 focus:outline-none focus:ring-1 focus:ring-slate-400/60', playerHitKey > 0 && 'anim-flash')}
                 style={playerHitKey > 0 ? { animationDuration: '280ms' } : undefined}
               >
                 <HeroSprite config={heroConfig} size={38} />
-              </span>
+              </button>
             </div>
 
             {/* Centre indicator */}
@@ -384,9 +480,109 @@ export default function MiniBattlePlayer() {
         </div>
 
         {/* ── HP bars ───────────────────────────────────────────────────── */}
-        <div className="px-2.5 pb-2.5 flex flex-col gap-1.5">
-          <MiniHpBar label={playerLabel}  current={player.hp} max={player.maxHp} />
-          <MiniHpBar label={enemyLabel}   current={enemy.hp}  max={enemy.maxHp}  />
+        <div className="px-2.5 pb-2.5 flex flex-col gap-1">
+          <MiniHpBar label={playerLabel} current={player.hp} max={player.maxHp} />
+          <MiniManaBar label={isEn ? 'MANA' : 'MANA'} current={mana} max={derivedStats.maxMana} />
+          <MiniHpBar label={enemyLabel} current={enemy.hp} max={enemy.maxHp} />
+          <div className="grid grid-cols-2 gap-1 pt-0.5">
+            <button
+              type="button"
+              onClick={() => toggleQuickslotDrawer('consumables')}
+              className={cn(
+                'h-6 rounded border text-[9px] font-black uppercase tracking-wide transition-colors',
+                openQuickslots === 'consumables'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+                  : 'bg-slate-800/80 border-slate-700/70 text-slate-400 hover:text-slate-200',
+              )}
+            >
+              {isEn ? 'Items' : 'Consumíveis'}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleQuickslotDrawer('spells')}
+              className={cn(
+                'h-6 rounded border text-[9px] font-black uppercase tracking-wide transition-colors',
+                openQuickslots === 'spells'
+                  ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-200'
+                  : 'bg-slate-800/80 border-slate-700/70 text-slate-400 hover:text-slate-200',
+              )}
+            >
+              {isEn ? 'Spells' : 'Magias'}
+            </button>
+          </div>
+          {openQuickslots === 'consumables' && (
+            <div className="grid grid-cols-4 gap-1 pt-0.5">
+              {quickslots.map((qid, slot) => {
+                const c = qid ? consumables.find(x => x.id === qid) : null
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => c && useMiniConsumable(c)}
+                    disabled={!c}
+                    title={c ? `[${slot + 1}] ${isEn ? c.nameEn : c.name}` : (isEn ? `Quickslot ${slot + 1} empty` : `Atalho ${slot + 1} vazio`)}
+                    className={cn(
+                      'h-8 rounded border flex items-center justify-center transition',
+                      c
+                        ? cn(MINI_RARITY_BORDER[c.rarity], 'bg-slate-800 hover:bg-slate-700 active:scale-95')
+                        : 'border-dashed border-slate-700 bg-slate-800/40 opacity-45 cursor-not-allowed',
+                    )}
+                  >
+                    <span className="text-base leading-none">{c ? c.icon : slot + 1}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {openQuickslots === 'spells' && (
+            <div className="grid grid-cols-6 gap-1 pt-0.5">
+              {spellSlots.map((sid, slot) => {
+                const spell = sid ? availableSpells.find(s => s.id === sid) : null
+                const cd = sid ? (cooldowns[sid] ?? 0) : 0
+                const canCast = spell && mana >= spell.manaCost && cd === 0
+                const isAuto = autoSlots[slot]?.enabled ?? false
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => spell && castSpell(spell.id)}
+                    disabled={!spell || !canCast}
+                    title={spell
+                      ? `[${slot + 5}] ${spell.name} - ${spell.manaCost} mana${cd > 0 ? ` (${cd} ${isEn ? 'left' : 'rest.'})` : ''}`
+                      : (isEn ? `Spell slot ${slot + 1} empty` : `Slot de magia ${slot + 1} vazio`)}
+                    className={cn(
+                      'relative h-8 rounded border flex items-center justify-center transition',
+                      spell
+                        ? cn(
+                            MINI_RARITY_BORDER[spell.rarity],
+                            'bg-slate-800',
+                            canCast ? 'hover:bg-slate-700 active:scale-95' : 'opacity-50 cursor-not-allowed',
+                          )
+                        : 'border-dashed border-slate-700 bg-slate-800/40 opacity-45 cursor-not-allowed',
+                    )}
+                  >
+                    {spell ? (
+                      <>
+                        <span className="text-sm leading-none">
+                          {SPELL_ICONS[spell.id] ?? WORD_ICONS[spell.word1Id] ?? MINI_EFFECT_ICON[spell.effect.type]}
+                        </span>
+                        {isAuto && cd === 0 && (
+                          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                        )}
+                        {cd > 0 && (
+                          <span className="absolute inset-0 rounded bg-black/55 flex items-center justify-center text-[9px] font-black text-white">
+                            {cd}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-[9px] font-bold text-slate-500">✦</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
           </>
         )}

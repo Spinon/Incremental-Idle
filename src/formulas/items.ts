@@ -42,35 +42,59 @@ const ALL_SLOTS: EquipSlot[] = ['head', 'shoulder', 'chest', 'gloves', 'legs', '
 
 // ─── Item name pools ─────────────────────────────────────────────────────────
 
-const ITEM_NAMES: Record<EquipSlot, string[]> = {
-  head:     ['Chapéu', 'Elmo', 'Capuz', 'Coroa'],
-  shoulder: ['Espaldeira', 'Pauldron', 'Ombreira'],
-  chest:    ['Peitoral', 'Armadura', 'Colete'],
-  gloves:   ['Luvas', 'Manoplas', 'Punhos'],
-  legs:     ['Calças', 'Grevas', 'Perneiras'],
-  feet:     ['Botas', 'Sandálias', 'Sapatos'],
-  acc:      ['Anel', 'Amuleto', 'Pingente', 'Talismã'],
+const ITEM_NAMES: Record<EquipSlot, { pt: string[]; en: string[] }> = {
+  head:     { pt: ['Chapéu', 'Elmo', 'Capuz', 'Coroa'], en: ['Hat', 'Helm', 'Hood', 'Crown'] },
+  shoulder: { pt: ['Espaldeira', 'Ombreira', 'Guarda-ombro'], en: ['Spaulder', 'Shoulder Guard', 'Pauldron'] },
+  chest:    { pt: ['Peitoral', 'Armadura', 'Colete'], en: ['Breastplate', 'Armor', 'Vest'] },
+  gloves:   { pt: ['Luvas', 'Manoplas', 'Punhos'], en: ['Gloves', 'Gauntlets', 'Bracers'] },
+  legs:     { pt: ['Calças', 'Grevas', 'Perneiras'], en: ['Pants', 'Greaves', 'Legguards'] },
+  feet:     { pt: ['Botas', 'Sandálias', 'Sapatos'], en: ['Boots', 'Sandals', 'Shoes'] },
+  acc:      { pt: ['Anel', 'Amuleto', 'Pingente', 'Talismã'], en: ['Ring', 'Amulet', 'Pendant', 'Talisman'] },
 }
 
-const RARITY_PREFIXES: Record<'common' | 'uncommon' | 'rare' | 'epic', string[]> = {
-  common:   ['Simples', 'Velho', 'Básico'],
-  uncommon: ['Resistente', 'Reforçado', 'Sólido'],
-  rare:     ['Élfico', 'Arcano', 'Veloz'],
-  epic:     ['Lendário', 'Ancestral', 'Divino'],
+const RARITY_PREFIXES: Record<'common' | 'uncommon' | 'rare' | 'epic', { pt: string[]; en: string[] }> = {
+  common:   { pt: ['Simples', 'Velho', 'Básico'], en: ['Simple', 'Old', 'Basic'] },
+  uncommon: { pt: ['Resistente', 'Reforçado', 'Sólido'], en: ['Sturdy', 'Reinforced', 'Solid'] },
+  rare:     { pt: ['Élfico', 'Arcano', 'Veloz'], en: ['Elven', 'Arcane', 'Swift'] },
+  epic:     { pt: ['Lendário', 'Ancestral', 'Divino'], en: ['Legendary', 'Ancestral', 'Divine'] },
 }
 
-/** Set item prefixes — evoke a shared magical theme */
-const SET_PREFIXES = ['Rúnico', 'Cristalino', 'Tempestuoso', 'Etéreo', 'Abissal', 'Celeste', 'Sombrio', 'Solar']
+/** Set item prefixes - evoke a shared magical theme */
+const SET_PREFIXES = {
+  pt: ['Rúnico', 'Cristalino', 'Tempestuoso', 'Etéreo', 'Abissal', 'Celeste', 'Sombrio', 'Solar'],
+  en: ['Runic', 'Crystal', 'Stormforged', 'Ethereal', 'Abyssal', 'Celestial', 'Shadowed', 'Solar'],
+}
 
-/** Unique item names — one legendary name per slot */
-const UNIQUE_NAMES: Record<EquipSlot, string[]> = {
-  head:     ['Elmo da Eternidade', 'Corona do Caos', 'Capuz das Sombras', 'Tiara do Destino'],
-  shoulder: ['Ombros do Titã', 'Pauldron do Apocalipse', 'Espaldeiras do Dragão'],
-  chest:    ['Couraça do Dragão', 'Veste Arcana', 'Armadura da Fênix', 'Peitoral Vivo'],
-  gloves:   ['Mãos do Fogo', 'Luvas da Fatalidade', 'Punhos do Trovão'],
-  legs:     ['Perneiras do Aço Vivo', 'Grevas do Abismo', 'Calças do Vento Eterno'],
-  feet:     ['Botas do Vento', 'Sandálias da Luz', 'Sapatos do Caçador'],
-  acc:      ['Anel do Destino', 'Olho do Caos', 'Amuleto do Fim', 'Talismã da Eternidade'],
+/** Unique item names - one legendary name per slot */
+const UNIQUE_NAMES: Record<EquipSlot, { pt: string[]; en: string[] }> = {
+  head: {
+    pt: ['Elmo da Eternidade', 'Coroa do Caos', 'Capuz das Sombras', 'Tiara do Destino'],
+    en: ['Helm of Eternity', 'Crown of Chaos', 'Hood of Shadows', 'Tiara of Fate'],
+  },
+  shoulder: {
+    pt: ['Ombreiras do Titã', 'Espaldeira do Apocalipse', 'Guarda-ombros do Dragão'],
+    en: ['Titan Shoulders', 'Pauldron of the Apocalypse', 'Dragon Shoulder Guards'],
+  },
+  chest: {
+    pt: ['Couraça do Dragão', 'Veste Arcana', 'Armadura da Fênix', 'Peitoral Vivo'],
+    en: ['Dragon Cuirass', 'Arcane Vestment', 'Phoenix Armor', 'Living Breastplate'],
+  },
+  gloves: {
+    pt: ['Mãos do Fogo', 'Luvas da Fatalidade', 'Punhos do Trovão'],
+    en: ['Hands of Fire', 'Gloves of Doom', 'Bracers of Thunder'],
+  },
+  legs: {
+    pt: ['Perneiras do Aço Vivo', 'Grevas do Abismo', 'Calças do Vento Eterno'],
+    en: ['Legguards of Living Steel', 'Greaves of the Abyss', 'Pants of Eternal Wind'],
+  },
+  feet: {
+    pt: ['Botas do Vento', 'Sandálias da Luz', 'Sapatos do Caçador'],
+    en: ['Boots of Wind', 'Sandals of Light', 'Hunter Shoes'],
+  },
+  acc: {
+    pt: ['Anel do Destino', 'Olho do Caos', 'Amuleto do Fim', 'Talismã da Eternidade'],
+    en: ['Ring of Fate', 'Eye of Chaos', 'Amulet of the End', 'Talisman of Eternity'],
+  },
 }
 
 /** Primary attributes that unique items can boost */
@@ -161,18 +185,26 @@ export function generateItem(level: number, forMarket = false): Item {
   }
 
   // ── Name ──────────────────────────────────────────────────────────────────
-  const baseName = ITEM_NAMES[slot][Math.floor(Math.random() * ITEM_NAMES[slot].length)]
+  const baseNames = ITEM_NAMES[slot]
+  const baseIdx = Math.floor(Math.random() * baseNames.pt.length)
+  const baseNamePt = baseNames.pt[baseIdx]
+  const baseNameEn = baseNames.en[baseIdx]
   let name: string
+  let nameEn: string
   if (rarity === 'unique') {
     const pool = UNIQUE_NAMES[slot]
-    name = pool[Math.floor(Math.random() * pool.length)]
+    const idx = Math.floor(Math.random() * pool.pt.length)
+    name = pool.pt[idx]
+    nameEn = pool.en[idx]
   } else if (rarity === 'set') {
-    const prefix = SET_PREFIXES[Math.floor(Math.random() * SET_PREFIXES.length)]
-    name = `${prefix} ${baseName}`
+    const idx = Math.floor(Math.random() * SET_PREFIXES.pt.length)
+    name = `${baseNamePt} ${SET_PREFIXES.pt[idx]}`
+    nameEn = `${SET_PREFIXES.en[idx]} ${baseNameEn}`
   } else {
     const prefixes = RARITY_PREFIXES[rarity as 'common' | 'uncommon' | 'rare' | 'epic']
-    const prefix   = prefixes[Math.floor(Math.random() * prefixes.length)]
-    name = `${prefix} ${baseName}`
+    const idx = Math.floor(Math.random() * prefixes.pt.length)
+    name = `${baseNamePt} ${prefixes.pt[idx]}`
+    nameEn = `${prefixes.en[idx]} ${baseNameEn}`
   }
 
   // ── Set bonus (set items only) ─────────────────────────────────────────────
@@ -203,6 +235,7 @@ export function generateItem(level: number, forMarket = false): Item {
   return {
     id:     `item_${Date.now()}_${_idSeq++}`,
     name,
+    nameEn,
     slot,
     rarity,
     level,
@@ -214,6 +247,28 @@ export function generateItem(level: number, forMarket = false): Item {
 }
 
 // ─── Consumable generator ─────────────────────────────────────────────────────
+
+function normalizeLegacyPtItemName(name: string): string {
+  return name
+    .replace(/\bPauldron\b/g, 'Ombreira')
+    .replace(/\bCorona\b/g, 'Coroa')
+}
+
+function legacyItemNameEn(item: Pick<Item, 'name' | 'slot' | 'rarity'>): string {
+  const base = ITEM_NAMES[item.slot].en[0]
+  if (item.rarity === 'unique') return `Unique ${base}`
+  if (item.rarity === 'set') return `Runic ${base}`
+  const prefixes = item.rarity === 'common' || item.rarity === 'uncommon' || item.rarity === 'rare' || item.rarity === 'epic'
+    ? RARITY_PREFIXES[item.rarity].en
+    : ['Basic']
+  return `${prefixes[0]} ${base}`
+}
+
+export function getItemDisplayName(item: Pick<Item, 'name' | 'nameEn' | 'slot' | 'rarity'>, isEn: boolean): string {
+  return isEn
+    ? (item.nameEn ?? legacyItemNameEn(item))
+    : normalizeLegacyPtItemName(item.name)
+}
 
 const CONSUMABLE_RARITY_MULT: Record<ItemRarity, number> = {
   common: 1, uncommon: 1.6, rare: 2.8, epic: 5.0, set: 5.0, unique: 5.0,

@@ -16,6 +16,16 @@ function StatRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+function formatPercent(value: number, digits = 1): string {
+  return `${(value * 100).toFixed(digits).replace(/\.0$/, '')}%`
+}
+
+function formatMultiplierBonus(value: number): string {
+  const bonus = value - 1
+  const sign = bonus >= 0 ? '+' : ''
+  return `${sign}${formatPercent(bonus)}`
+}
+
 export default function HeroPanel() {
   const { freePoints, attributes, level, spendPoint, optimizePoints, applyPreset } = useHeroStore()
   const equipment    = useInventoryStore(s => s.equipment)
@@ -142,22 +152,22 @@ export default function HeroPanel() {
           <StatRow label={t.statNames.atk}             value={String(Math.round(derived.atk))} />
           <StatRow label={t.statNames.def}             value={derived.def.toFixed(1)} />
           <StatRow label={t.statNames.hpMax}           value={String(Math.round(derived.maxHp))} />
-          <StatRow label={t.statNames.atkSpeed}        value={derived.attackSpeed.toFixed(2)} />
+          <StatRow label={t.statNames.atkSpeed}        value={formatMultiplierBonus(derived.attackSpeed)} />
           <StatRow label={t.statNames.dodge}           value={`${(derived.dodgeChance * 100).toFixed(1)}%`} />
           <StatRow label={t.statNames.critChance}      value={`${(derived.critChance * 100).toFixed(1)}%`} />
-          <StatRow label={t.statNames.critDamage}      value={`${derived.critDamage.toFixed(2)}×`} />
+          <StatRow label={t.statNames.critDamage}      value={formatMultiplierBonus(derived.critDamage)} />
           <StatRow label={t.statNames.damageReduction} value={`${(derived.damageReduction * 100).toFixed(1)}%`} />
           <StatRow label={t.statNames.magicDmg}        value={String(Math.round(derived.magicDamage))} />
-          <StatRow label={t.statNames.healBonus}       value={`${derived.healBonus.toFixed(2)}×`} />
-          <StatRow label={t.statNames.staminaEff}      value={`${derived.staminaEfficiency.toFixed(2)}×`} />
-          <StatRow label={t.statNames.manaEff}         value={`${derived.manaEfficiency.toFixed(2)}×`} />
-          <StatRow label={t.statNames.moveSpeed}       value={`${derived.moveSpeed.toFixed(2)}×`} />
+          <StatRow label={t.statNames.healBonus}       value={formatMultiplierBonus(derived.healBonus)} />
+          <StatRow label={t.statNames.staminaEff}      value={formatMultiplierBonus(derived.staminaEfficiency)} />
+          <StatRow label={t.statNames.manaEff}         value={formatMultiplierBonus(derived.manaEfficiency)} />
+          <StatRow label={t.statNames.moveSpeed}       value={formatMultiplierBonus(derived.moveSpeed)} />
           <StatRow label={t.statNames.maxSpeed}        value={`${maxSpeed}×`} />
           <StatRow label={t.statNames.vision}          value={String(Math.round(derived.vision))} />
-          <StatRow label={t.statNames.dropChance}      value={`${(derived.dropChance * 100).toFixed(1)}%`} />
+          <StatRow label={t.statNames.dropChance}      value={formatPercent(derived.dropChance)} />
           <StatRow label={t.statNames.goldEfficiency}  value={`${((derived.goldEfficiency - 1) * 100).toFixed(0)}% desc.`} />
-          <StatRow label={t.statNames.goldMult}        value={`${derived.goldMultiplier.toFixed(2)}×`} />
-          <StatRow label={t.statNames.xpBonus}        value={`${derived.xpBonus.toFixed(2)}×`} />
+          <StatRow label={t.statNames.goldMult}        value={formatMultiplierBonus(derived.goldMultiplier)} />
+          <StatRow label={t.statNames.xpBonus}        value={formatMultiplierBonus(derived.xpBonus)} />
           {(derived.resIgnea > 0 || derived.resGlacial > 0 || derived.resSombria > 0 || derived.resVital > 0) && (
             <>
               <StatRow label={t.statNames.resIgnea}   value={`${(derived.resIgnea   * 100).toFixed(1)}%`} />

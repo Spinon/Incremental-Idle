@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
 import { useHeroStore } from '../store/heroStore'
 import { ALL_WORDS, LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
 import { findSpell, SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
-import type { Word, Spell, SpellRarity } from '../types/spell'
+import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
 import { useSettingsStore } from '../store/settingsStore'
 
 // ─── Rarity styling ───────────────────────────────────────────────────────────
@@ -166,16 +166,20 @@ export default function SpellbookPanel() {
   const setSpellSlot  = useSpellStore(s => s.setSpellSlot)
   const activeBuffs   = useSpellStore(s => s.activeBuffs)
   const activeDebuff  = useSpellStore(s => s.activeDebuff)
+  const spellAutoSlots = useSpellStore(s => s.autoSlots)
+  const setAutoSlot    = useSpellStore(s => s.setAutoSlot)
 
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
 
-  const autoSlots   = getAutoWordSlots(level, attrs.inteligencia, attrs.sabedoria)
+  const wordSlotCount = getAutoWordSlots(level, attrs.inteligencia, attrs.sabedoria)
   const nextSlotAt  = (Math.floor(level / 5) + 1) * 5  // next level milestone
 
   const [tab, setTab]           = useState<'words' | 'spells'>('words')
   const [selectedWords, setSelectedWords] = useState<string[]>([])
   const [assigningSpell, setAssigningSpell] = useState<string | null>(null)
+  const [showAutoConfig, setShowAutoConfig] = useState(false)
+  const autoConfigRef = useRef<HTMLDivElement>(null)
 
   // ── Word selection for preview combo ──
   function toggleWord(id: string) {
@@ -196,6 +200,17 @@ export default function SpellbookPanel() {
     setSpellSlot(slotIndex, assigningSpell)
     setAssigningSpell(null)
   }
+
+  useEffect(() => {
+    if (!showAutoConfig) return
+    function closeAutoConfig(e: MouseEvent) {
+      if (autoConfigRef.current && !autoConfigRef.current.contains(e.target as Node)) {
+        setShowAutoConfig(false)
+      }
+    }
+    document.addEventListener('mousedown', closeAutoConfig)
+    return () => document.removeEventListener('mousedown', closeAutoConfig)
+  }, [showAutoConfig])
 
   const knownWords = ALL_WORDS.filter(w => knownWordIds.includes(w.id))
 
@@ -227,7 +242,7 @@ export default function SpellbookPanel() {
         <div>
           {/* Progress info */}
           <div className="mb-2 text-[9px] text-slate-400 dark:text-slate-600 flex gap-3 flex-wrap">
-            <span>Slots de nível: {autoSlots}/{LEARNABLE_WORDS.length} (próx. Nv.{nextSlotAt})</span>
+            <span>Slots de nível: {wordSlotCount}/{LEARNABLE_WORDS.length} (próx. Nv.{nextSlotAt})</span>
             <span>+INT: +{Math.floor(attrs.inteligencia / 10)} &nbsp; +SAB: +{Math.floor(attrs.sabedoria / 10)}</span>
             {earnedWordIds.length > 0 && (
               <span className="text-purple-500 dark:text-purple-400">+{earnedWordIds.length} palavra{earnedWordIds.length !== 1 ? 's' : ''} obtida{earnedWordIds.length !== 1 ? 's' : ''}</span>
@@ -292,7 +307,10 @@ export default function SpellbookPanel() {
       {tab === 'spells' && (
         <div>
           {/* Spell slots strip */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <div
+            ref={autoConfigRef}
+            className="sticky top-[76px] z-30 mb-3 flex items-center gap-1.5 flex-wrap rounded-xl border border-slate-200/80 dark:border-slate-800/90 bg-slate-50/95 dark:bg-slate-950/95 px-2.5 py-2 shadow-sm backdrop-blur"
+          >
             <span className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest shrink-0">
               Slots:
             </span>
@@ -300,6 +318,7 @@ export default function SpellbookPanel() {
               const spell = sid ? availableSpells.find(s => s.id === sid) : null
               const cd    = sid ? (cooldowns[sid] ?? 0) : 0
               const isAssigning = assigningSpell !== null
+              const isAuto = spellAutoSlots[i]?.enabled ?? false
               return (
                 <button
                   key={i}
@@ -324,6 +343,9 @@ export default function SpellbookPanel() {
                         {SPELL_ICONS[spell.id] ?? WORD_ICONS[spell.word1Id] ?? EFFECT_ICON[spell.effect.type]}
                       </span>
                       <span className={cn('text-[7px]', RARITY_TEXT[spell.rarity])}>{i + 1}</span>
+                      {isAuto && cd === 0 && (
+                        <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-indigo-500 border border-white dark:border-slate-900" />
+                      )}
                       {cd > 0 && (
                         <div
                           className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center"
@@ -343,6 +365,83 @@ export default function SpellbookPanel() {
                 ← escolha um slot
               </span>
             )}
+            <div className="relative ml-auto flex items-center gap-1">
+              <span className="text-[8px] text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+                Auto
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAutoConfig(v => !v)}
+                title="Configurar auto-uso"
+                className={cn(
+                  'w-7 h-7 rounded-full flex items-center justify-center text-[12px] transition-colors',
+                  showAutoConfig
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700',
+                )}
+              >
+                ⚙
+              </button>
+
+              {showAutoConfig && (
+                <div className="absolute top-full right-0 mt-2 z-50 w-72 max-h-[60vh] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-xl">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                    Auto-uso de Magias
+                  </p>
+                  {spellSlots.map((sid, i) => {
+                    const spell = sid ? availableSpells.find(s => s.id === sid) : null
+                    const cfg: AutoCastConfig = spellAutoSlots[i] ?? { enabled: false, hpThreshold: 0.7 }
+                    const isHeal = spell?.effect.type === 'heal'
+                    return (
+                      <div key={i} className="flex items-center gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700/60 last:border-0">
+                        <span className="text-[10px] font-bold text-slate-400 w-3 shrink-0">{i + 1}</span>
+                        {spell ? (
+                          <>
+                            <span className={cn('text-xs shrink-0', EFFECT_COLOR[spell.effect.type])}>
+                              {EFFECT_ICON[spell.effect.type]}
+                            </span>
+                            <span className="text-xs text-slate-700 dark:text-slate-200 flex-1 truncate min-w-0">
+                              {spell.name}
+                            </span>
+                            {isHeal && cfg.enabled && (
+                              <select
+                                className="text-[10px] bg-slate-100 dark:bg-slate-700 rounded px-1 py-0.5 text-slate-600 dark:text-slate-300 border-0 shrink-0"
+                                value={cfg.hpThreshold}
+                                onChange={e => setAutoSlot(i, { ...cfg, hpThreshold: Number(e.target.value) })}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <option value={0.5}>HP &lt; 50%</option>
+                                <option value={0.6}>HP &lt; 60%</option>
+                                <option value={0.7}>HP &lt; 70%</option>
+                                <option value={0.8}>HP &lt; 80%</option>
+                                <option value={0.9}>HP &lt; 90%</option>
+                                <option value={1.0}>sempre</option>
+                              </select>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setAutoSlot(i, { ...cfg, enabled: !cfg.enabled })}
+                              className={cn(
+                                'text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors shrink-0',
+                                cfg.enabled
+                                  ? 'bg-indigo-500 text-white'
+                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600',
+                              )}
+                            >
+                              {cfg.enabled ? 'AUTO' : 'OFF'}
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400 dark:text-slate-600 italic">
+                            vazio
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Active effects */}

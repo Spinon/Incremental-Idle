@@ -32,8 +32,8 @@ interface HeroStore {
   gainXp(amount: number): void
   earnGold(amount: number): void
   spendGold(amount: number): boolean
-  restoreStamina(amount: number): void
-  restoreMana(amount: number): void
+  restoreStamina(amount: number, maxOverride?: number): void
+  restoreMana(amount: number, maxOverride?: number): void
   consumeMana(amount: number): void
   gainSkipCharge(): void
   tickResources(deltaMs: number, speed: Speed): void
@@ -176,14 +176,14 @@ export const useHeroStore = create<HeroStore>()(
       return ok
     },
 
-    restoreStamina: (amount) => set((st) => {
+    restoreStamina: (amount, maxOverride) => set((st) => {
       const derived = getDerivedStats(st.attributes, undefined, st.level)
-      st.stamina = Math.min(derived.maxStamina, st.stamina + amount)
+      st.stamina = Math.min(maxOverride ?? derived.maxStamina, st.stamina + amount)
     }),
 
-    restoreMana: (amount) => set((st) => {
+    restoreMana: (amount, maxOverride) => set((st) => {
       const derived = getDerivedStats(st.attributes, undefined, st.level)
-      st.mana = Math.min(derived.maxMana, st.mana + amount)
+      st.mana = Math.min(maxOverride ?? derived.maxMana, st.mana + amount)
     }),
 
     consumeMana: (amount) => set((st) => {

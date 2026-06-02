@@ -5,7 +5,7 @@ import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
-import { wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable } from '../formulas/items'
+import { wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
 import { getDerivedStats } from '../formulas/derived'
 import { DROP_WORDS, WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
@@ -62,6 +62,19 @@ function consumableDesc(c: Consumable, isEn: boolean): string {
 
 // ─── Equipment stat summary (brief) ──────────────────────────────────────────
 
+const PERCENT_ITEM_STATS = new Set(['atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus'])
+
+function itemDisplayName(item: Item, isEn: boolean): string {
+  return getItemDisplayName(item, isEn)
+}
+
+function formatMarketStat(key: string, value: number): string {
+  if (PERCENT_ITEM_STATS.has(key)) {
+    return `+${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
+  }
+  return `+${Math.round(value)}`
+}
+
 function itemStatLine(item: Item, isEn: boolean): string {
   const LABELS: Record<string, [string, string]> = {
     atk: ['ATK', 'ATK'], def: ['DEF', 'DEF'], hp: ['HP', 'HP'],
@@ -72,16 +85,14 @@ function itemStatLine(item: Item, isEn: boolean): string {
   const parts = Object.entries(item.stats).map(([k, v]) => {
     const lbl = LABELS[k]?.[isEn ? 1 : 0] ?? k
     const val = typeof v === 'number'
-      ? (k === 'dropChance' ? `+${(v * 100).toFixed(1)}%` : k.endsWith('Mult') || k.endsWith('Bonus') || k.endsWith('Speed') ? `+${v.toFixed(2)}×` : `+${Math.round(v)}`)
+      ? formatMarketStat(k, v)
       : String(v)
     return `${lbl} ${val}`
   })
   // Set bonus suffix
   if (item.setBonus) {
     const lbl = LABELS[item.setBonus.stat]?.[isEn ? 1 : 0] ?? item.setBonus.stat
-    const val = typeof item.setBonus.value === 'number' && item.setBonus.stat.endsWith('Mult')
-      ? `+${item.setBonus.value.toFixed(3)}×`
-      : `+${item.setBonus.value}`
+    const val = formatMarketStat(item.setBonus.stat, item.setBonus.value)
     parts.push(`◆${lbl} ${val}/${isEn ? 'set' : 'conj'}`)
   }
   // Attr bonus suffix
@@ -119,6 +130,7 @@ export default function MarketInterior() {
   const setSceneAutoElapsed = useUIStore(s => s.setSceneAutoElapsed)
   const pauseSceneAuto = useUIStore(s => s.pauseSceneAuto)
   const clearSceneAuto = useUIStore(s => s.clearSceneAuto)
+  const setActiveTab = useUIStore(s => s.setActiveTab)
 
   // Tile level and position — shop is generated at the tile's level
   const marketPos = useMapStore(s => s.playerPos)
@@ -395,7 +407,7 @@ export default function MarketInterior() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={cn('text-[12px] font-semibold truncate', RARITY_TEXT[item.rarity])}>
-                        {item.name}
+                        {itemDisplayName(item, isEn)}
                       </span>
                       <span className="text-[8px] font-semibold uppercase tracking-widest text-indigo-500/60">
                         {rarLbl}
@@ -541,7 +553,7 @@ export default function MarketInterior() {
         <div className="flex gap-2">
           {/* Manual sell button — opens sell mode in inventory (stays in market) */}
           <button
-            onClick={() => { setSellMode(true); document.getElementById('inventory-panel')?.scrollIntoView({ behavior: 'smooth' }) }}
+            onClick={() => { setSellMode(true); setActiveTab('equips') }}
             className="flex-1 py-2 rounded-lg text-sm font-semibold border border-yellow-700/40 bg-yellow-900/20 text-yellow-300 hover:bg-yellow-900/40 transition-colors"
           >
             💰 {isEn ? 'Sell Items' : 'Vender Itens'}

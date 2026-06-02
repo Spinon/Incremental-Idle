@@ -3,6 +3,7 @@ import { useNotifStore, type GameNotif } from '../store/notifStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { cn } from '../lib/utils'
+import { navigateToShortcut } from '../lib/shortcuts'
 import type { ItemRarity } from '../types/item'
 
 const DURATION_MS = 5000
@@ -95,6 +96,7 @@ function ToastCard({ notif }: ToastCardProps) {
   }
 
   function scrollTo(id: string) {
+    if (navigateToShortcut(id)) return
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 

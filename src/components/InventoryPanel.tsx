@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { getEquipmentBonuses, ATTR_LABEL_PT, ATTR_LABEL_EN } from '../formulas/items'
+import { useUIStore } from '../store/uiStore'
+import { getEquipmentBonuses, ATTR_LABEL_PT, ATTR_LABEL_EN, getItemDisplayName } from '../formulas/items'
 import { getDerivedStats } from '../formulas/derived'
 import { cn } from '../lib/utils'
 import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, Consumable } from '../types/item'
@@ -94,27 +95,32 @@ const SLOT_FULL_EN: Record<EquipmentKey, string> = {
 const STAT_LABEL_PT: Partial<Record<keyof ItemStats, string>> = {
   atk: 'ATK', def: 'DEF', hp: 'HP', atkSpeed: 'Vel. Atk',
   magicDamage: 'Dano Mágico', vision: 'Visão', moveSpeed: 'Vel. Mov.',
-  dropChance: 'Chance Drop', goldMult: 'Mult. Ouro', xpBonus: 'Bônus XP',
+  dropChance: 'Chance Drop', goldMult: 'Bônus Ouro', xpBonus: 'Bônus XP',
 }
 const STAT_LABEL_EN: Partial<Record<keyof ItemStats, string>> = {
   atk: 'ATK', def: 'DEF', hp: 'HP', atkSpeed: 'Atk Speed',
   magicDamage: 'Magic Dmg', vision: 'Vision', moveSpeed: 'Move Spd',
-  dropChance: 'Drop Rate', goldMult: 'Gold Mult', xpBonus: 'XP Bonus',
+  dropChance: 'Drop Rate', goldMult: 'Gold Bonus', xpBonus: 'XP Bonus',
 }
-const PERCENT_STATS = new Set<keyof ItemStats>(['dropChance'])
-const MULT_STATS    = new Set<keyof ItemStats>(['goldMult', 'xpBonus', 'moveSpeed', 'atkSpeed'])
+const PERCENT_STATS = new Set<keyof ItemStats>(['dropChance', 'goldMult', 'xpBonus', 'moveSpeed', 'atkSpeed'])
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
+}
 
 function formatStat(key: keyof ItemStats, value: number): string {
-  if (PERCENT_STATS.has(key)) return `+${(value * 100).toFixed(1)}%`
-  if (MULT_STATS.has(key))    return `+${value.toFixed(3)}×`
+  if (PERCENT_STATS.has(key)) return `+${formatPercent(value)}`
   return `+${Math.round(value)}`
 }
 
 function formatDelta(key: keyof ItemStats, delta: number): string {
   const sign = delta >= 0 ? '+' : ''
-  if (PERCENT_STATS.has(key)) return `${sign}${(delta * 100).toFixed(1)}%`
-  if (MULT_STATS.has(key))    return `${sign}${delta.toFixed(3)}×`
+  if (PERCENT_STATS.has(key)) return `${sign}${formatPercent(delta)}`
   return `${sign}${Math.round(delta)}`
+}
+
+function itemDisplayName(item: Item, isEn: boolean): string {
+  return getItemDisplayName(item, isEn)
 }
 
 // ─── Comparison helpers ───────────────────────────────────────────────────────
@@ -159,15 +165,18 @@ type Selection =
 function ItemCell({
   item,
   isSelected,
+  isEn,
   size = 52,
   onClick,
 }: {
   item: Item
   isSelected: boolean
+  isEn: boolean
   size?: number
   onClick: () => void
 }) {
-  const shortName = item.name.split(' ').slice(-1)[0].slice(0, 6)
+  const displayName = itemDisplayName(item, isEn)
+  const shortName = displayName.split(' ').slice(-1)[0].slice(0, 6)
   return (
     <button
       onClick={onClick}
@@ -178,7 +187,7 @@ function ItemCell({
         RARITY_BG[item.rarity],
         isSelected && 'ring-2 ring-offset-1 ring-white dark:ring-slate-300 shadow-lg scale-105',
       )}
-      title={item.name}
+      title={displayName}
     >
       <span className={cn('text-[8px] font-black uppercase leading-none', RARITY_TEXT[item.rarity])}>
         {shortName}
@@ -287,11 +296,12 @@ function EquipmentBody({
         return (
           <div key={key}>
             {item
-              ? <ItemCell
-                  item={item}
-                  isSelected={isSel}
-                  onClick={() => onSlotClick(key)}
-                />
+                ? <ItemCell
+                    item={item}
+                    isSelected={isSel}
+                    isEn={isEn}
+                    onClick={() => onSlotClick(key)}
+                  />
               : <EmptyEquipSlot
                   slot={key}
                   label={slotLabels[key]}
@@ -364,10 +374,10 @@ function InventoryGrid({
                     ? 'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-900/25 ring-2 ring-red-400 ring-offset-1 scale-105'
                     : cn(RARITY_BORDER[item.rarity], RARITY_BG[item.rarity], 'opacity-70 hover:opacity-100'),
                 )}
-                title={item.name}
+                title={itemDisplayName(item, isEn)}
               >
                 <span className={cn('text-[8px] font-black uppercase leading-none', isChosen ? 'text-red-500 dark:text-red-400' : RARITY_TEXT[item.rarity])}>
-                  {item.name.split(' ').slice(-1)[0].slice(0, 6)}
+                  {itemDisplayName(item, isEn).split(' ').slice(-1)[0].slice(0, 6)}
                 </span>
                 <span className="text-[7px] text-slate-400 dark:text-slate-500 leading-none">
                   Lv.{item.level}
@@ -384,6 +394,7 @@ function InventoryGrid({
               key={item.id}
               item={item}
               isSelected={isSel}
+              isEn={isEn}
               onClick={() => onItemClick(item)}
             />
           )
@@ -447,7 +458,7 @@ function ItemDetail({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn('text-xs font-bold truncate', RARITY_TEXT[item.rarity])}>
-            {item.name}
+            {itemDisplayName(item, isEn)}
           </span>
           <span className={cn(
             'text-[8px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded',
@@ -569,7 +580,7 @@ function ComparisonDetail({
       )}>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className={cn('text-[10px] font-bold truncate', RARITY_TEXT[item.rarity])}>
-            {item.name}
+            {itemDisplayName(item, isEn)}
           </span>
           <span className={cn(
             'shrink-0 text-[8px] font-semibold uppercase tracking-widest px-1 py-px rounded border',
@@ -802,6 +813,8 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const restoreMana    = useHeroStore(s => s.restoreMana)
   const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
   const gainXp         = useHeroStore(s => s.gainXp)
+  const heroLevel      = useHeroStore(s => s.level)
+  const setActiveTab   = useUIStore(s => s.setActiveTab)
   const lang           = useSettingsStore(s => s.lang)
   const isEn           = lang === 'en'
 
@@ -852,19 +865,19 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
     }
   }
 
-  function scrollBackToMarket() {
-    document.getElementById('market-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  function returnToMarket() {
+    setActiveTab('battle')
   }
 
   function handleConfirmSale() {
     const earned = confirmSale()
     if (earned > 0) earnGold(earned)
-    scrollBackToMarket()
+    returnToMarket()
   }
 
   function handleCancelSell() {
     setSellMode(false)
-    scrollBackToMarket()
+    returnToMarket()
   }
 
   function handleEquipSlotClick(key: EquipmentKey) {
@@ -918,10 +931,10 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
 
   // ── Consumable helpers ──
   function applyConsumable(c: Consumable) {
-    const derived = getDerivedStats(attrs)
+    const derived = getDerivedStats(attrs, equipBonuses, heroLevel)
     switch (c.effect) {
-      case 'stamina': restoreStamina(derived.maxStamina * c.magnitude); break
-      case 'mana':    restoreMana(derived.maxMana * c.magnitude);        break
+      case 'stamina': restoreStamina(derived.maxStamina * c.magnitude, derived.maxStamina); break
+      case 'mana':    restoreMana(derived.maxMana * c.magnitude, derived.maxMana);           break
       case 'skip':    for (let i = 0; i < c.magnitude; i++) gainSkipCharge(); break
       case 'xp':      gainXp(Math.round(c.magnitude));                  break
     }

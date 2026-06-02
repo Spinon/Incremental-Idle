@@ -30,6 +30,7 @@ export interface SetBonus {
 export interface Item {
   id:    string
   name:  string
+  nameEn?: string
   slot:  EquipSlot
   rarity: ItemRarity
   level: number
