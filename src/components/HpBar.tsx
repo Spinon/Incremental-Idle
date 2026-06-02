@@ -36,16 +36,10 @@ export default function HpBar({ name, level, current, max, side, rarityColor }: 
             </span>
           )}
         </span>
-        <span className={cn(
-          'text-[10px] tabular-nums shrink-0',
-          isLow ? 'text-red-500 dark:text-red-400 font-bold' : 'text-slate-500 dark:text-slate-400',
-        )}>
-          {current}/{max}
-        </span>
       </div>
 
-      {/* Bar */}
-      <div className="relative w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/70 dark:border-slate-600/60 shadow-inner">
+      {/* Bar with HP overlay */}
+      <div className="relative w-full h-4 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/70 dark:border-slate-600/60 shadow-inner">
         <div
           className={cn(
             'h-full rounded-full transition-[width] duration-300 ease-out',
@@ -57,6 +51,14 @@ export default function HpBar({ name, level, current, max, side, rarityColor }: 
         {/* Gloss sheen */}
         <div className="absolute inset-0 rounded-full"
           style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%)' }} />
+        {/* HP text inside bar */}
+        <span className={cn(
+          'absolute inset-0 flex items-center px-2 text-[9px] font-bold tabular-nums select-none',
+          side === 'enemy' ? 'justify-end' : 'justify-start',
+          isLow ? 'text-white drop-shadow-[0_0_3px_rgba(0,0,0,0.9)]' : 'text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.7)]',
+        )}>
+          {current}/{max}
+        </span>
       </div>
     </div>
   )

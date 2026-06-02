@@ -105,8 +105,8 @@ export default function StickyBar() {
         })}
       </div>
 
-      {/* ── Row 2: Controls + Gold + XP ──────────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* ── Row 2: Controls + Stamina + Gold + XP ───────────────────────── */}
+      <div className="flex items-center gap-2">
 
         {/* Skip button */}
         <button
@@ -187,6 +187,33 @@ export default function StickyBar() {
 
         <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
 
+        {/* Stamina — flex-1 fills space between speed controls and gold */}
+        <div className="flex-1 flex items-center gap-1.5 min-w-0">
+          <span className="text-[9px] font-bold text-amber-500 dark:text-amber-400/80 uppercase tracking-wider shrink-0">
+            {t.stamina}
+          </span>
+          <div className="flex-1 relative h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden min-w-0">
+            <div
+              className={cn('h-full rounded-full transition-[width] duration-200', staminaFill)}
+              style={{ width: `${staminaPct}%` }}
+            />
+          </div>
+          <span className={cn(
+            'text-[9px] tabular-nums shrink-0',
+            netChange < 0 ? 'text-red-400 dark:text-red-500' : 'text-slate-400 dark:text-slate-500',
+          )}>
+            {Math.floor(stamina)}/{Math.round(derived.maxStamina)}
+          </span>
+          {timeLeft !== null && (
+            <span className={cn(
+              'text-[9px] tabular-nums shrink-0',
+              timeLeft < 5 ? 'text-red-400' : timeLeft < 10 ? 'text-orange-400' : 'text-slate-400 dark:text-slate-600',
+            )}>
+              {timeLeft.toFixed(0)}s
+            </span>
+          )}
+        </div>
+
         {/* Gold */}
         <div className="relative flex items-center ml-auto">
           {goldGainVersion > 0 && (
@@ -236,35 +263,6 @@ export default function StickyBar() {
         </div>
       </div>
 
-      {/* ── Row 3: Stamina bar ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 pb-0.5">
-        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400/90 uppercase tracking-wider w-12 shrink-0">
-          {t.stamina}
-        </span>
-        <span className="text-[9px] text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
-          {Math.floor(stamina)}/{Math.round(derived.maxStamina)}
-        </span>
-        <span className={cn(
-          'text-[9px] font-semibold tabular-nums whitespace-nowrap',
-          netChange >= 0 ? 'text-amber-500/80 dark:text-amber-400/60' : 'text-red-500 dark:text-red-400',
-        )}>
-          {netChange >= 0 ? '+' : ''}{netChange.toFixed(1)}/s
-        </span>
-        {timeLeft !== null && (
-          <span className={cn(
-            'text-[9px] tabular-nums whitespace-nowrap',
-            timeLeft > 10 ? 'text-slate-400 dark:text-slate-600' : timeLeft > 5 ? 'text-orange-500' : 'text-red-500',
-          )}>
-            ({timeLeft.toFixed(0)}s)
-          </span>
-        )}
-        <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/50 dark:border-slate-700/50 min-w-0">
-          <div
-            className={cn('h-full rounded-full transition-[width] duration-200', staminaFill)}
-            style={{ width: `${staminaPct}%` }}
-          />
-        </div>
-      </div>
     </div>
   )
 }

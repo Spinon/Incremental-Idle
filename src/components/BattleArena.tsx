@@ -304,14 +304,18 @@ export default function BattleArena() {
               {store.heroStatuses.map(s => (
                 <span
                   key={s.element}
-                  title={`${STATUS_LABEL_PT[s.type]}${s.power > 1 ? ` (${s.power})` : ''}`}
+                  title={`${STATUS_LABEL_PT[s.type]} — ${s.turnsLeft}t restantes`}
                   className={cn(
                     'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
                     'bg-slate-900/70 border border-slate-700/50',
                     STATUS_COLOR[s.type],
                   )}
                 >
-                  {STATUS_ICONS[s.type]}<span className="text-[9px] opacity-80">{s.turnsLeft}</span>
+                  {STATUS_ICONS[s.type]}
+                  {s.power > 1 && (
+                    <span className="text-[9px] font-bold">{s.power}</span>
+                  )}
+                  <span className="text-[8px] opacity-50 ml-0.5">{s.turnsLeft}t</span>
                 </span>
               ))}
             </div>
@@ -341,8 +345,10 @@ export default function BattleArena() {
                   )}
                 >
                   {STATUS_ICONS[s.type]}
-                  {s.power > 1 && <span className="text-[9px]">{s.power}</span>}
-                  <span className="text-[9px] opacity-70">{s.turnsLeft}</span>
+                  {s.power > 1 && (
+                    <span className="text-[9px] font-bold">{s.power}</span>
+                  )}
+                  <span className="text-[8px] opacity-50 ml-0.5">{s.turnsLeft}t</span>
                 </span>
               ))}
             </div>

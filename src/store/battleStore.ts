@@ -459,8 +459,26 @@ export const useBattleStore = create<BattleStore>()(
         }
       }
 
-      // ── Regen on hero ──────────────────────────────────────────────────────
+      // ── DoTs + Regen on hero ───────────────────────────────────────────────
       for (const s of st.heroStatuses) {
+        if (s.type === 'burn' || s.type === 'poison') {
+          const dmg   = Math.max(1, Math.round(s.power))
+          const newHp = Math.max(0, st.player.hp - dmg)
+          st.player.hp = newHp
+          st.log.unshift({
+            attacker: STATUS_ICONS[s.type] + ' ' + STATUS_LABEL_PT[s.type],
+            defender: st.player.name,
+            dmg,
+            spell: {
+              name: STATUS_LABEL_PT[s.type],
+              icon: STATUS_ICONS[s.type],
+              effectType: 'damage',
+              value: dmg,
+            },
+          })
+          if (newHp === 0) { st.winner = 'enemy'; st.phase = 'over' }
+          if (s.type === 'poison') s.power = Math.round(s.power * 1.3)
+        }
         if (s.type === 'regen') {
           const healed = Math.max(1, s.power)
           st.player.hp = Math.min(st.player.maxHp, st.player.hp + healed)
