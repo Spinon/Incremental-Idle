@@ -77,9 +77,10 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEnemyQueue 
   }
 
   if (isFirstEncounter) {
-    st.pendingGold += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
+    const tileMult = 1 + Math.floor(st.tilesPlaced / 10) * 0.05
+    st.pendingGold += Math.round((15 + enemyLevel * 8) * tileMult * (0.8 + Math.random() * 0.4))
     st.pendingMonsterXp = {
-      xp:           Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
+      xp:           Math.round((10 + enemyLevel * 4) * tileMult * (0.8 + Math.random() * 0.4)),
       monsterLevel: enemyLevel,
     }
   }
@@ -554,7 +555,7 @@ export const useMapStore = create<MapStore>()(
               type: 'monster',
               monsterLevel:  tileLevel,
               monsterType:   sighted.monsterType   ?? pickForestMonster().id,
-              monsterRarity: sighted.monsterRarity ?? pickMonsterRarity(),
+              monsterRarity: sighted.monsterRarity ?? pickMonsterRarity(st.tilesPlaced),
             }
           } else if (sighted.type === 'treasure') {
             content = { type: 'treasure', xpAmount: Math.round((20 + tileLevel * 10) * (0.8 + Math.random() * 0.4)) }

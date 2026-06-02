@@ -217,8 +217,8 @@ export const useBattleStore = create<BattleStore>()(
       st.nextEnemyLevel     = level
       st.nextEnemyBaseLevel = baseLevel ?? level
       st.nextEnemyType      = monsterType   ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
-      st.nextEnemyRarity    = monsterRarity ?? pickMonsterRarity()
       st.nextTilesPlaced    = tilesPlaced   ?? st.nextTilesPlaced
+      st.nextEnemyRarity    = monsterRarity ?? pickMonsterRarity(st.nextTilesPlaced)
       st.nextEnemyEnraged   = enraged       ?? false
     }),
 
