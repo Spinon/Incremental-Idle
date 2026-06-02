@@ -8,6 +8,8 @@ import HeroPanel from './components/HeroPanel'
 import SettingsMenu from './components/SettingsMenu'
 import MapSection from './components/map/MapSection'
 import InventoryPanel from './components/InventoryPanel'
+import SpellbookPanel from './components/SpellbookPanel'
+import QuestPanel from './components/QuestPanel'
 import StickyBar from './components/StickyBar'
 import NotifToast from './components/NotifToast'
 import { useGameLoop } from './hooks/useGameLoop'
@@ -17,6 +19,7 @@ import { useMapStore } from './store/mapStore'
 import { useInventoryStore } from './store/inventoryStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useNotifStore } from './store/notifStore'
+import { useUIStore } from './store/uiStore'
 import { getDerivedStats, getBaseSpeed } from './formulas/derived'
 import { getEquipmentBonuses } from './formulas/items'
 import { useT } from './i18n/useT'
@@ -31,6 +34,7 @@ function GameRoot() {
   const setSpeed     = useBattleStore((s) => s.setSpeed)
   const scene        = useMapStore((s) => s.scene)
   const equipment    = useInventoryStore((s) => s.equipment)
+  const activeTab    = useUIStore((s) => s.activeTab)
   const pushNotif    = useNotifStore((s) => s.push)
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
@@ -165,31 +169,27 @@ function GameRoot() {
 
       {/* Main layout */}
       <main className="w-full max-w-5xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-[1fr_300px] gap-6 items-start">
 
-          {/* Left — scene-dependent content + resources */}
-          <div className="flex flex-col">
-            {scene === 'home'   ? <HouseInterior /> :
-             scene === 'market' ? <MarketInterior /> :
-                                  <BattleArena />}
-            <ResourceBars />
+        {/* Battle tab — always mounted (battle timers must keep running) */}
+        <div className={activeTab !== 'battle' ? 'hidden' : undefined}>
+          <div className="grid grid-cols-[1fr_300px] gap-6 items-start">
+            <div className="flex flex-col">
+              {scene === 'home'   ? <HouseInterior /> :
+               scene === 'market' ? <MarketInterior /> :
+                                    <BattleArena />}
+              <ResourceBars />
+            </div>
+            <aside>
+              <HeroPanel />
+            </aside>
           </div>
-
-          {/* Right — hero panel */}
-          <aside>
-            <HeroPanel />
-          </aside>
         </div>
 
-        {/* Map */}
-        <div className="mt-6">
-          <MapSection />
-        </div>
-
-        {/* Inventory & Equipment */}
-        <div className="mt-6">
-          <InventoryPanel />
-        </div>
+        {activeTab === 'map'         && <MapSection />}
+        {activeTab === 'equips'      && <InventoryPanel />}
+        {activeTab === 'consumables' && <InventoryPanel />}
+        {activeTab === 'spells'      && <SpellbookPanel />}
+        {activeTab === 'quests'      && <QuestPanel />}
       </main>
     </div>
   )

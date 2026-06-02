@@ -5,6 +5,7 @@ import { useMapStore } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
+import { useQuestStore } from '../store/questStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses } from '../formulas/items'
 import { DROP_WORDS } from '../data/words'
@@ -112,14 +113,21 @@ export function useGameLoop() {
           useMapStore.getState().handleDefeat()
         } else {
           // ── Victory: advance, rewards, drops ────────────────────────────
-          // Guarantee one cooldown tick even for instant kills — when the enemy
-          // dies on the first hit, switchAttacker() never fires, turn stays at 0,
-          // and the normal turn-diff check never triggers onBattleTurn again.
           useSpellStore.getState().onBattleTurn()
-          // Reset prevTurn so turn=0 of the next battle fires a fresh tick.
           prevTurn.current = -1
-
           useSpellStore.getState().clearEnemyDebuff()
+
+          // ── Quest progress: kill hooks (read before reset clears questId) ──
+          {
+            const bs          = useBattleStore.getState()
+            const playerPos   = useMapStore.getState().playerPos
+            const monsterType = bs.enemy.monsterType ?? ''
+            const questId     = bs.nextEnemyQuestId
+            if (questId) {
+              useQuestStore.getState().onBountyDefeated(questId)
+            }
+            useQuestStore.getState().onMonsterKill(monsterType, playerPos.x, playerPos.y)
+          }
 
           useMapStore.getState().moveOneStep(useHeroStore.getState().level)
 

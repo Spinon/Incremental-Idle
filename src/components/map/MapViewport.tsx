@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import type { PlacedTile, Direction, TileContent } from '../../types/map'
 import { gridKey, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
-import { MonsterIcon, TreasureIcon, MarketIcon } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
 const VP_W = 676
@@ -195,6 +195,7 @@ export default function MapViewport({
                   {sight.type === 'monster'  && <MonsterIcon  size={previewIconSize} />}
                   {sight.type === 'treasure' && <TreasureIcon size={previewIconSize} />}
                   {sight.type === 'market'   && <MarketIcon   size={previewIconSize} />}
+                  {sight.type === 'quest'    && <QuestIcon    size={previewIconSize} />}
                 </div>
               )}
               {vis === 'penumbra' && (

@@ -2,8 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { useBattleStore } from './battleStore'
+import { useQuestStore } from './questStore'
 import { pickForestMonster } from '../data/monsters'
 import { pickMonsterRarity } from '../formulas/monsters'
+import { generateQuest } from '../formulas/quests'
+import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
 import type { Direction, MapTile, PlacedTile, TileContent } from '../types/map'
 import type { MarketOffer } from '../types/item'
@@ -53,27 +56,51 @@ interface TileEnemyQueue {
   rarity?: MonsterRarity
   tilesPlaced: number
   enraged: boolean
+  questId?: string
 }
 
-type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'tilesPlaced'>
+interface TileEntryResult {
+  enemy: TileEnemyQueue | null
+  questTileLevel: number | null
+}
 
-function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEnemyQueue | null {
-  if (tile.content.type === 'market') return null
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'tilesPlaced' | 'bountyTiles'>
+
+function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult {
+  if (tile.content.type === 'market') return { enemy: null, questTileLevel: null }
+
+  // Quest board tile — consumed on entry, generates a quest afterward
+  if (tile.content.type === 'quest') {
+    if (!tile.explored) {
+      tile.explored = true
+      tile.content  = { type: 'empty' }
+    }
+    return { enemy: null, questTileLevel: tile.level }
+  }
 
   const baseLevel        = Math.max(1, tile.level)
   const isMonster        = tile.content.type === 'monster'
   const isFirstEncounter = isMonster && !tile.explored
-  const enemyLevel       = isFirstEncounter
-    ? baseLevel + enragedLevelBonus(st.tilesPlaced)
+
+  // Bounty override: replace first encounter with bounty target
+  const tileKey   = `${tile.x},${tile.y}`
+  const bounty    = isFirstEncounter ? st.bountyTiles[tileKey] : undefined
+  const enemyLevel = isFirstEncounter
+    ? (bounty ? bounty.targetLevel : baseLevel + enragedLevelBonus(st.tilesPlaced))
     : baseLevel
 
   const queuedEnemy: TileEnemyQueue = {
-    level: enemyLevel,
-    baseLevel,
-    type: tile.content.monsterType,
-    rarity: tile.content.monsterRarity as MonsterRarity | undefined,
+    level:       enemyLevel,
+    baseLevel:   bounty ? bounty.targetLevel : baseLevel,
+    type:        bounty ? bounty.monsterType : tile.content.monsterType,
+    rarity:      bounty ? bounty.targetRarity as MonsterRarity : tile.content.monsterRarity as MonsterRarity | undefined,
     tilesPlaced: st.tilesPlaced,
-    enraged: isFirstEncounter,
+    enraged:     isFirstEncounter && !bounty,
+    questId:     bounty?.questId,
+  }
+
+  if (bounty && isFirstEncounter) {
+    delete st.bountyTiles[tileKey]
   }
 
   if (isFirstEncounter) {
@@ -89,11 +116,11 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEnemyQueue 
     tile.explored = true
     if (tile.content.type === 'treasure' && tile.content.xpAmount) {
       st.pendingXp += tile.content.xpAmount
-      tile.content = { type: 'empty' }
+      tile.content  = { type: 'empty' }
     }
   }
 
-  return queuedEnemy
+  return { enemy: queuedEnemy, questTileLevel: null }
 }
 
 function queueTileEnemy(enemy: TileEnemyQueue | null): void {
@@ -105,13 +132,15 @@ function queueTileEnemy(enemy: TileEnemyQueue | null): void {
     enemy.tilesPlaced,
     enemy.enraged,
     enemy.baseLevel,
+    enemy.questId,
   )
 }
 
 export function generateContent(level: number, tilesPlaced = 0): TileContent {
   const r = Math.random()
-  if (r < 0.015) return { type: 'market' }
-  if (r < 0.04) {
+  if (r < 0.008) return { type: 'quest' }
+  if (r < 0.016) return { type: 'market' }
+  if (r < 0.041) {
     return {
       type: 'treasure',
       xpAmount: Math.round((8 + level * 4) * (0.8 + Math.random() * 0.4)),
@@ -312,6 +341,8 @@ interface MapStore {
    * refresh-to-reroll exploits.  Cleared on new journey (resetMap).
    */
   marketOffers: Record<string, MarketOffer>
+  /** Tiles reserved for bounty quests: key = "x,y", value = bounty data */
+  bountyTiles: Record<string, BountyTileEntry>
 
   placeTile(tileId: string, x: number, y: number): void
   saveMarketOffer(key: string, offer: MarketOffer): void
@@ -331,6 +362,7 @@ interface MapStore {
    */
   processMarketExitTile(): void
   handleDefeat(): void
+  registerBountyTile(questId: string, objective: import('../types/quest').QuestObjectiveBounty): void
   /**
    * Try to place a random valid deck tile on the grid.
    * When `maxTileLevel` is provided only tiles at or below that level are
@@ -380,6 +412,7 @@ export const useMapStore = create<MapStore>()(
       easyTilesRemaining: 5,
       riskMode: false,
       marketOffers: {},
+      bountyTiles: {},
 
       setAutoExplore:  (v) => set((st) => { st.autoExplore = v }),
       toggleRiskMode:  ()  => set((st) => { st.riskMode = !st.riskMode }),
@@ -440,16 +473,25 @@ export const useMapStore = create<MapStore>()(
       // encounter rewards, and queues the correct enemy (with tilesPlaced so
       // the stealth buff is applied).
       processMarketExitTile: () => {
-        let queuedEnemy: TileEnemyQueue | null = null
+        let result: TileEntryResult = { enemy: null, questTileLevel: null }
 
         set((st) => {
           const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
           if (!tile || tile.content.type === 'market') return
-
-          queuedEnemy = processTileEntry(st, tile)
+          result = processTileEntry(st, tile)
         })
 
-        queueTileEnemy(queuedEnemy)
+        queueTileEnemy(result.enemy)
+        if (result.questTileLevel !== null) {
+          const { grid, playerPos } = useMapStore.getState()
+          const quest = generateQuest(result.questTileLevel, grid, playerPos)
+          if (quest) {
+            if (quest.objective.type === 'bounty') {
+              useMapStore.getState().registerBountyTile(quest.id, quest.objective)
+            }
+            useQuestStore.getState().addQuest(quest)
+          }
+        }
       },
 
       // Exit market: move the player to a random connected adjacent tile and
@@ -507,10 +549,26 @@ export const useMapStore = create<MapStore>()(
         // intentionally no queueEnemy call — battle starts on next moveOneStep
       },
 
-      handleDefeat: () => set((st) => {
-        st.scene          = 'home'
-        st.destination    = null
-        st.defeatPending  = true
+      handleDefeat: () => {
+        set((st) => {
+          st.scene         = 'home'
+          st.destination   = null
+          st.defeatPending = true
+        })
+        useQuestStore.getState().failAllQuests()
+      },
+
+      registerBountyTile: (questId, objective) => set((st) => {
+        const key = `${objective.targetX},${objective.targetY}`
+        st.bountyTiles[key] = {
+          questId,
+          targetName:   objective.targetName,
+          targetNameEn: objective.targetNameEn,
+          monsterType:  objective.monsterType,
+          targetLevel:  objective.targetLevel,
+          targetRarity: objective.targetRarity as import('../types/monster').MonsterRarity,
+          isNpc:        objective.isNpc,
+        }
       }),
 
       setDestination: (x, y) => set((st) => {
@@ -591,13 +649,11 @@ export const useMapStore = create<MapStore>()(
       },
 
       moveOneStep: (heroLevel?: number) => {
-        let queuedEnemy: TileEnemyQueue | null = null
+        let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
+        let didMove = false
 
         set((st) => {
           if (!st.destination && st.autoExplore !== 'manual') {
-            // In risk mode the level cap is lifted — the hero willingly enters
-            // tiles above its level.  In safe mode the cap prevents pathing
-            // into unexplored tiles above heroLevel.
             const cap    = (heroLevel !== undefined && !st.riskMode) ? heroLevel : undefined
             const target = findNearestUnexplored(st.grid, st.playerPos, cap)
             if (target) st.destination = target
@@ -608,6 +664,7 @@ export const useMapStore = create<MapStore>()(
           const next = findNextStep(st.grid, st.playerPos, st.destination)
           if (next) {
             st.playerPos = next
+            didMove = true
             if (next.x === st.destination.x && next.y === st.destination.y) {
               st.destination = null
             }
@@ -617,7 +674,7 @@ export const useMapStore = create<MapStore>()(
                 st.scene = 'market'
                 if (!tile.explored) tile.explored = true
               } else {
-                queuedEnemy = processTileEntry(st, tile)
+                tileResult = processTileEntry(st, tile)
               }
             }
           } else {
@@ -625,7 +682,21 @@ export const useMapStore = create<MapStore>()(
           }
         })
 
-        queueTileEnemy(queuedEnemy)
+        queueTileEnemy(tileResult.enemy)
+        if (didMove) {
+          const { x, y } = useMapStore.getState().playerPos
+          useQuestStore.getState().onPlayerMove(x, y)
+        }
+        if (tileResult.questTileLevel !== null) {
+          const { grid, playerPos } = useMapStore.getState()
+          const quest = generateQuest(tileResult.questTileLevel, grid, playerPos)
+          if (quest) {
+            if (quest.objective.type === 'bounty') {
+              useMapStore.getState().registerBountyTile(quest.id, quest.objective)
+            }
+            useQuestStore.getState().addQuest(quest)
+          }
+        }
       },
 
       resetMap: (startLevel) => set((st) => {
@@ -646,6 +717,7 @@ export const useMapStore = create<MapStore>()(
         st.stuckPending       = false
         st.levelOffset        = 0
         st.marketOffers       = {}   // new journey → fresh shops
+        st.bountyTiles        = {}
         // 5 more easy tiles generated by tickMap after the 3 initial deck tiles
         st.easyTilesRemaining = 5
       }),

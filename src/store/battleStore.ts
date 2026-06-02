@@ -95,6 +95,7 @@ interface BattleStore {
    * a non-enraged tile.
    */
   nextEnemyEnraged: boolean
+  nextEnemyQuestId: string | null
   hitsLeft: number
   comboSize: number
   defeatSnapshot: DefeatSnapshot | null
@@ -105,7 +106,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number): void
+  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string): void
   captureDefeat(): void
   applyHit(): void
   switchAttacker(): void
@@ -203,6 +204,7 @@ export const useBattleStore = create<BattleStore>()(
     nextEnemyRarity: 'normal' as MonsterRarity,
     nextTilesPlaced: 0,
     nextEnemyEnraged: false,
+    nextEnemyQuestId: null,
     hitsLeft: 1,
     comboSize: 1,
     defeatSnapshot: null,
@@ -213,13 +215,14 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel) => set((st) => {
+    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId) => set((st) => {
       st.nextEnemyLevel     = level
       st.nextEnemyBaseLevel = baseLevel ?? level
       st.nextEnemyType      = monsterType   ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
       st.nextTilesPlaced    = tilesPlaced   ?? st.nextTilesPlaced
       st.nextEnemyRarity    = monsterRarity ?? pickMonsterRarity(st.nextTilesPlaced)
       st.nextEnemyEnraged   = enraged       ?? false
+      st.nextEnemyQuestId   = questId       ?? null
     }),
 
     captureDefeat: () => set((st) => {
@@ -521,7 +524,8 @@ export const useBattleStore = create<BattleStore>()(
       st.player.hp    = st.player.maxHp
       st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
       st.enemy.enraged = st.nextEnemyEnraged
-      st.nextEnemyEnraged = false   // consume the flag — next reset starts fresh
+      st.nextEnemyEnraged  = false  // consume the flag — next reset starts fresh
+      st.nextEnemyQuestId  = null   // consumed by useGameLoop on victory
       if (wasEnraged) {
         const baseLevel = Math.max(1, st.nextEnemyBaseLevel ?? st.nextEnemyLevel)
         st.nextEnemyLevel     = baseLevel

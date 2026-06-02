@@ -1,7 +1,7 @@
 import type { PlacedTile } from '../../types/map'
 import { buildMonster } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
-import { MonsterIcon, TreasureIcon, MarketIcon, PlayerMarker } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, PlayerMarker } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
 export type Visibility = 'clear' | 'penumbra' | 'fog'
@@ -28,6 +28,7 @@ function tileBg(content: PlacedTile['content'], explored: boolean): string {
   if (content.type === 'market')   return explored ? '#0c0c18' : '#0d0d1a'
   if (content.type === 'monster')  return explored ? '#160b0b' : '#1a0d0d'
   if (content.type === 'treasure') return explored ? '#100f08' : '#14130a'
+  if (content.type === 'quest')    return explored ? '#0f0d08' : '#141008'
   return explored ? '#0b160b' : '#0d1a0d'
 }
 
@@ -36,6 +37,7 @@ function nodeColor(content: PlacedTile['content']): string {
   if (content.type === 'market')   return '#353545'
   if (content.type === 'monster')  return '#4a3535'
   if (content.type === 'treasure') return '#5a5035'
+  if (content.type === 'quest')    return '#5a4a20'
   return '#4a4035'
 }
 
@@ -52,6 +54,7 @@ function levelBadgeBg(content: PlacedTile['content']): string {
   if (content.type === 'market')   return 'rgba(10, 10, 26, 0.62)'
   if (content.type === 'monster')  return 'rgba(26, 8, 8, 0.62)'
   if (content.type === 'treasure') return 'rgba(26, 24, 8, 0.62)'
+  if (content.type === 'quest')    return 'rgba(26, 20, 5, 0.62)'
   return 'rgba(10, 26, 10, 0.62)'
 }
 
@@ -89,7 +92,7 @@ export default function MapTileCell({
   const showContentIcon =
     visibility === 'clear' &&
     content.type !== 'empty' &&
-    (!tile.explored || content.type === 'market')
+    (!tile.explored || content.type === 'market' || content.type === 'quest')
 
   // Icon opacity: explored market is dimmed
   const iconOpacity = tile.explored ? 0.45 : 1
@@ -132,6 +135,7 @@ export default function MapTileCell({
           {content.type === 'monster'  && <MonsterIcon  size={contentIconSize} />}
           {content.type === 'treasure' && <TreasureIcon size={contentIconSize} />}
           {content.type === 'market'   && <MarketIcon   size={contentIconSize} />}
+          {content.type === 'quest'    && <QuestIcon    size={contentIconSize} />}
         </div>
       )}
 

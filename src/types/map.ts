@@ -2,7 +2,7 @@ export type Direction = 'N' | 'S' | 'E' | 'W'
 export type Biome = 'forest'
 
 export interface TileContent {
-  type: 'empty' | 'monster' | 'treasure' | 'market'
+  type: 'empty' | 'monster' | 'treasure' | 'market' | 'quest'
   xpAmount?: number
   monsterLevel?: number
   /** Monster template ID (e.g. 'goblin', 'wolf') */

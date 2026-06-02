@@ -71,3 +71,24 @@ export function PlayerMarker({ size = 24 }: { size?: number }) {
     </svg>
   )
 }
+
+export function QuestIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      {/* Scroll body */}
+      <rect x="5" y="4" width="14" height="16" rx="2" fill="#c8a86b" />
+      <rect x="5" y="4" width="14" height="16" rx="2" stroke="#8a6a30" strokeWidth="1" />
+      {/* Rolled ends */}
+      <rect x="3" y="5" width="4" height="14" rx="2" fill="#b8904a" stroke="#8a6a30" strokeWidth="0.8" />
+      <rect x="17" y="5" width="4" height="14" rx="2" fill="#b8904a" stroke="#8a6a30" strokeWidth="0.8" />
+      {/* Lines of text */}
+      <line x1="8" y1="9"  x2="16" y2="9"  stroke="#8a6a30" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="8" y1="12" x2="16" y2="12" stroke="#8a6a30" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="8" y1="15" x2="13" y2="15" stroke="#8a6a30" strokeWidth="1.2" strokeLinecap="round" />
+      {/* Exclamation mark badge */}
+      <circle cx="17" cy="7" r="4" fill="#e8a020" />
+      <rect x="16.2" y="4.5" width="1.6" height="4" rx="0.6" fill="white" />
+      <circle cx="17" cy="9.8" r="0.9" fill="white" />
+    </svg>
+  )
+}
