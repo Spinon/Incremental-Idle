@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { Item, ItemRarity, EquipSlot, EquipmentSlots, EquipmentKey, Consumable } from '../types/item'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 const BASE_SLOTS      = 12
 const EXPAND_SLOTS    = 6
@@ -328,6 +329,11 @@ export const useInventoryStore = create<InventoryStore>()(
         }
       }),
     })),
-    { name: 'incremental-idle-inventory' }
+    {
+      name: SAVE_KEYS.inventory,
+      version: SAVE_SCHEMA_VERSION,
+      migrate: migrateSave,
+      merge: mergeSave,
+    }
   )
 )

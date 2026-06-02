@@ -10,6 +10,7 @@ import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
 import type { Direction, MapTile, PlacedTile, TileContent } from '../types/map'
 import type { MarketOffer } from '../types/item'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 export const DIR_OPPOSITE: Record<Direction, Direction> = { N: 'S', S: 'N', E: 'W', W: 'E' }
 export const DIR_DELTA: Record<Direction, { dx: number; dy: number }> = {
@@ -67,10 +68,13 @@ interface TileEntryResult {
 type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'tilesPlaced' | 'bountyTiles'>
 
 function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult {
-  if (tile.content.type === 'market') return { enemy: null, questTileLevel: null }
+  const tileKey = `${tile.x},${tile.y}`
+  const bounty  = st.bountyTiles[tileKey]
+
+  if (!bounty && tile.content.type === 'market') return { enemy: null, questTileLevel: null }
 
   // Quest board tile — consumed on entry, generates a quest afterward
-  if (tile.content.type === 'quest') {
+  if (!bounty && tile.content.type === 'quest') {
     if (!tile.explored) {
       tile.explored = true
       tile.content  = { type: 'empty' }
@@ -82,16 +86,13 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
   const isMonster        = tile.content.type === 'monster'
   const isFirstEncounter = isMonster && !tile.explored
 
-  // Bounty override: replace first encounter with bounty target
-  const tileKey   = `${tile.x},${tile.y}`
-  const bounty    = isFirstEncounter ? st.bountyTiles[tileKey] : undefined
   const enemyLevel = isFirstEncounter
     ? (bounty ? bounty.targetLevel : baseLevel + enragedLevelBonus(st.tilesPlaced))
-    : baseLevel
+    : (bounty ? bounty.targetLevel : baseLevel)
 
   const queuedEnemy: TileEnemyQueue = {
     level:       enemyLevel,
-    baseLevel:   bounty ? bounty.targetLevel : baseLevel,
+    baseLevel:   baseLevel,
     type:        bounty ? bounty.monsterType : tile.content.monsterType,
     rarity:      bounty ? bounty.targetRarity as MonsterRarity : tile.content.monsterRarity as MonsterRarity | undefined,
     tilesPlaced: st.tilesPlaced,
@@ -99,7 +100,7 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
     questId:     bounty?.questId,
   }
 
-  if (bounty && isFirstEncounter) {
+  if (bounty) {
     delete st.bountyTiles[tileKey]
   }
 
@@ -765,10 +766,11 @@ export const useMapStore = create<MapStore>()(
       }),
     })),
     {
-      name: 'incremental-idle-map',
-      version: 1,
+      name: SAVE_KEYS.map,
+      version: SAVE_SCHEMA_VERSION,
+      merge: mergeSave,
       migrate: (raw, version) => {
-        const s = raw as Record<string, unknown>
+        const s = migrateSave<Record<string, unknown>>(raw)
         // v0 stored autoExplore as boolean — migrate to the 3-state string
         if (version < 1 && typeof s.autoExplore === 'boolean') {
           s.autoExplore = s.autoExplore ? 'move' : 'manual'

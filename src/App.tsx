@@ -11,6 +11,7 @@ import SpellbookPanel from './components/SpellbookPanel'
 import QuestPanel from './components/QuestPanel'
 import StickyBar from './components/StickyBar'
 import NotifToast from './components/NotifToast'
+import { SpriteGallery } from './components/icons/__SpriteGallery'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
@@ -156,6 +157,10 @@ function GameRoot() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heroLevel])
 
+  if (typeof window !== 'undefined' && window.location.hash === '#gallery') {
+    return <SpriteGallery />
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <MiniBattlePlayer />
@@ -166,7 +171,7 @@ function GameRoot() {
           INCREMENTAL IDLE
         </span>
         <span className="text-slate-300 dark:text-slate-700">|</span>
-        <span className="text-slate-400 dark:text-slate-500 text-sm">{t.build}</span>
+        <span className="text-slate-400 dark:text-slate-500 text-sm">{t.build} v{__APP_VERSION__}</span>
         <div className="ml-auto">
           <SettingsMenu />
         </div>

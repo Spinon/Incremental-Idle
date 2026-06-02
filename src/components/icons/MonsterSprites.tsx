@@ -57,60 +57,87 @@ function EnragedEffect() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function GoblinBase() {
-  const s  = '#4a9a36'; const d  = '#2a6a18'; const hi = '#6aba50'
-  const e  = '#cc2222'; const ep = '#881111'
-  const b  = '#5a3a10'; const bd = '#3a2008'
-  const cl = '#6a4a1a'; const ch = '#3a2008'
+  const s   = '#52a83c'   // verde base
+  const d   = '#2e6e1e'   // verde sombra
+  const hi  = '#74c258'   // verde brilho
+  const out = '#1a3e10'   // contorno
+  const e   = '#e23030'   // olho
+  const ep  = '#7a0e0e'   // pupila
+  const b   = '#6a4818'   // couro
+  const bd  = '#43290c'   // couro escuro
+  const bh  = '#8a6224'   // couro brilho
+  const cl  = '#7a5420'   // madeira clava
+  const ch  = '#4a3010'   // madeira escura
+  const fang = '#f4ead0'
   return (
     <g>
       {/* orelhas */}
-      <rect x="2"  y="3"  width="4" height="8" rx="2" fill={s} />
-      <rect x="24" y="3"  width="4" height="8" rx="2" fill={s} />
-      <rect x="2"  y="3"  width="2" height="5" fill={d} opacity="0.35" />
-      <rect x="26" y="3"  width="2" height="5" fill={d} opacity="0.35" />
-      {/* cabeça */}
+      <rect x="2"  y="3"  width="4" height="8" rx="2" fill={out} />
+      <rect x="2"  y="3"  width="3" height="7" rx="2" fill={s} />
+      <rect x="25" y="3"  width="4" height="8" rx="2" fill={out} />
+      <rect x="25" y="3"  width="3" height="7" rx="2" fill={s} />
+      <rect x="26" y="4"  width="2" height="5" fill={d} opacity="0.5" />
+      {/* cabeça — contorno + base */}
+      <rect x="4"  y="1"  width="22" height="15" rx="4" fill={out} />
       <rect x="5"  y="1"  width="20" height="14" rx="3" fill={s} />
-      <rect x="6"  y="2"  width="18" height="4"  rx="2" fill={d} />
-      <rect x="9"  y="1"  width="8"  height="3"  rx="1" fill={hi} opacity="0.25" />
-      <rect x="7"  y="13" width="16" height="2"  rx="1" fill={d} opacity="0.4" />
+      {/* testa brilho + sombra da sobrancelha */}
+      <rect x="8"  y="2"  width="9"  height="3" rx="1" fill={hi} opacity="0.4" />
+      <rect x="6"  y="2"  width="18" height="3" rx="2" fill={d} opacity="0.55" />
+      {/* sombra do lado direito */}
+      <rect x="22" y="3"  width="3"  height="11"      fill={d} opacity="0.4" />
       {/* olhos */}
       <rect x="6"  y="5"  width="7"  height="5" rx="2" fill={e} />
       <rect x="17" y="5"  width="7"  height="5" rx="2" fill={e} />
-      <rect x="7"  y="5"  width="4"  height="5" fill={ep} />
-      <rect x="18" y="5"  width="4"  height="5" fill={ep} />
-      <rect x="8"  y="5"  width="2"  height="2" fill="white" opacity="0.7" />
-      <rect x="19" y="5"  width="2"  height="2" fill="white" opacity="0.7" />
+      <rect x="8"  y="6"  width="3"  height="3" rx="1" fill={ep} />
+      <rect x="19" y="6"  width="3"  height="3" rx="1" fill={ep} />
+      <rect x="8"  y="5"  width="2"  height="2" fill="#ff9a9a" opacity="0.8" />
+      <rect x="19" y="5"  width="2"  height="2" fill="#ff9a9a" opacity="0.8" />
       {/* nariz */}
       <rect x="12" y="9"  width="6"  height="3" rx="2" fill={d} />
       <rect x="13" y="10" width="2"  height="2" rx="1" fill="#0a1a08" />
       <rect x="16" y="10" width="2"  height="2" rx="1" fill="#0a1a08" />
       {/* boca + presas */}
-      <rect x="7"  y="12" width="16" height="3" fill="#1a0808" />
-      <rect x="9"  y="12" width="3"  height="2" fill="#f8f0d0" />
-      <rect x="14" y="12" width="3"  height="2" fill="#f8f0d0" />
-      <rect x="19" y="12" width="2"  height="1" fill="#f8f0d0" />
+      <rect x="7"  y="12" width="16" height="3" rx="1" fill="#180606" />
+      <rect x="9"  y="11" width="3"  height="3" rx="1" fill={fang} />
+      <rect x="18" y="11" width="3"  height="3" rx="1" fill={fang} />
+      <rect x="13" y="13" width="4"  height="2"      fill="#3a0c0c" />
       {/* pescoço */}
       <rect x="11" y="15" width="8"  height="3" fill={s} />
-      {/* corpo */}
+      <rect x="11" y="15" width="8"  height="1" fill={d} opacity="0.4" />
+      {/* corpo — colete de couro */}
+      <rect x="4"  y="18" width="22" height="11" rx="3" fill={out} />
       <rect x="5"  y="18" width="20" height="10" rx="2" fill={b} />
-      <rect x="8"  y="19" width="14" height="6"  rx="1" fill={bd} opacity="0.45" />
-      <rect x="14" y="18" width="2"  height="10" fill={bd} opacity="0.4" />
-      <rect x="5"  y="27" width="20" height="2"  fill={bd} />
-      <rect x="13" y="27" width="4"  height="2"  fill="#c9a227" />
+      <rect x="7"  y="19" width="9"  height="5"  rx="1" fill={bh} opacity="0.5" />
+      <rect x="14" y="18" width="2"  height="10"      fill={bd} opacity="0.5" />
+      <rect x="22" y="19" width="3"  height="9"       fill={bd} opacity="0.4" />
+      {/* cinto */}
+      <rect x="5"  y="26" width="20" height="2"  fill={bd} />
+      <rect x="13" y="26" width="4"  height="2"  fill="#d8b13a" />
+      <rect x="14" y="26" width="1"  height="1"  fill="#f2d878" />
       {/* braço esquerdo */}
-      <rect x="1"  y="18" width="5"  height="10" rx="2" fill={s} />
-      <rect x="1"  y="27" width="5"  height="2"  rx="1" fill={d} opacity="0.6" />
+      <rect x="1"  y="18" width="5"  height="10" rx="2" fill={out} />
+      <rect x="1"  y="18" width="4"  height="9"  rx="2" fill={s} />
+      <rect x="1"  y="18" width="1"  height="9"        fill={hi} opacity="0.5" />
+      <rect x="1"  y="25" width="4"  height="2"  rx="1" fill={d} opacity="0.6" />
       {/* braço direito */}
-      <rect x="24" y="18" width="5"  height="10" rx="2" fill={s} />
-      {/* clava */}
-      <rect x="25" y="2"  width="4"  height="18" rx="2" fill={cl} />
-      <rect x="26" y="9"  width="2"  height="1"  fill={ch} opacity="0.5" />
-      <rect x="26" y="15" width="2"  height="1"  fill={ch} opacity="0.5" />
-      <rect x="23" y="0"  width="7"  height="5"  rx="2" fill={ch} />
-      <rect x="24" y="0"  width="4"  height="2"  fill={cl} opacity="0.5" />
+      <rect x="24" y="18" width="5"  height="10" rx="2" fill={out} />
+      <rect x="24" y="18" width="4"  height="9"  rx="2" fill={s} />
+      <rect x="27" y="18" width="1"  height="9"        fill={d} />
+      {/* clava — cabo + cabeça com cravos */}
+      <rect x="25" y="3"  width="4"  height="16" rx="1" fill={ch} />
+      <rect x="25" y="3"  width="3"  height="16" rx="1" fill={cl} />
+      <rect x="25" y="9"  width="3"  height="1"  fill={ch} opacity="0.6" />
+      <rect x="25" y="14" width="3"  height="1"  fill={ch} opacity="0.6" />
+      <rect x="22" y="0"  width="8"  height="5"  rx="2" fill={ch} />
+      <rect x="23" y="0"  width="6"  height="4"  rx="2" fill={cl} />
+      <rect x="24" y="0"  width="2"  height="1"  fill={bh} opacity="0.6" />
+      <rect x="22" y="1"  width="1"  height="1"  fill={ch} />
+      <rect x="29" y="1"  width="1"  height="1"  fill={ch} />
       {/* pernas */}
-      <rect x="7"  y="27" width="6"  height="3"  rx="1" fill={s} />
-      <rect x="17" y="27" width="6"  height="3"  rx="1" fill={s} />
+      <rect x="7"  y="27" width="6"  height="3"  rx="1" fill={out} />
+      <rect x="7"  y="27" width="6"  height="2"  rx="1" fill={s} />
+      <rect x="17" y="27" width="6"  height="3"  rx="1" fill={out} />
+      <rect x="17" y="27" width="6"  height="2"  rx="1" fill={s} />
       {/* pés */}
       <rect x="6"  y="29" width="8"  height="1"  rx="1" fill={d} />
       <rect x="16" y="29" width="8"  height="1"  rx="1" fill={d} />
@@ -179,54 +206,66 @@ function GoblinAccessory({ rarity, enraged }: AccessoryProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function WolfBase() {
-  const f = '#6a7a8a'; const d = '#4a5a6a'; const li = '#8a9aaa'
-  const ey = '#c8a020'; const ep = '#3a2800'; const mz = '#2a2030'
+  const f   = '#76828f'  // pelo base
+  const d   = '#4a5560'  // pelo sombra
+  const li  = '#9aa6b2'  // pelo brilho
+  const out = '#252d36'  // contorno
+  const ey  = '#e0b028'  // olho âmbar
+  const ep  = '#2a1c00'  // pupila
+  const mz  = '#2a2230'  // focinho
+  const fang = '#f4f0dc'
   return (
     <g>
-      {/* rabo (lado esquerdo no SVG = direito após mirror) */}
-      <rect x="0" y="10" width="8"  height="5"  rx="3" fill={f} />
-      <rect x="1" y="8"  width="5"  height="5"  rx="3" fill={f} />
-      <rect x="2" y="6"  width="4"  height="5"  rx="2" fill={li} opacity="0.3" />
-      {/* corpo */}
-      <rect x="6" y="14" width="20" height="10" rx="3" fill={f} />
-      <rect x="8" y="13" width="16" height="4"  rx="2" fill={d} opacity="0.4" />
-      <rect x="14" y="16" width="10" height="6"  rx="2" fill={li} opacity="0.25" />
-      {/* pescoço */}
-      <rect x="18" y="10" width="8"  height="7"  rx="2" fill={f} />
-      <rect x="19" y="10" width="5"  height="3"  rx="1" fill={d} opacity="0.3" />
+      {/* rabo (esquerda → direita após mirror) */}
+      <rect x="0" y="9"  width="9"  height="7"  rx="3" fill={out} />
+      <rect x="1" y="9"  width="7"  height="6"  rx="3" fill={f} />
+      <rect x="1" y="6"  width="5"  height="6"  rx="3" fill={f} />
+      <rect x="2" y="6"  width="3"  height="5"  rx="2" fill={li} opacity="0.4" />
+      {/* corpo — contorno + base */}
+      <rect x="5"  y="13" width="22" height="12" rx="4" fill={out} />
+      <rect x="6"  y="13" width="20" height="11" rx="3" fill={f} />
+      {/* lombo (sombra superior) */}
+      <rect x="8"  y="13" width="16" height="3"  rx="2" fill={d} opacity="0.5" />
+      {/* ventre (brilho) */}
+      <rect x="9"  y="20" width="14" height="4"  rx="2" fill={li} opacity="0.25" />
+      {/* pescoço / juba */}
+      <rect x="18" y="9"  width="9"  height="9"  rx="3" fill={out} />
+      <rect x="18" y="9"  width="8"  height="8"  rx="2" fill={f} />
+      <rect x="19" y="10" width="3"  height="6"        fill={d} opacity="0.35" />
       {/* cabeça */}
+      <rect x="19" y="2"  width="11" height="12" rx="3" fill={out} />
       <rect x="20" y="3"  width="10" height="10" rx="3" fill={f} />
-      <rect x="22" y="3"  width="6"  height="3"  rx="1" fill={li} opacity="0.3" />
+      <rect x="21" y="3"  width="6"  height="3"  rx="1" fill={li} opacity="0.4" />
       {/* orelhas pontudas */}
-      <rect x="21" y="0"  width="4"  height="6"  rx="1" fill={f} />
-      <rect x="27" y="0"  width="3"  height="5"  rx="1" fill={f} />
-      <rect x="22" y="0"  width="2"  height="4"  rx="1" fill="#cc5555" opacity="0.45" />
-      <rect x="28" y="0"  width="1"  height="3"  fill="#cc5555" opacity="0.45" />
-      {/* focinho — integrado naturalmente à cabeça */}
-      <rect x="27" y="6"  width="3"  height="7"  rx="1" fill={mz} />
-      <rect x="28" y="7"  width="2"  height="5"  fill={d} opacity="0.4" />
-      <rect x="28" y="7"  width="2"  height="2"  rx="1" fill="#0a0a0a" />
-      {/* olho (perfil — único visível) */}
+      <rect x="20" y="0"  width="4"  height="5"  rx="1" fill={out} />
+      <rect x="20" y="0"  width="3"  height="4"  rx="1" fill={f} />
+      <rect x="26" y="0"  width="4"  height="5"  rx="1" fill={out} />
+      <rect x="27" y="0"  width="3"  height="4"  rx="1" fill={f} />
+      <rect x="21" y="1"  width="1"  height="2"  fill="#c87878" opacity="0.6" />
+      <rect x="28" y="1"  width="1"  height="2"  fill="#c87878" opacity="0.6" />
+      {/* focinho */}
+      <rect x="27" y="6"  width="3"  height="7"  rx="1" fill={out} />
+      <rect x="27" y="6"  width="3"  height="6"  rx="1" fill={mz} />
+      <rect x="28" y="6"  width="2"  height="2"  rx="1" fill="#0a0a0a" />
+      {/* olho âmbar */}
       <rect x="22" y="5"  width="4"  height="3"  rx="1" fill={ey} />
       <rect x="23" y="6"  width="2"  height="2"  fill={ep} />
-      <rect x="24" y="5"  width="1"  height="1"  fill="white" opacity="0.6" />
+      <rect x="22" y="5"  width="1"  height="1"  fill="#fff0b0" opacity="0.9" />
       {/* presas */}
-      <rect x="27" y="11" width="2"  height="3"  rx="1" fill="#f8f8e0" />
-      <rect x="25" y="11" width="2"  height="2"  rx="1" fill="#f8f8e0" opacity="0.7" />
+      <rect x="27" y="11" width="2"  height="3"  rx="1" fill={fang} />
+      <rect x="25" y="11" width="2"  height="2"  rx="1" fill={fang} opacity="0.75" />
       {/* patas dianteiras */}
-      <rect x="20" y="23" width="5"  height="7"  rx="1" fill={d} />
-      <rect x="20" y="28" width="6"  height="2"  rx="1" fill={d} />
-      <rect x="20" y="29" width="1"  height="1"  fill={d} />
-      <rect x="22" y="29" width="1"  height="1"  fill={d} />
-      <rect x="24" y="29" width="1"  height="1"  fill={d} />
-      <rect x="24" y="23" width="4"  height="5"  rx="1" fill={f} opacity="0.55" />
+      <rect x="20" y="23" width="5"  height="7"  rx="1" fill={out} />
+      <rect x="20" y="23" width="4"  height="6"  rx="1" fill={d} />
+      <rect x="20" y="23" width="1"  height="6"  fill={f} opacity="0.4" />
+      <rect x="20" y="29" width="5"  height="1"  fill="#15191e" />
       {/* patas traseiras */}
-      <rect x="7"  y="23" width="5"  height="7"  rx="1" fill={d} />
-      <rect x="7"  y="28" width="6"  height="2"  rx="1" fill={d} />
-      <rect x="7"  y="29" width="1"  height="1"  fill={d} />
-      <rect x="9"  y="29" width="1"  height="1"  fill={d} />
-      <rect x="11" y="29" width="1"  height="1"  fill={d} />
-      <rect x="12" y="23" width="4"  height="5"  rx="1" fill={f} opacity="0.55" />
+      <rect x="7"  y="23" width="5"  height="7"  rx="1" fill={out} />
+      <rect x="7"  y="23" width="4"  height="6"  rx="1" fill={d} />
+      <rect x="7"  y="23" width="1"  height="6"  fill={f} opacity="0.4" />
+      <rect x="7"  y="29" width="5"  height="1"  fill="#15191e" />
+      {/* perna do meio (profundidade) */}
+      <rect x="13" y="23" width="4"  height="5"  rx="1" fill={d} opacity="0.6" />
     </g>
   )
 }
@@ -305,39 +344,47 @@ const SLIME_COLORS: Record<string, SlimeColors> = {
 
 function SlimeBase({ c }: { c: SlimeColors }) {
   const { main: m, dark: d, lite: l } = c
+  // contorno = versão bem escura da cor principal
+  const out = d
   return (
     <g>
-      {/* bolhas decorativas */}
-      <rect x="4"  y="5"  width="2" height="2" rx="1" fill={l} opacity="0.3" />
-      <rect x="24" y="4"  width="2" height="2" rx="1" fill={l} opacity="0.3" />
+      {/* contorno geral (sombra atrás do corpo) */}
+      <rect x="1"  y="6"  width="28" height="23" rx="7" fill={out} />
       {/* forma do topo */}
+      <rect x="8"  y="4"  width="14" height="6" rx="5" fill={out} />
       <rect x="9"  y="4"  width="12" height="5" rx="4" fill={m} />
-      <rect x="5"  y="7"  width="20" height="6" rx="5" fill={m} />
-      {/* corpo */}
-      <rect x="2"  y="10" width="26" height="15" rx="6" fill={m} />
-      {/* highlight */}
-      <rect x="11" y="5"  width="7"  height="4" rx="2" fill={l} opacity="0.4" />
-      <rect x="14" y="10" width="3"  height="5" rx="1" fill={l} opacity="0.15" />
+      {/* corpo principal */}
+      <rect x="2"  y="8"  width="26" height="19" rx="7" fill={m} />
+      {/* sombra inferior interna */}
+      <rect x="4"  y="22" width="22" height="5" rx="4" fill={d} opacity="0.45" />
+      {/* sombra lateral direita */}
+      <rect x="23" y="9"  width="4"  height="15"      fill={d} opacity="0.3" />
+      {/* gloss principal (brilho gelatinoso) */}
+      <rect x="6"  y="6"  width="9"  height="4" rx="2" fill={l} opacity="0.6" />
+      <rect x="6"  y="10" width="4"  height="6" rx="2" fill={l} opacity="0.35" />
+      <rect x="5"  y="6"  width="3"  height="3" rx="1" fill="#ffffff" opacity="0.5" />
+      {/* bolhas internas */}
+      <rect x="20" y="11" width="3"  height="3" rx="1" fill={l} opacity="0.3" />
+      <rect x="16" y="7"  width="2"  height="2" rx="1" fill={l} opacity="0.4" />
       {/* olhos */}
-      <rect x="7"  y="13" width="7"  height="8" rx="3" fill="white" />
-      <rect x="16" y="13" width="7"  height="8" rx="3" fill="white" />
-      <rect x="8"  y="14" width="5"  height="6" rx="2" fill="#1a2a1a" />
-      <rect x="17" y="14" width="5"  height="6" rx="2" fill="#1a2a1a" />
-      <rect x="11" y="14" width="2"  height="3" fill="white" opacity="0.7" />
-      <rect x="20" y="14" width="2"  height="3" fill="white" opacity="0.7" />
-      {/* boca */}
-      <rect x="10" y="21" width="10" height="3" rx="2" fill={d} />
-      <rect x="12" y="21" width="2"  height="1" fill="#0a1a0a" opacity="0.5" />
-      <rect x="16" y="21" width="2"  height="1" fill="#0a1a0a" opacity="0.5" />
-      {/* base */}
-      <rect x="1"  y="22" width="28" height="7" rx="5" fill={d} />
-      <rect x="2"  y="23" width="26" height="5" rx="4" fill={m} opacity="0.55" />
+      <rect x="7"  y="13" width="7"  height="8" rx="3" fill="#f4f8f4" />
+      <rect x="16" y="13" width="7"  height="8" rx="3" fill="#f4f8f4" />
+      <rect x="8"  y="14" width="5"  height="6" rx="2" fill="#16241a" />
+      <rect x="17" y="14" width="5"  height="6" rx="2" fill="#16241a" />
+      <rect x="10" y="15" width="2"  height="3" fill="#ffffff" opacity="0.85" />
+      <rect x="19" y="15" width="2"  height="3" fill="#ffffff" opacity="0.85" />
+      {/* boca sorridente */}
+      <rect x="10" y="22" width="10" height="2" rx="1" fill="#0e1c0e" />
+      <rect x="9"  y="21" width="2"  height="1" fill="#0e1c0e" />
+      <rect x="19" y="21" width="2"  height="1" fill="#0e1c0e" />
       {/* pingos laterais */}
-      <rect x="0"  y="17" width="4"  height="8" rx="2" fill={m} />
-      <rect x="26" y="17" width="4"  height="8" rx="2" fill={m} />
-      <rect x="4"  y="22" width="3"  height="5" rx="2" fill={m} opacity="0.7" />
-      <rect x="23" y="22" width="3"  height="5" rx="2" fill={m} opacity="0.7" />
-      <rect x="12" y="26" width="6"  height="4" rx="3" fill={d} />
+      <rect x="0"  y="16" width="4"  height="9" rx="2" fill={out} />
+      <rect x="0"  y="16" width="3"  height="8" rx="2" fill={m} />
+      <rect x="26" y="16" width="4"  height="9" rx="2" fill={out} />
+      <rect x="27" y="16" width="3"  height="8" rx="2" fill={m} />
+      {/* pingo escorrendo embaixo */}
+      <rect x="12" y="26" width="6"  height="4" rx="3" fill={out} />
+      <rect x="13" y="26" width="4"  height="3" rx="2" fill={m} />
     </g>
   )
 }
@@ -389,50 +436,68 @@ function SlimeAccessory({ rarity, enraged }: AccessoryProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function BanditBase() {
-  const hd = '#1a1a2a'; const dk = '#0e0e18'; const sk = '#d4a86a'
-  const ey = '#f0a030'; const bl = '#c0c0d8'; const bh = '#dde0f0'
-  const ac = '#3a2a5a'
+  const hd  = '#262636'  // capa base
+  const dk  = '#15151f'  // capa sombra
+  const hh  = '#34344a'  // capa brilho
+  const out = '#0a0a12'  // contorno
+  const sk  = '#caa066'  // pele
+  const ey  = '#ffb648'  // olhos brilhando
+  const bl  = '#c8ccdc'  // lâmina
+  const bh  = '#e6eaf6'  // lâmina brilho
+  const bld = '#8890a4'  // lâmina sombra
+  const grip = '#46362a'
   return (
     <g>
       {/* ponta do capuz */}
+      <rect x="11" y="0"  width="8"  height="5"  rx="2" fill={out} />
       <rect x="12" y="0"  width="6"  height="4"  rx="2" fill={hd} />
-      <rect x="10" y="2"  width="10" height="4"  fill={hd} />
-      {/* capuz */}
+      {/* capuz — contorno + base */}
+      <rect x="5"  y="3"  width="20" height="15" rx="4" fill={out} />
       <rect x="6"  y="4"  width="18" height="13" rx="3" fill={hd} />
-      <rect x="8"  y="5"  width="14" height="11" rx="2" fill={dk} />
-      <rect x="8"  y="6"  width="14" height="8"  rx="2" fill={sk} opacity="0.55" />
-      {/* máscara */}
-      <rect x="7"  y="10" width="16" height="6"  rx="1" fill="#2a1a1a" />
-      {/* olhos brilhando */}
-      <rect x="9"  y="6"  width="5"  height="3"  rx="1" fill={ey} />
-      <rect x="16" y="6"  width="5"  height="3"  rx="1" fill={ey} />
-      <rect x="9"  y="6"  width="2"  height="2"  fill="white" opacity="0.4" />
-      <rect x="16" y="6"  width="2"  height="2"  fill="white" opacity="0.4" />
-      {/* pescoço */}
-      <rect x="12" y="17" width="6"  height="3"  fill={sk} opacity="0.55" />
+      <rect x="7"  y="4"  width="6"  height="4"        fill={hh} opacity="0.5" />
+      {/* interior sombrio do capuz */}
+      <rect x="8"  y="5"  width="14" height="10" rx="2" fill={dk} />
+      {/* olhos brilhando na sombra */}
+      <rect x="9"  y="7"  width="5"  height="3"  rx="1" fill={ey} />
+      <rect x="16" y="7"  width="5"  height="3"  rx="1" fill={ey} />
+      <rect x="9"  y="7"  width="2"  height="2"  fill="#fff0c0" opacity="0.7" />
+      <rect x="16" y="7"  width="2"  height="2"  fill="#fff0c0" opacity="0.7" />
+      {/* faixa do rosto (lenço) */}
+      <rect x="8"  y="11" width="14" height="4"  rx="1" fill="#1e1414" />
+      <rect x="8"  y="11" width="14" height="1"        fill={sk} opacity="0.3" />
       {/* capa / corpo */}
-      <rect x="4"  y="19" width="22" height="11" rx="3" fill={hd} />
-      <rect x="4"  y="19" width="3"  height="11" rx="1" fill={ac} opacity="0.35" />
-      <rect x="23" y="19" width="3"  height="11" rx="1" fill={ac} opacity="0.35" />
-      <rect x="14" y="19" width="2"  height="11" fill={dk} opacity="0.4" />
+      <rect x="3"  y="18" width="24" height="12" rx="3" fill={out} />
+      <rect x="4"  y="18" width="22" height="11" rx="3" fill={hd} />
+      <rect x="5"  y="19" width="3"  height="10"       fill={hh} opacity="0.4" />
+      <rect x="14" y="18" width="2"  height="11"       fill={dk} opacity="0.5" />
+      <rect x="23" y="19" width="3"  height="10"       fill={dk} opacity="0.5" />
       {/* braços */}
-      <rect x="1"  y="19" width="4"  height="11" rx="2" fill={hd} />
-      <rect x="25" y="19" width="4"  height="11" rx="2" fill={hd} />
+      <rect x="1"  y="18" width="4"  height="11" rx="2" fill={out} />
+      <rect x="1"  y="18" width="3"  height="10" rx="2" fill={hd} />
+      <rect x="25" y="18" width="4"  height="11" rx="2" fill={out} />
+      <rect x="26" y="18" width="3"  height="10" rx="2" fill={hd} />
       {/* adaga esquerda */}
-      <rect x="1"  y="8"  width="3"  height="13" rx="1" fill={bl} />
-      <rect x="2"  y="8"  width="1"  height="11" fill={bh} opacity="0.5" />
-      <rect x="0"  y="19" width="5"  height="2"  rx="1" fill="#8888aa" />
-      <rect x="1"  y="21" width="3"  height="4"  rx="1" fill="#4a3a2a" />
+      <rect x="0"  y="7"  width="4"  height="14" rx="1" fill={out} />
+      <rect x="1"  y="7"  width="3"  height="13" rx="1" fill={bl} />
+      <rect x="1"  y="7"  width="1"  height="13"       fill={bh} opacity="0.6" />
+      <rect x="3"  y="8"  width="1"  height="12"       fill={bld} />
+      <rect x="0"  y="18" width="5"  height="2"  rx="1" fill="#9498ac" />
+      <rect x="1"  y="20" width="3"  height="4"  rx="1" fill={grip} />
       {/* adaga direita */}
-      <rect x="26" y="8"  width="3"  height="13" rx="1" fill={bl} />
-      <rect x="26" y="8"  width="1"  height="11" fill={bh} opacity="0.5" />
-      <rect x="25" y="19" width="5"  height="2"  rx="1" fill="#8888aa" />
-      <rect x="26" y="21" width="3"  height="4"  rx="1" fill="#4a3a2a" />
+      <rect x="26" y="7"  width="4"  height="14" rx="1" fill={out} />
+      <rect x="26" y="7"  width="3"  height="13" rx="1" fill={bl} />
+      <rect x="26" y="7"  width="1"  height="13"       fill={bh} opacity="0.6" />
+      <rect x="28" y="8"  width="1"  height="12"       fill={bld} />
+      <rect x="25" y="18" width="5"  height="2"  rx="1" fill="#9498ac" />
+      <rect x="26" y="20" width="3"  height="4"  rx="1" fill={grip} />
       {/* pernas */}
-      <rect x="7"  y="26" width="6"  height="4"  rx="1" fill={dk} />
-      <rect x="17" y="26" width="6"  height="4"  rx="1" fill={dk} />
-      <rect x="5"  y="28" width="9"  height="2"  rx="1" fill="#0e0e14" />
-      <rect x="16" y="28" width="9"  height="2"  rx="1" fill="#0e0e14" />
+      <rect x="7"  y="26" width="6"  height="4"  rx="1" fill={out} />
+      <rect x="7"  y="26" width="6"  height="3"  rx="1" fill={dk} />
+      <rect x="17" y="26" width="6"  height="4"  rx="1" fill={out} />
+      <rect x="17" y="26" width="6"  height="3"  rx="1" fill={dk} />
+      {/* botas */}
+      <rect x="5"  y="28" width="9"  height="2"  rx="1" fill="#0a0a10" />
+      <rect x="16" y="28" width="9"  height="2"  rx="1" fill="#0a0a10" />
     </g>
   )
 }
@@ -496,55 +561,70 @@ function BanditAccessory({ rarity, enraged }: AccessoryProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function SpiderBase() {
-  const b  = '#2a1a2a'; const lg = '#1a1020'; const lh = '#4a3a4a'
-  const ab = '#3a2a3a'; const rd = '#cc2222'
+  const b   = '#322038'  // cefalotórax
+  const ab  = '#412e44'  // abdômen
+  const lg  = '#241628'  // pernas
+  const lgh = '#4e3c52'  // perna brilho
+  const lh  = '#5a465e'  // articulação
+  const out = '#140a16'  // contorno
+  const rd  = '#e23030'  // olhos
+  const fang = '#d8ccd8'
+  // helper: perna com contorno (segmento horizontal + descida)
+  const leg = (hx: number, hy: number, hw: number, vx: number, vy: number, vh: number) => (
+    <>
+      <rect x={hx} y={hy} width={hw} height="2" rx="1" fill={out} />
+      <rect x={hx} y={hy} width={hw} height="1" rx="1" fill={lgh} opacity="0.5" />
+      <rect x={vx} y={vy} width="3" height={vh} rx="1" fill={out} />
+      <rect x={vx} y={vy} width="2" height={vh} rx="1" fill={lg} />
+    </>
+  )
   return (
     <g>
       {/* fio de teia */}
       <rect x="14" y="0"  width="2"  height="5"  fill={lh} opacity="0.4" />
       {/* ── 4 pernas lado esquerdo ── */}
-      <rect x="0"  y="8"  width="9"  height="2"  rx="1" fill={lg} />
-      <rect x="0"  y="5"  width="4"  height="4"  rx="1" fill={lg} />
-      <rect x="0"  y="11" width="8"  height="2"  rx="1" fill={lg} />
-      <rect x="0"  y="13" width="4"  height="3"  rx="1" fill={lg} />
-      <rect x="0"  y="14" width="8"  height="2"  rx="1" fill={lg} />
-      <rect x="0"  y="16" width="4"  height="4"  rx="1" fill={lg} />
-      <rect x="1"  y="17" width="8"  height="2"  rx="1" fill={lg} />
-      <rect x="1"  y="19" width="4"  height="5"  rx="1" fill={lg} />
+      {leg(0, 5,  9, 0, 3,  4)}
+      {leg(0, 11, 8, 0, 12, 4)}
+      {leg(0, 15, 8, 0, 16, 5)}
+      {leg(1, 18, 8, 1, 19, 6)}
       {/* ── 4 pernas lado direito ── */}
-      <rect x="21" y="8"  width="9"  height="2"  rx="1" fill={lg} />
-      <rect x="26" y="5"  width="4"  height="4"  rx="1" fill={lg} />
-      <rect x="22" y="11" width="8"  height="2"  rx="1" fill={lg} />
-      <rect x="26" y="13" width="4"  height="3"  rx="1" fill={lg} />
-      <rect x="22" y="14" width="8"  height="2"  rx="1" fill={lg} />
-      <rect x="26" y="16" width="4"  height="4"  rx="1" fill={lg} />
-      <rect x="21" y="17" width="8"  height="2"  rx="1" fill={lg} />
-      <rect x="25" y="19" width="4"  height="5"  rx="1" fill={lg} />
+      {leg(21, 5,  9, 27, 3,  4)}
+      {leg(22, 11, 8, 27, 12, 4)}
+      {leg(22, 15, 8, 27, 16, 5)}
+      {leg(21, 18, 8, 26, 19, 6)}
       {/* articulações */}
       <rect x="6"  y="8"  width="3"  height="3"  rx="1" fill={lh} />
       <rect x="21" y="8"  width="3"  height="3"  rx="1" fill={lh} />
-      {/* cefalotórax */}
+      {/* abdômen — contorno + base */}
+      <rect x="5"  y="15" width="20" height="15" rx="6" fill={out} />
+      <rect x="6"  y="15" width="18" height="14" rx="5" fill={ab} />
+      {/* padrão dorsal claro */}
+      <rect x="10" y="18" width="10" height="2"  rx="1" fill={lh} opacity="0.55" />
+      <rect x="11" y="21" width="8"  height="2"  rx="1" fill={lh} opacity="0.4" />
+      <rect x="13" y="24" width="4"  height="2"  rx="1" fill={lh} opacity="0.3" />
+      {/* marca de ampulheta vermelha */}
+      <rect x="13" y="19" width="4"  height="2"        fill={rd} opacity="0.5" />
+      <rect x="14" y="21" width="2"  height="3"        fill={rd} opacity="0.4" />
+      {/* sombra lateral */}
+      <rect x="22" y="16" width="2"  height="12"       fill={out} opacity="0.4" />
+      {/* cefalotórax — contorno + base */}
+      <rect x="7"  y="5"  width="16" height="13" rx="4" fill={out} />
       <rect x="8"  y="6"  width="14" height="11" rx="3" fill={b} />
-      {/* abdômen */}
-      <rect x="6"  y="16" width="18" height="13" rx="5" fill={ab} />
-      <rect x="10" y="18" width="10" height="2"  rx="1" fill={lh} opacity="0.45" />
-      <rect x="11" y="21" width="8"  height="2"  rx="1" fill={lh} opacity="0.3" />
-      <rect x="13" y="24" width="4"  height="2"  rx="1" fill={lh} opacity="0.2" />
-      <rect x="14" y="16" width="2"  height="13" fill={b} opacity="0.3" />
+      <rect x="9"  y="6"  width="12" height="2"  rx="1" fill={lgh} opacity="0.4" />
       {/* 6 olhos vermelhos */}
-      <rect x="9"  y="7"  width="3"  height="3"  fill={rd} />
-      <rect x="13" y="6"  width="4"  height="3"  fill={rd} />
-      <rect x="18" y="7"  width="3"  height="3"  fill={rd} />
-      <rect x="10" y="10" width="3"  height="3"  fill={rd} opacity="0.7" />
-      <rect x="17" y="10" width="3"  height="3"  fill={rd} opacity="0.7" />
-      <rect x="10" y="7"  width="1"  height="1"  fill="white" opacity="0.5" />
-      <rect x="14" y="6"  width="2"  height="1"  fill="white" opacity="0.5" />
-      <rect x="19" y="7"  width="1"  height="1"  fill="white" opacity="0.5" />
-      {/* quelíceros */}
+      <rect x="9"  y="8"  width="3"  height="3"  rx="1" fill={rd} />
+      <rect x="13" y="7"  width="4"  height="3"  rx="1" fill={rd} />
+      <rect x="18" y="8"  width="3"  height="3"  rx="1" fill={rd} />
+      <rect x="10" y="11" width="3"  height="2"  rx="1" fill={rd} opacity="0.7" />
+      <rect x="17" y="11" width="3"  height="2"  rx="1" fill={rd} opacity="0.7" />
+      <rect x="9"  y="8"  width="1"  height="1"  fill="#ff9090" opacity="0.8" />
+      <rect x="14" y="7"  width="1"  height="1"  fill="#ff9090" opacity="0.8" />
+      <rect x="18" y="8"  width="1"  height="1"  fill="#ff9090" opacity="0.8" />
+      {/* quelíceros / presas */}
       <rect x="9"  y="16" width="3"  height="5"  rx="1" fill={lh} />
       <rect x="18" y="16" width="3"  height="5"  rx="1" fill={lh} />
-      <rect x="10" y="19" width="1"  height="3"  fill="white" opacity="0.4" />
-      <rect x="19" y="19" width="1"  height="3"  fill="white" opacity="0.4" />
+      <rect x="10" y="19" width="1"  height="3"  fill={fang} opacity="0.6" />
+      <rect x="19" y="19" width="1"  height="3"  fill={fang} opacity="0.6" />
     </g>
   )
 }

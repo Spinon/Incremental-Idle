@@ -1,7 +1,7 @@
 export type Lang = 'pt' | 'en'
 
 const pt = {
-  build: 'Build Inicial',
+  build: 'Versão',
   settings: { title: 'Configurações', theme: 'Tema', dark: 'Escuro', light: 'Claro', lang: 'Idioma' },
   skip: 'Pular',
   speed: 'Veloc.',
@@ -74,7 +74,7 @@ const pt = {
 } as const
 
 const en = {
-  build: 'Early Build',
+  build: 'Version',
   settings: { title: 'Settings', theme: 'Theme', dark: 'Dark', light: 'Light', lang: 'Language' },
   skip: 'Skip',
   speed: 'Speed',

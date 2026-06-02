@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Lang } from '../i18n/translations'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 type Theme = 'dark' | 'light'
 
@@ -19,6 +20,11 @@ export const useSettingsStore = create<SettingsStore>()(
       setTheme: (theme) => set({ theme }),
       setLang: (lang) => set({ lang }),
     }),
-    { name: 'incremental-idle-settings' }
+    {
+      name: SAVE_KEYS.settings,
+      version: SAVE_SCHEMA_VERSION,
+      migrate: migrateSave,
+      merge: mergeSave,
+    }
   )
 )

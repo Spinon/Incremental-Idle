@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ItemRarity } from '../types/item'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 export type NotifActionKind = 'equip' | 'scroll' | 'dismiss'
 
@@ -58,7 +59,10 @@ export const useNotifStore = create<NotifStore>()(
       setEnabled: (enabled) => set({ enabled }),
     }),
     {
-      name: 'incremental-idle-notifs',
+      name: SAVE_KEYS.notifs,
+      version: SAVE_SCHEMA_VERSION,
+      migrate: migrateSave,
+      merge: mergeSave,
       partialize: (st) => ({ enabled: st.enabled }),
     }
   )

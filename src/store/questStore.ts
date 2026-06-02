@@ -5,6 +5,7 @@ import type { Quest, QuestObjectiveExtermination, QuestObjectiveBounty } from '.
 import { DIFFICULTY_LABEL_PT, DIFFICULTY_LABEL_EN } from '../formulas/quests'
 import { useHeroStore } from './heroStore'
 import { useNotifStore } from './notifStore'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 interface QuestStore {
   quests: Quest[]
@@ -116,7 +117,10 @@ export const useQuestStore = create<QuestStore>()(
       }),
     })),
     {
-      name: 'incremental-idle-quests',
+      name: SAVE_KEYS.quests,
+      version: SAVE_SCHEMA_VERSION,
+      migrate: migrateSave,
+      merge: mergeSave,
       storage: createJSONStorage(() => localStorage),
     }
   )

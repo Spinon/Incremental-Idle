@@ -12,6 +12,7 @@ import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
 import type { Spell } from '../types/spell'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 /** Returns the primary element word from a spell (word1 first, then word2). */
 function getSpellElement(spell: Spell): ElementType | null {
@@ -248,7 +249,10 @@ export const useSpellStore = create<SpellStore>()(
     tick: (_deltaS) => {},
   })),
   {
-    name: 'incremental-idle-spells',
+    name: SAVE_KEYS.spells,
+    version: SAVE_SCHEMA_VERSION,
+    migrate: migrateSave,
+    merge: mergeSave,
     partialize: (s) => ({
       earnedWordIds: s.earnedWordIds,
       spellSlots:    s.spellSlots,

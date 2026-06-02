@@ -1,10 +1,15 @@
 {
   "name": "incremental-idle",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Incremental idle game with procedural events and growing difficulty",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --mode github-pages",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "deploy:pages": "powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1",
     "preview": "vite preview"
   },
   "keywords": [],

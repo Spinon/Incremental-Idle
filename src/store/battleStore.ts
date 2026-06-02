@@ -7,6 +7,7 @@ import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
 import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT } from '../types/element'
 import type { ActiveStatus } from '../types/element'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 export type { ActiveStatus }
 
 export type Speed = number
@@ -592,7 +593,10 @@ export const useBattleStore = create<BattleStore>()(
     }),
   })),
   {
-    name: 'incremental-idle-battle',
+    name: SAVE_KEYS.battle,
+    version: SAVE_SCHEMA_VERSION,
+    migrate: migrateSave,
+    merge: mergeSave,
     partialize: (state) => ({
       speed:                state.speed,
       nextEnemyLevel:       state.nextEnemyLevel,

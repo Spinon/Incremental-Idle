@@ -1,97 +1,123 @@
 /**
- * HeroHair — cabelo / chapéu / capacete
+ * HeroHair — cabelo / capacete / capuz
  * viewBox compartilhado: "0 0 20 30"
  *
+ * Ancoragem: topo da cabeça y0-7, x4-16. Não cobrir os olhos (y5+).
+ *
  * Variantes:
- *   Hair1 — curto e espetado (marrom)
- *   Hair2 — longo e fluido (preto)
- *   Hair3 — capacete de cavaleiro (metálico)
- *   Hair4 — capuz de mago (roxo escuro)
+ *   Hair1 — curto espetado (castanho)
+ *   Hair2 — longo (preto)
+ *   Hair3 — capacete de cavaleiro (metal)
+ *   Hair4 — capuz de mago (roxo)
  */
 
 export function Hair1() {
+  const base = '#6a4421'
+  const dark = '#4a2e14'
+  const hi   = '#8a5e30'
   return (
     <g>
       {/* base */}
-      <rect x="5"  y="2" width="10" height="3" fill="#5a3a1a" />
+      <rect x="5"  y="2" width="10" height="3" rx="1" fill={base} />
       {/* espetos */}
-      <rect x="5"  y="0" width="2"  height="4" fill="#5a3a1a" />
-      <rect x="9"  y="0" width="2"  height="3" fill="#6a4a22" />
-      <rect x="13" y="0" width="2"  height="4" fill="#5a3a1a" />
-      <rect x="7"  y="1" width="2"  height="3" fill="#4a2a12" />
-      <rect x="11" y="1" width="2"  height="3" fill="#4a2a12" />
-      {/* lateral — cobre parcialmente as têmporas */}
-      <rect x="4"  y="3" width="2"  height="4" fill="#5a3a1a" />
-      <rect x="14" y="3" width="2"  height="4" fill="#5a3a1a" />
+      <rect x="5"  y="0" width="2" height="4" fill={dark} />
+      <rect x="8"  y="0" width="2" height="3" fill={base} />
+      <rect x="11" y="0" width="2" height="4" fill={dark} />
+      <rect x="13" y="0" width="2" height="3" fill={base} />
+      {/* brilho */}
+      <rect x="6"  y="1" width="2" height="1" fill={hi} opacity="0.7" />
+      <rect x="9"  y="0" width="2" height="1" fill={hi} opacity="0.7" />
+      {/* laterais cobrindo têmporas */}
+      <rect x="4"  y="3" width="2" height="4" rx="1" fill={base} />
+      <rect x="14" y="3" width="2" height="4" rx="1" fill={dark} />
     </g>
   )
 }
 
 export function Hair2() {
+  const base = '#241a12'
+  const dark = '#140d08'
+  const hi   = '#3e2c1c'
   return (
     <g>
       {/* topo */}
-      <rect x="5"  y="1"  width="10" height="4" rx="2" fill="#1a1008" />
-      {/* queda esquerda — cobre lateral do rosto e desce */}
-      <rect x="2"  y="4"  width="4"  height="14" rx="1" fill="#1a1008" />
-      <rect x="3"  y="18" width="2"  height="4"  rx="1" fill="#1a1008" opacity="0.7" />
+      <rect x="5"  y="0"  width="10" height="4" rx="2" fill={base} />
+      <rect x="6"  y="0"  width="6"  height="1"       fill={hi} opacity="0.6" />
+      {/* queda esquerda */}
+      <rect x="3"  y="3"  width="3"  height="15" rx="1" fill={base} />
+      <rect x="3"  y="3"  width="1"  height="13"       fill={hi} opacity="0.4" />
+      <rect x="3"  y="17" width="2"  height="4"  rx="1" fill={dark} />
       {/* queda direita */}
-      <rect x="14" y="4"  width="4"  height="14" rx="1" fill="#1a1008" />
-      <rect x="15" y="18" width="2"  height="4"  rx="1" fill="#1a1008" opacity="0.7" />
-      {/* franja */}
-      <rect x="6"  y="2"  width="8"  height="3" fill="#2a1a0a" />
-      <rect x="7"  y="4"  width="3"  height="2" fill="#2a1a0a" />
-      <rect x="10" y="4"  width="3"  height="2" fill="#2a1a0a" />
+      <rect x="14" y="3"  width="3"  height="15" rx="1" fill={base} />
+      <rect x="16" y="3"  width="1"  height="13"       fill={dark} />
+      <rect x="15" y="17" width="2"  height="4"  rx="1" fill={dark} />
+      {/* franja (acima dos olhos) */}
+      <rect x="5"  y="2"  width="10" height="2"       fill={base} />
+      <rect x="6"  y="4"  width="2"  height="1"       fill={dark} />
+      <rect x="12" y="4"  width="2"  height="1"       fill={dark} />
     </g>
   )
 }
 
 export function Hair3() {
-  const metal  = '#7a8a9a'
-  const hilight = '#9aaaba'
-  const shadow  = '#5a6a7a'
+  const metal = '#8590a2'
+  const hi    = '#aab4c4'
+  const dark  = '#586374'
+  const out   = '#2e3644'
   return (
     <g>
-      {/* corpo do capacete — cobre toda a cabeça */}
-      <rect x="4"  y="0"  width="12" height="14" rx="2" fill={metal} />
+      {/* contorno do capacete */}
+      <rect x="4"  y="0"  width="12" height="14" rx="2" fill={out} />
+      {/* corpo do capacete */}
+      <rect x="4"  y="0"  width="11" height="13" rx="2" fill={metal} />
       {/* highlight topo */}
-      <rect x="6"  y="0"  width="8"  height="3"  rx="1" fill={hilight} />
-      {/* abertura do visor — escura */}
-      <rect x="6"  y="4"  width="8"  height="6"  rx="1" fill="#1a1a2a" />
-      {/* guarda-nariz (T-bar) */}
-      <rect x="9"  y="4"  width="2"  height="6"        fill={metal} />
-      {/* protetor de bochecha */}
-      <rect x="4"  y="8"  width="3"  height="5"  rx="1" fill={shadow} />
-      <rect x="13" y="8"  width="3"  height="5"  rx="1" fill={shadow} />
+      <rect x="6"  y="1"  width="7"  height="2"  rx="1" fill={hi} />
+      {/* sombra direita */}
+      <rect x="14" y="2"  width="1"  height="11"       fill={dark} />
+      {/* abertura do visor */}
+      <rect x="5"  y="5"  width="10" height="5"  rx="1" fill="#10141e" />
+      {/* brilho dentro do visor (olhos) */}
+      <rect x="6"  y="6"  width="2"  height="2"        fill="#7aa0d8" opacity="0.5" />
+      <rect x="12" y="6"  width="2"  height="2"        fill="#7aa0d8" opacity="0.5" />
+      {/* guarda-nariz */}
+      <rect x="9"  y="5"  width="2"  height="5"        fill={metal} />
+      <rect x="9"  y="5"  width="1"  height="5"        fill={hi} opacity="0.5" />
+      {/* protetores de bochecha */}
+      <rect x="4"  y="9"  width="3"  height="4"  rx="1" fill={dark} />
+      <rect x="13" y="9"  width="3"  height="4"  rx="1" fill={dark} />
       {/* borda inferior */}
-      <rect x="4"  y="12" width="12" height="2"        fill={shadow} />
-      {/* crista decorativa */}
-      <rect x="9"  y="0"  width="2"  height="1"        fill="#c9a227" />
+      <rect x="4"  y="12" width="11" height="2"        fill={dark} />
+      {/* crista dourada */}
+      <rect x="9"  y="0"  width="2"  height="1"        fill="#d8b13a" />
     </g>
   )
 }
 
 export function Hair4() {
-  const hood   = '#2a1a3a'
-  const accent = '#3a2a5a'
+  const hood   = '#34244e'
+  const dark   = '#1e1232'
+  const accent = '#5a4490'
+  const out    = '#140a26'
   return (
     <g>
+      {/* contorno do capuz */}
+      <rect x="4"  y="0"  width="12" height="14" rx="2" fill={out} />
       {/* ponta do capuz */}
       <rect x="8"  y="0"  width="4"  height="3" rx="1" fill={hood} />
-      <rect x="7"  y="2"  width="6"  height="2"        fill={hood} />
-      {/* corpo do capuz — envolve o rosto */}
-      <rect x="5"  y="3"  width="10" height="10" rx="1" fill={hood} />
+      {/* corpo do capuz */}
+      <rect x="5"  y="2"  width="10" height="11" rx="2" fill={hood} />
       {/* drapeado lateral */}
-      <rect x="2"  y="5"  width="4"  height="16" rx="1" fill={hood} />
-      <rect x="14" y="5"  width="4"  height="16" rx="1" fill={hood} />
-      {/* abertura do rosto — oval escura levemente visível */}
-      <rect x="7"  y="4"  width="6"  height="8"  rx="2" fill="#1a0a2a" opacity="0.5" />
-      {/* bordas do capuz com acento */}
-      <rect x="5"  y="3"  width="2"  height="10"        fill={accent} />
-      <rect x="13" y="3"  width="2"  height="10"        fill={accent} />
+      <rect x="3"  y="4"  width="3"  height="16" rx="1" fill={hood} />
+      <rect x="14" y="4"  width="3"  height="16" rx="1" fill={dark} />
+      {/* brilho frontal esquerdo */}
+      <rect x="5"  y="2"  width="2"  height="9"        fill={accent} opacity="0.5" />
+      {/* abertura escura do rosto */}
+      <rect x="6"  y="4"  width="8"  height="8"  rx="2" fill="#0e0620" opacity="0.6" />
+      {/* olhos brilhando na sombra */}
+      <rect x="7"  y="6"  width="2"  height="2"        fill="#9a7ad8" opacity="0.7" />
+      <rect x="11" y="6"  width="2"  height="2"        fill="#9a7ad8" opacity="0.7" />
       {/* estrela na ponta */}
-      <rect x="9"  y="0"  width="2"  height="1"         fill="#c9a227" />
-      <rect x="9"  y="1"  width="2"  height="1"         fill="#c9a227" opacity="0.5" />
+      <rect x="9"  y="0"  width="2"  height="1"        fill="#d8b13a" />
     </g>
   )
 }
