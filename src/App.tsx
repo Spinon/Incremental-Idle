@@ -186,8 +186,8 @@ function GameRoot() {
         </div>
 
         {activeTab === 'map'         && <MapSection />}
-        {activeTab === 'equips'      && <InventoryPanel />}
-        {activeTab === 'consumables' && <InventoryPanel />}
+        {activeTab === 'equips'      && <InventoryPanel section="equips" />}
+        {activeTab === 'consumables' && <InventoryPanel section="consumables" />}
         {activeTab === 'spells'      && <SpellbookPanel />}
         {activeTab === 'quests'      && <QuestPanel />}
       </main>

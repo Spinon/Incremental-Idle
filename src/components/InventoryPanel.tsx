@@ -773,7 +773,7 @@ function AutoSellPanel({ isEn }: { isEn: boolean }) {
 
 // ─── Main InventoryPanel ──────────────────────────────────────────────────────
 
-export default function InventoryPanel() {
+export default function InventoryPanel({ section }: { section?: 'equips' | 'consumables' } = {}) {
   const inventory          = useInventoryStore(s => s.inventory)
   const equipment          = useInventoryStore(s => s.equipment)
   const maxSlots           = useInventoryStore(s => s.maxSlots)
@@ -943,7 +943,8 @@ export default function InventoryPanel() {
 
   return (
     <div id="inventory-panel" className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
-      {/* Header */}
+      {/* Header + Equipment+Inventory body — hidden when showing consumables only */}
+      {(!section || section === 'equips') && <>
       <div className="flex items-center gap-3 mb-4">
         <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
           {isEn ? 'Equipment & Inventory' : 'Equipamento & Inventário'}
@@ -1129,16 +1130,20 @@ export default function InventoryPanel() {
         )}
       </div>
 
+      </>}
+
       {/* ─── Spellbook section ───────────────────────────────────────────── */}
-      <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
-        <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold mb-3">
-          {isEn ? 'Spellbook' : 'Grimório'}
-        </p>
-        <SpellbookPanel />
-      </div>
+      {!section && (
+        <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+          <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold mb-3">
+            {isEn ? 'Spellbook' : 'Grimório'}
+          </p>
+          <SpellbookPanel />
+        </div>
+      )}
 
       {/* ─── Consumables section ─────────────────────────────────────────── */}
-      <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+      {(!section || section === 'consumables') && <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
         {/* Header: label + quickslots */}
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold shrink-0">
@@ -1257,7 +1262,7 @@ export default function InventoryPanel() {
             })}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }
