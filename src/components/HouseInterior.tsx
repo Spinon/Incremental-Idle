@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useMapStore } from '../store/mapStore'
 import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { useUIStore } from '../store/uiStore'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { MONSTER_RARITY_COLOR, MONSTER_RARITY_LABEL } from '../formulas/monsters'
 import type { MonsterRarity } from '../types/monster'
@@ -21,16 +22,24 @@ export default function HouseInterior() {
   const resetBattle    = useBattleStore(s => s.reset)
   const defeatSnapshot = useBattleStore(s => s.defeatSnapshot)
   const lang           = useSettingsStore(s => s.lang)
+  const sceneAuto      = useUIStore(s => s.sceneAuto)
+  const configureSceneAuto = useUIStore(s => s.configureSceneAuto)
+  const setSceneAutoElapsed = useUIStore(s => s.setSceneAutoElapsed)
+  const pauseSceneAuto = useUIStore(s => s.pauseSceneAuto)
+  const clearSceneAuto = useUIStore(s => s.clearSceneAuto)
 
   // ── Auto-restart timer ─────────────────────────────────────────────────────
   // Counts down when the player is on the defeat screen or stuck screen.
   // Pauses when the user interacts with the panel so they can read / decide.
   const shouldAutoRestart = defeatPending || stuckPending
-  const [elapsed, setElapsed] = useState(0)
-  const [paused,  setPaused]  = useState(false)
+  const elapsed = sceneAuto.kind === 'home' ? sceneAuto.elapsedMs : 0
+  const paused  = sceneAuto.kind === 'home' ? sceneAuto.paused : false
 
   // Reset when entering/leaving auto-restart state
-  useEffect(() => { setElapsed(0); setPaused(false) }, [shouldAutoRestart])
+  useEffect(() => {
+    configureSceneAuto('home', AUTO_RESTART_MS, shouldAutoRestart)
+    return () => clearSceneAuto('home')
+  }, [clearSceneAuto, configureSceneAuto, shouldAutoRestart])
 
   useEffect(() => {
     if (!shouldAutoRestart || paused) return
@@ -38,7 +47,7 @@ export default function HouseInterior() {
     const id = setInterval(() => {
       const cur = Date.now() - startedAt
       if (cur >= AUTO_RESTART_MS) { clearInterval(id); startJourney() }
-      else setElapsed(cur)
+      else setSceneAutoElapsed(cur)
     }, 50)
     return () => clearInterval(id)
   }, [paused, shouldAutoRestart]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,7 +69,7 @@ export default function HouseInterior() {
     <div
       className="rounded-2xl border border-amber-900/40 dark:border-amber-800/30 overflow-hidden"
       style={{ background: 'linear-gradient(160deg, #1c0f05 0%, #2d1a08 50%, #1a1205 100%)' }}
-      onPointerDown={() => setPaused(true)}   // any click pauses the auto-restart
+      onPointerDown={() => shouldAutoRestart && pauseSceneAuto()}   // any click pauses the auto-restart
     >
       {/* Roof beam */}
       <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #78350f, #92400e, #78350f)' }} />

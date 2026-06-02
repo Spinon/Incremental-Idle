@@ -47,6 +47,19 @@ export interface DefeatSnapshot {
   log: LogEntry[]
 }
 
+export interface DeathRecord {
+  id: string
+  playerLevel: number
+  monsterName: string
+  monsterLevel: number
+  monsterType: string
+  monsterRarity: MonsterRarity
+  monsterEnraged: boolean
+  monsterHpRemaining: number
+  monsterMaxHp: number
+  tilesPlaced: number
+}
+
 export interface SpellLogData {
   name: string
   icon: string
@@ -99,6 +112,7 @@ interface BattleStore {
   hitsLeft: number
   comboSize: number
   defeatSnapshot: DefeatSnapshot | null
+  deathHistory: DeathRecord[]
   enemyStatuses: ActiveStatus[]
   heroStatuses:  ActiveStatus[]
 
@@ -107,7 +121,7 @@ interface BattleStore {
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
   queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string): void
-  captureDefeat(): void
+  captureDefeat(playerLevel: number, tilesPlaced: number): void
   applyHit(): void
   switchAttacker(): void
   skipBattle(): void
@@ -208,6 +222,7 @@ export const useBattleStore = create<BattleStore>()(
     hitsLeft: 1,
     comboSize: 1,
     defeatSnapshot: null,
+    deathHistory: [],
     enemyStatuses: [],
     heroStatuses:  [],
 
@@ -225,13 +240,26 @@ export const useBattleStore = create<BattleStore>()(
       st.nextEnemyQuestId   = questId       ?? null
     }),
 
-    captureDefeat: () => set((st) => {
+    captureDefeat: (playerLevel, tilesPlaced) => set((st) => {
       st.defeatSnapshot = {
         killerName:        st.enemy.name,
         killerLevel:       st.enemy.level,
         killerMonsterType: st.enemy.monsterType ?? st.nextEnemyType,
         log:               st.log.slice(0, 20),
       }
+      st.deathHistory.unshift({
+        id: `${Date.now()}_${st.deathHistory.length}`,
+        playerLevel,
+        monsterName:        st.enemy.name,
+        monsterLevel:       st.enemy.level,
+        monsterType:        st.enemy.monsterType ?? st.nextEnemyType,
+        monsterRarity:      st.enemy.rarity ?? 'normal',
+        monsterEnraged:     st.enemy.enraged,
+        monsterHpRemaining: st.enemy.hp,
+        monsterMaxHp:       st.enemy.maxHp,
+        tilesPlaced,
+      })
+      st.deathHistory = st.deathHistory.slice(0, 8)
     }),
 
     syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, damageReduction,
@@ -574,6 +602,7 @@ export const useBattleStore = create<BattleStore>()(
       nextTilesPlaced:      state.nextTilesPlaced,
       nextEnemyEnraged:     state.nextEnemyEnraged,
       defeatSnapshot:       state.defeatSnapshot,
+      deathHistory:         state.deathHistory,
     }),
   }
   )

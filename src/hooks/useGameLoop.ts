@@ -109,7 +109,10 @@ export function useGameLoop() {
 
         if (winner === 'enemy') {
           // ── Defeat: snapshot who killed us, then force player home ────────
-          useBattleStore.getState().captureDefeat()
+          useBattleStore.getState().captureDefeat(
+            useHeroStore.getState().level,
+            useMapStore.getState().tilesPlaced,
+          )
           useMapStore.getState().handleDefeat()
         } else {
           // ── Victory: advance, rewards, drops ────────────────────────────

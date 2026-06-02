@@ -12,6 +12,7 @@ import { cn } from '../lib/utils'
 import { useSettingsStore } from '../store/settingsStore'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
+import type { DeathRecord } from '../store/battleStore'
 import type { Consumable, ItemRarity } from '../types/item'
 import type { SpellRarity, AutoCastConfig } from '../types/spell'
 
@@ -39,8 +40,131 @@ const ATTACK_MS = 2000
 const IDLE_MS   = 1600
 const COMBO_MS  = 350   // short gap between hits in a combo
 
+const DEATH_RARITY_LABEL_PT = {
+  normal: 'Normal',
+  uncommon: 'Incomum',
+  rare: 'Raro',
+  epic: 'Épico',
+  unique: 'Único',
+} as const
+
+const DEATH_RARITY_LABEL_EN = {
+  normal: 'Normal',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+  epic: 'Epic',
+  unique: 'Unique',
+} as const
+
+const DEATH_RARITY_COLOR = {
+  normal: 'text-slate-300',
+  uncommon: 'text-green-300',
+  rare: 'text-blue-300',
+  epic: 'text-purple-300',
+  unique: 'text-orange-300',
+} as const
+
+function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean }) {
+  return (
+    <div className="w-full rounded-xl border border-slate-700/70 bg-slate-950/95 shadow-xl overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          {isEn ? 'Deaths' : 'Últimas mortes'}
+        </p>
+        <span className="text-[10px] text-slate-600 tabular-nums">{deaths.length}/8</span>
+      </div>
+
+      {deaths.length === 0 ? (
+        <div className="px-3 py-5 text-center">
+          <p className="text-xs text-slate-500">
+            {isEn ? 'No deaths recorded yet.' : 'Nenhuma morte registrada ainda.'}
+          </p>
+        </div>
+      ) : (
+        <div className="max-h-64 overflow-y-auto p-2 flex flex-col gap-1.5">
+          {deaths.map((death) => {
+            const rarityLabel = isEn
+              ? DEATH_RARITY_LABEL_EN[death.monsterRarity]
+              : DEATH_RARITY_LABEL_PT[death.monsterRarity]
+            const variation = [
+              death.monsterRarity !== 'normal' ? rarityLabel : null,
+              death.monsterEnraged ? (isEn ? 'Enraged' : 'Furioso') : null,
+            ].filter(Boolean).join(' · ')
+
+            return (
+              <div key={death.id} className="rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base leading-none">🪦</span>
+                  <p className="text-[11px] font-bold text-slate-200 truncate flex-1">
+                    {death.monsterName}
+                  </p>
+                  <span className="text-[10px] font-black text-red-300 tabular-nums">
+                    Lv.{death.monsterLevel}
+                  </span>
+                </div>
+
+                <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
+                  <span>{isEn ? 'Player' : 'Player'} <b className="text-slate-300">Lv.{death.playerLevel}</b></span>
+                  <span>{isEn ? 'Tiles' : 'Tiles'} <b className="text-slate-300">{death.tilesPlaced}</b></span>
+                  <span className="col-span-2">
+                    HP {isEn ? 'left' : 'restante'}{' '}
+                    <b className="text-red-300">{death.monsterHpRemaining}/{death.monsterMaxHp}</b>
+                  </span>
+                  <span className="col-span-2">
+                    {isEn ? 'Variation' : 'Variação'}{' '}
+                    <b className={cn(DEATH_RARITY_COLOR[death.monsterRarity], !variation && 'text-slate-400')}>
+                      {variation || (isEn ? 'None' : 'Nenhuma')}
+                    </b>
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PlayerManaBar({
+  current,
+  max,
+  regen,
+  label,
+}: {
+  current: number
+  max: number
+  regen: number
+  label: string
+}) {
+  const pct = Math.max(0, Math.min(100, (current / max) * 100))
+
+  return (
+    <div className="w-44 flex flex-col gap-1">
+      <div className="relative w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-blue-300/60 dark:border-blue-700/60 shadow-inner">
+        <div
+          className="h-full rounded-full transition-[width] duration-200 bg-blue-500"
+          style={{ width: `${pct}%` }}
+        />
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, transparent 60%)' }}
+        />
+        <span className="absolute inset-0 flex items-center justify-between px-2 text-[8px] font-bold tabular-nums select-none text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.75)]">
+          <span>{label}</span>
+          <span>
+            {Math.floor(current)}/{Math.round(max)}
+            <span className="ml-1 text-white/65">+{regen.toFixed(1)}/s</span>
+          </span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function BattleArena() {
   const store      = useBattleStore()
+  const deathHistory = useBattleStore(s => s.deathHistory)
   const gainXp     = useHeroStore((s) => s.gainXp)
   const heroLevel  = useHeroStore((s) => s.level)
   const xpGranted  = useRef(false)
@@ -50,6 +174,7 @@ export default function BattleArena() {
 
   // Consumable quickslots
   const attrs          = useHeroStore(s => s.attributes)
+  const derivedStats   = getDerivedStats(attrs)
   const restoreStamina = useHeroStore(s => s.restoreStamina)
   const restoreMana    = useHeroStore(s => s.restoreMana)
   const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
@@ -96,6 +221,7 @@ export default function BattleArena() {
   }, [setShowMini])
 
   const [showAutoConfig, setShowAutoConfig] = useState(false)
+  const [showDeathLog, setShowDeathLog] = useState(false)
   const autoConfigRef = useRef<HTMLDivElement>(null)
 
   const closeAutoConfig = useCallback((e: MouseEvent) => {
@@ -111,10 +237,9 @@ export default function BattleArena() {
 
   function useQuickslot(c: Consumable) {
     removeConsumable(c.id)
-    const derived = getDerivedStats(attrs)
     switch (c.effect) {
-      case 'stamina': restoreStamina(derived.maxStamina * c.magnitude); break
-      case 'mana':    restoreMana(derived.maxMana * c.magnitude);        break
+      case 'stamina': restoreStamina(derivedStats.maxStamina * c.magnitude); break
+      case 'mana':    restoreMana(derivedStats.maxMana * c.magnitude);        break
       case 'skip':    for (let i = 0; i < c.magnitude; i++) gainSkipCharge(); break
       case 'xp':      gainXp(Math.round(c.magnitude));                  break
     }
@@ -298,6 +423,12 @@ export default function BattleArena() {
         {/* Player */}
         <div className="absolute left-10 bottom-[72px] flex flex-col items-start gap-2">
           <HpBar name={store.player.name} current={store.player.hp} max={store.player.maxHp} side="player" />
+          <PlayerManaBar
+            current={mana}
+            max={derivedStats.maxMana}
+            regen={derivedStats.manaRegen * store.speed}
+            label={t.mana}
+          />
           {/* Hero elemental statuses (regen, blessed…) */}
           {store.heroStatuses.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -725,8 +856,32 @@ export default function BattleArena() {
                   }
                 </div>
               )
-            })
+          })
         }
+      </div>
+
+      <div className="mt-2 flex flex-col gap-2">
+        <button
+          onClick={() => setShowDeathLog(v => !v)}
+          title={isEn ? 'Death history' : 'Histórico de mortes'}
+          className={cn(
+            'self-start h-8 px-2.5 rounded-lg text-sm flex items-center gap-1.5 transition-colors border',
+            showDeathLog
+              ? 'bg-slate-800 border-slate-600 text-white'
+              : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200',
+          )}
+        >
+          <span>🪦</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest">
+            {isEn ? 'Deaths' : 'Mortes'}
+          </span>
+          {deathHistory.length > 0 && (
+            <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+              {deathHistory.length}
+            </span>
+          )}
+        </button>
+        {showDeathLog && <DeathLogPanel deaths={deathHistory} isEn={isEn} />}
       </div>
     </div>
   )

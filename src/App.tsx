@@ -3,7 +3,6 @@ import MiniBattlePlayer from './components/MiniBattlePlayer'
 import BattleArena from './components/BattleArena'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
-import ResourceBars from './components/ResourceBars'
 import HeroPanel from './components/HeroPanel'
 import SettingsMenu from './components/SettingsMenu'
 import MapSection from './components/map/MapSection'
@@ -35,6 +34,7 @@ function GameRoot() {
   const scene        = useMapStore((s) => s.scene)
   const equipment    = useInventoryStore((s) => s.equipment)
   const activeTab    = useUIStore((s) => s.activeTab)
+  const setShowMini  = useUIStore((s) => s.setShowMiniPlayer)
   const pushNotif    = useNotifStore((s) => s.push)
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
@@ -115,6 +115,14 @@ function GameRoot() {
     }
   }, [scene, setSpeed]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Home and market scenes live inside the battle tab; expose them through
+  // the mini player when the user is currently looking at another tab.
+  useEffect(() => {
+    if (scene === 'home' || scene === 'market') {
+      setShowMini(activeTab !== 'battle')
+    }
+  }, [activeTab, scene, setShowMini])
+
   // Sync hero stats → battle store whenever attributes, equipment or level change.
   // heroLevel is included so passive level bonuses take effect on level-up.
   useEffect(() => {
@@ -177,7 +185,6 @@ function GameRoot() {
               {scene === 'home'   ? <HouseInterior /> :
                scene === 'market' ? <MarketInterior /> :
                                     <BattleArena />}
-              <ResourceBars />
             </div>
             <aside>
               <HeroPanel />

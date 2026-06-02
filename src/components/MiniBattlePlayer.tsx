@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useUIStore } from '../store/uiStore'
+import { useMapStore } from '../store/mapStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { HeroSprite } from './icons/hero/HeroComposer'
@@ -42,9 +43,37 @@ function MiniHpBar({ label, current, max }: { label: string; current: number; ma
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+function MiniAutoBar({ kind }: { kind: 'home' | 'market' }) {
+  const sceneAuto = useUIStore(s => s.sceneAuto)
+  const lang = useSettingsStore(s => s.lang)
+  const isEn = lang === 'en'
+
+  if (!sceneAuto.active || sceneAuto.kind !== kind || sceneAuto.durationMs <= 0) return null
+
+  const pct = Math.max(0, Math.min(100, (sceneAuto.elapsedMs / sceneAuto.durationMs) * 100))
+  const sec = Math.ceil(Math.max(0, (sceneAuto.durationMs - sceneAuto.elapsedMs) / 1000))
+  const fill = kind === 'market' ? 'bg-indigo-500/80' : 'bg-red-500/80'
+  const text = sceneAuto.paused
+    ? (isEn ? 'Auto paused' : 'Auto pausado')
+    : kind === 'market'
+      ? (isEn ? `Leaving in ${sec}s` : `Saindo em ${sec}s`)
+      : (isEn ? `New journey in ${sec}s` : `Nova jornada em ${sec}s`)
+
+  return (
+    <div className="px-2.5 pb-2.5">
+      <div className="h-1.5 rounded-full bg-slate-950/70 overflow-hidden border border-white/10">
+        <div className={cn('h-full rounded-full transition-none', fill)} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1 text-[9px] text-slate-400 text-center leading-none">{text}</p>
+    </div>
+  )
+}
+
 export default function MiniBattlePlayer() {
   const show    = useUIStore(s => s.showMiniPlayer)
   const setShow = useUIStore(s => s.setShowMiniPlayer)
+  const setActiveTab = useUIStore(s => s.setActiveTab)
+  const pauseSceneAuto = useUIStore(s => s.pauseSceneAuto)
 
   const player   = useBattleStore(s => s.player)
   const enemy    = useBattleStore(s => s.enemy)
@@ -54,13 +83,17 @@ export default function MiniBattlePlayer() {
   const log      = useBattleStore(s => s.log)
 
   const heroConfig = useHeroStore(s => s.heroConfig)
+  const gold = useHeroStore(s => s.gold)
+  const scene = useMapStore(s => s.scene)
+  const defeatPending = useMapStore(s => s.defeatPending)
+  const stuckPending = useMapStore(s => s.stuckPending)
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
 
   // ── Drag ──────────────────────────────────────────────────────────────────
   const [pos, setPos] = useState(() => ({
     x: Math.max(0, window.innerWidth - 256),
-    y: 80,
+    y: Math.max(0, window.innerHeight - 190),
   }))
   const drag = useRef<{ ox: number; oy: number; px: number; py: number } | null>(null)
 
@@ -151,6 +184,81 @@ export default function MiniBattlePlayer() {
   // ── Don't render until shown ───────────────────────────────────────────────
   if (!show) return null
 
+  function openBattleTabAndPause() {
+    pauseSceneAuto()
+    setActiveTab('battle')
+    setShow(false)
+  }
+
+  function renderSceneMini() {
+    if (scene === 'home') {
+      const title = stuckPending
+        ? (isEn ? 'Map blocked' : 'Mapa bloqueado')
+        : defeatPending
+          ? (isEn ? 'Defeated' : 'Derrotado')
+          : (isEn ? 'At home' : 'Em casa')
+      const subtitle = defeatPending || stuckPending
+        ? (isEn ? 'Open home to restart' : 'Abra a casa para reiniciar')
+        : (isEn ? 'Open home actions' : 'Abrir a casa')
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={openBattleTabAndPause}
+            className="w-full text-left px-3 pt-3 pb-2 bg-[linear-gradient(160deg,#1c0f05_0%,#2d1a08_55%,#161006_100%)] hover:brightness-110 transition"
+            title={isEn ? 'Open home' : 'Abrir casa'}
+          >
+            <div className="h-16 rounded-lg border border-amber-800/40 bg-amber-950/30 px-3 py-2 flex flex-col justify-between">
+              <div className="flex items-center gap-2 text-2xl leading-none opacity-80">
+                <span>🔥</span><span>🪑</span><span>🪵</span><span>🕯️</span>
+              </div>
+              <div>
+                <p className="text-[11px] font-black text-amber-200 leading-none">{title}</p>
+                <p className="text-[9px] text-amber-500/70 mt-1 leading-none">{subtitle}</p>
+              </div>
+            </div>
+          </button>
+          <MiniAutoBar kind="home" />
+        </>
+      )
+    }
+
+    if (scene === 'market') {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={openBattleTabAndPause}
+            className="w-full text-left px-3 pt-3 pb-2 bg-[linear-gradient(160deg,#0f0c1e_0%,#1a1340_55%,#0c0f1e_100%)] hover:brightness-110 transition"
+            title={isEn ? 'Open market' : 'Abrir mercado'}
+          >
+            <div className="h-16 rounded-lg border border-indigo-700/40 bg-indigo-950/40 px-3 py-2 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg border border-indigo-500/30 bg-indigo-900/50 flex items-center justify-center text-xl">
+                ⚑
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black text-indigo-200 leading-none">
+                  {isEn ? 'Market' : 'Mercado'}
+                </p>
+                <p className="text-[9px] text-indigo-400/70 mt-1 leading-none">
+                  {isEn ? 'Open shop actions' : 'Abrir a loja'}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[11px] font-bold text-yellow-400 leading-none">⬡ {gold}</p>
+                <p className="text-[8px] text-yellow-600/70 mt-1 leading-none">{isEn ? 'gold' : 'ouro'}</p>
+              </div>
+            </div>
+          </button>
+          <MiniAutoBar kind="market" />
+        </>
+      )
+    }
+
+    return null
+  }
+
   const enemyTemplate = FOREST_MONSTER_MAP.get(enemy.monsterType ?? '')
   const playerFloats = floats.filter(f => f.side === 'player')
   const enemyFloats  = floats.filter(f => f.side === 'enemy')
@@ -172,6 +280,8 @@ export default function MiniBattlePlayer() {
       </span>
     )
 
+  const sceneMini = renderSceneMini()
+
   return createPortal(
     <div
       className="fixed z-[9999] select-none"
@@ -185,7 +295,11 @@ export default function MiniBattlePlayer() {
           onMouseDown={onHeaderMouseDown}
         >
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex-1 pointer-events-none">
-            ⚔ {isEn ? 'Battle' : 'Batalha'}
+            {scene === 'home'
+              ? (isEn ? 'Home' : 'Casa')
+              : scene === 'market'
+                ? (isEn ? 'Market' : 'Mercado')
+                : `⚔ ${isEn ? 'Battle' : 'Batalha'}`}
           </span>
           <button
             className="text-slate-500 hover:text-slate-200 text-xs leading-none px-0.5 transition-colors"
@@ -197,6 +311,8 @@ export default function MiniBattlePlayer() {
         </div>
 
         {/* ── Emoji arena ───────────────────────────────────────────────── */}
+        {sceneMini ?? (
+          <>
         <div className="px-3 pt-3 pb-1 relative">
           <div className="relative flex items-end justify-between h-14">
 
@@ -271,6 +387,8 @@ export default function MiniBattlePlayer() {
           <MiniHpBar label={playerLabel}  current={player.hp} max={player.maxHp} />
           <MiniHpBar label={enemyLabel}   current={enemy.hp}  max={enemy.maxHp}  />
         </div>
+          </>
+        )}
 
       </div>
     </div>,

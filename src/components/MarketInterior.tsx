@@ -4,6 +4,7 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
+import { useUIStore } from '../store/uiStore'
 import { wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable } from '../formulas/items'
 import { getDerivedStats } from '../formulas/derived'
 import { DROP_WORDS, WORD_MAP } from '../data/words'
@@ -113,6 +114,11 @@ export default function MarketInterior() {
   const setSellMode  = useInventoryStore(s => s.setSellMode)
   const lang       = useSettingsStore(s => s.lang)
   const isEn       = lang === 'en'
+  const sceneAuto      = useUIStore(s => s.sceneAuto)
+  const configureSceneAuto = useUIStore(s => s.configureSceneAuto)
+  const setSceneAutoElapsed = useUIStore(s => s.setSceneAutoElapsed)
+  const pauseSceneAuto = useUIStore(s => s.pauseSceneAuto)
+  const clearSceneAuto = useUIStore(s => s.clearSceneAuto)
 
   // Tile level and position — shop is generated at the tile's level
   const marketPos = useMapStore(s => s.playerPos)
@@ -180,10 +186,15 @@ export default function MarketInterior() {
   // Track what was bought (id-set)
   const [bought, setBought]   = useState<Set<string>>(new Set())
   const [soldGold, setSoldGold] = useState(0)
-  const [elapsed, setElapsed]  = useState(0)
-  const [paused,  setPaused]   = useState(false)
+  const elapsed = sceneAuto.kind === 'market' ? sceneAuto.elapsedMs : 0
+  const paused  = sceneAuto.kind === 'market' ? sceneAuto.paused : false
   // Feedback for failed buys (inventory full)
   const [failId, setFailId]    = useState<string | null>(null)
+
+  useEffect(() => {
+    configureSceneAuto('market', AUTO_LEAVE_MS, true)
+    return () => clearSceneAuto('market')
+  }, [clearSceneAuto, configureSceneAuto])
 
   // Auto-sell on entry
   useEffect(() => {
@@ -204,7 +215,7 @@ export default function MarketInterior() {
         // tick to start the first battle after the market naturally.
         exitMarket()
       } else {
-        setElapsed(current)
+        setSceneAutoElapsed(current)
       }
     }, 50)
     return () => clearInterval(id)
@@ -216,7 +227,7 @@ export default function MarketInterior() {
   }
 
   function buyConsumable(c: Consumable) {
-    setPaused(true)
+    pauseSceneAuto()
     const price = eff(c.price)
     if (!spendGold(price)) return
     const ok = addConsumable(c)
@@ -225,14 +236,14 @@ export default function MarketInterior() {
   }
 
   function buyWord(wo: WordOffer) {
-    setPaused(true)
+    pauseSceneAuto()
     if (!spendGold(eff(wo.price))) return
     earnWord(wo.wordId)
     setBought(b => new Set(b).add(wo.wordId))
   }
 
   function buyEquipment(item: Item) {
-    setPaused(true)
+    pauseSceneAuto()
     const price = eff(item.price!)
     if (!spendGold(price)) return
     const ok = addItem(item as Item)
@@ -250,7 +261,7 @@ export default function MarketInterior() {
       id="market-panel"
       className="rounded-2xl border border-indigo-900/40 dark:border-indigo-800/30 overflow-hidden"
       style={{ background: 'linear-gradient(160deg, #0f0c1e 0%, #1a1340 50%, #0c0f1e 100%)' }}
-      onPointerDown={() => setPaused(true)}
+      onPointerDown={pauseSceneAuto}
     >
       {/* Awning */}
       <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #3730a3, #4f46e5, #3730a3)' }} />

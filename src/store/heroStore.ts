@@ -219,7 +219,7 @@ export const useHeroStore = create<HeroStore>()(
       const netChange = derived.staminaRegen - rawDrain
       st.stamina = Math.max(0, Math.min(derived.maxStamina, st.stamina + netChange * deltaS))
 
-      st.mana = Math.min(derived.maxMana, st.mana + derived.manaRegen * deltaS)
+      st.mana = Math.min(derived.maxMana, st.mana + derived.manaRegen * speed * deltaS)
 
       // Skip charges regen: level charges per hour = level/3600 per second
       const regenRate = st.level / 3600
