@@ -3,9 +3,8 @@ import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
 import { useQuestStore } from '../../store/questStore'
 import { getDerivedStats } from '../../formulas/derived'
-import { buildMonster } from '../../formulas/monsters'
-import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
-import { MONSTER_RARITY_LABEL, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
+import { buildMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
+import { FOREST_MONSTER_MAP, FOREST_MONSTERS, monsterName } from '../../data/monsters'
 import { useT } from '../../i18n/useT'
 import { useSettingsStore } from '../../store/settingsStore'
 import MapViewport from './MapViewport'
@@ -395,7 +394,7 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
         <div className="p-2 flex flex-col gap-1 overflow-y-auto min-h-0">
           {entries.map(e => {
         const template    = FOREST_MONSTER_MAP.get(e.monsterType) ?? FOREST_MONSTERS[0]
-        const rarityLabel = MONSTER_RARITY_LABEL[e.monsterRarity]
+        const rarityLabel = isEn ? MONSTER_RARITY_LABEL_EN[e.monsterRarity] : MONSTER_RARITY_LABEL[e.monsterRarity]
         const rarityColor = MONSTER_RARITY_COLOR[e.monsterRarity]
         const isSelected  = selectedPos?.x === e.x && selectedPos?.y === e.y
         const isPlayer    = playerPos.x === e.x && playerPos.y === e.y
@@ -422,7 +421,7 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
               <span className="text-sm leading-none shrink-0">{template.emoji}</span>
               <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate">
                 {rarityLabel && <span className={cn('mr-1 text-[10px]', rarityColor)}>[{rarityLabel}]</span>}
-                {template.name}
+                {monsterName(template, isEn)}
               </span>
               <span className={cn('ml-auto text-[10px] font-black tabular-nums shrink-0', levelColor(e.level, heroLevel))}>
                 Nv.{e.level}
@@ -496,7 +495,7 @@ function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: PlacedTile; o
         const g        = buildMonster(template, lvl, (content.monsterRarity ?? 'normal') as MonsterRarity, tilesPlaced)
         return (
           <div className="flex gap-4 text-[11px] text-slate-400">
-            <span>{template.emoji} {template.name} <span className="text-red-400 font-semibold">Nv.{lvl}</span></span>
+            <span>{template.emoji} {monsterName(template, isEn)} <span className="text-red-400 font-semibold">Nv.{lvl}</span></span>
             <span>HP <span className="text-slate-300">{g.maxHp}</span></span>
             <span>ATK <span className="text-slate-300">{g.atk}</span></span>
             <span>DEF <span className="text-slate-300">{g.def}</span></span>
@@ -518,7 +517,7 @@ function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: PlacedTile; o
         const { template, stats: g } = emptyMonster.current!
         return (
           <div className="flex gap-3 text-[11px] text-slate-400">
-            <span>{template.emoji} {template.name} <span className="text-red-400 font-semibold">Nv.{level}</span></span>
+            <span>{template.emoji} {monsterName(template, isEn)} <span className="text-red-400 font-semibold">Nv.{level}</span></span>
             <span>HP <span className="text-slate-300">{g.maxHp}</span></span>
             <span>ATK <span className="text-slate-300">{g.atk}</span></span>
             <span>DEF <span className="text-slate-300">{g.def}</span></span>

@@ -264,7 +264,8 @@ export default function MiniBattlePlayer() {
   const enemyFloats  = floats.filter(f => f.side === 'enemy')
 
   const playerLabel = player.name
-  const enemyLabel  = `${enemy.name}  Nv.${enemy.level}`
+  const enemyName   = isEn ? (enemy.nameEn ?? enemy.name) : (enemy.namePt ?? enemy.name)
+  const enemyLabel  = `${enemyName}  Nv.${enemy.level}`
   const enemyVisual = enemyTemplate && MONSTER_PIXEL_SPRITES[enemyTemplate.id]
     ? (
       <MonsterSprite

@@ -5,7 +5,7 @@ import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../data/monsters'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
-import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT } from '../types/element'
+import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
 import type { ActiveStatus } from '../types/element'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 export type { ActiveStatus }
@@ -16,6 +16,8 @@ export type Side = 'player' | 'enemy'
 
 export interface Unit {
   name: string
+  namePt?: string
+  nameEn?: string
   level: number
   hp: number
   maxHp: number
@@ -63,6 +65,7 @@ export interface DeathRecord {
 
 export interface SpellLogData {
   name: string
+  nameEn?: string
   icon: string
   effectType: 'damage' | 'heal' | 'buff' | 'debuff' | 'utility'
   /** Damage dealt (damage spells) or HP restored (heal spells); 0 for buff/debuff/utility. */
@@ -477,6 +480,7 @@ export const useBattleStore = create<BattleStore>()(
             dmg,
             spell: {
               name: STATUS_LABEL_PT[s.type],
+              nameEn: STATUS_LABEL_EN[s.type],
               icon: STATUS_ICONS[s.type],
               effectType: 'damage',
               value: dmg,
@@ -500,6 +504,7 @@ export const useBattleStore = create<BattleStore>()(
             dmg,
             spell: {
               name: STATUS_LABEL_PT[s.type],
+              nameEn: STATUS_LABEL_EN[s.type],
               icon: STATUS_ICONS[s.type],
               effectType: 'damage',
               value: dmg,
@@ -517,6 +522,7 @@ export const useBattleStore = create<BattleStore>()(
             dmg: 0,
             spell: {
               name: STATUS_LABEL_PT.regen,
+              nameEn: STATUS_LABEL_EN.regen,
               icon: STATUS_ICONS.regen,
               effectType: 'heal',
               value: healed,

@@ -196,8 +196,8 @@ function makeBountyMonster(tileLevel: number, difficulty: QuestDifficulty, grid:
   const template = FOREST_MONSTERS.find(m => m.id === target.content.monsterType) ?? FOREST_MONSTERS[0]
   const epithetPt = pickRandom(MONSTER_EPITHETS_PT)
   const epithetEn = pickRandom(MONSTER_EPITHETS_EN)
-  const namePt = `${template.name} ${epithetPt}`
-  const nameEn = `${epithetEn} ${template.name}`
+  const namePt = `${template.namePt} ${epithetPt}`
+  const nameEn = `${epithetEn} ${template.nameEn}`
   const rarity = pickBountyRarity(tileLevel)
   const rewardMult = difficulty === 'easy' ? 1.5 : difficulty === 'medium' ? 3 : 6
   return {
@@ -264,8 +264,8 @@ function makeCollection(tileLevel: number, difficulty: QuestDifficulty, grid: Re
   const template = monsterType ? FOREST_MONSTERS.find(m => m.id === monsterType) : null
   const required = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 7 : 15
 
-  const namePt = template ? template.name : 'Criatura'
-  const nameEn = template ? template.name : 'Creature'
+  const namePt = template ? template.namePt : 'Criatura'
+  const nameEn = template ? template.nameEn : 'Creature'
   return {
     id: uid(), type: 'collection', difficulty, status: 'active', tileLevel,
     title:       `Coleta: ${required}× ${namePt}`,

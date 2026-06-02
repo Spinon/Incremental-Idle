@@ -232,7 +232,7 @@ export function useGameLoop() {
               useNotifStore.getState().push({
                 title:    '📖 Palavra aprendida!',
                 titleEn:  '📖 Word learned!',
-                body:     `${rarityPt} — ${word.namePt}`,
+                body:     `${rarityPt} — ${word.nameEn}${word.namePt !== word.nameEn ? ` (${word.namePt})` : ''}`,
                 bodyEn:   `${rarityEn} — ${word.nameEn}`,
                 rarity:   word.rarity as 'rare' | 'epic' | 'unique',
                 scrollTo: 'inventory-panel',

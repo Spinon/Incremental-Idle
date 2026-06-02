@@ -787,6 +787,16 @@ export const ALL_SPELLS: Spell[] = [
   },
 ]
 
+export function arcaneSpellName(wordId1: string, wordId2: string): string {
+  const w1 = WORD_MAP.get(wordId1)
+  const w2 = WORD_MAP.get(wordId2)
+  return `${w1?.nameEn ?? wordId1} ${w2?.nameEn ?? wordId2}`
+}
+
+for (const spell of ALL_SPELLS) {
+  spell.name = arcaneSpellName(spell.word1Id, spell.word2Id)
+}
+
 export const SPELL_MAP = new Map(ALL_SPELLS.map(s => [s.id, s]))
 
 // ─── Per-word icons (used as icon fallback for generated spells) ──────────────
@@ -979,9 +989,10 @@ function generateFallbackSpell(wordId1: string, wordId2: string): Spell {
   let description: string
 
   if (SPECIFIC_DESC[key]) {
-    ;[spellName, description] = SPECIFIC_DESC[key]
+    ;[, description] = SPECIFIC_DESC[key]
+    spellName = arcaneSpellName(a, b)
   } else {
-    spellName = `${w1.namePt} ${w2.namePt}`
+    spellName = arcaneSpellName(a, b)
     if (cat1 === 'element' && cat2 === 'element') {
       description = ELEM_ELEM_TEMPLATES[hash % ELEM_ELEM_TEMPLATES.length]
     } else if (cat1 === 'form' && cat2 === 'form') {

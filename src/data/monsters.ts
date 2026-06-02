@@ -3,6 +3,8 @@ import type { MonsterTemplate } from '../types/monster'
 export const FOREST_MONSTERS: MonsterTemplate[] = [
   {
     id: 'goblin',
+    namePt: 'Goblin',
+    nameEn: 'Goblin',
     name: 'Goblin',
     emoji: '👺',
     basePoints: 5,
@@ -14,6 +16,8 @@ export const FOREST_MONSTERS: MonsterTemplate[] = [
   },
   {
     id: 'wolf',
+    namePt: 'Lobo',
+    nameEn: 'Wolf',
     name: 'Lobo',
     emoji: '🐺',
     basePoints: 5,
@@ -25,6 +29,8 @@ export const FOREST_MONSTERS: MonsterTemplate[] = [
   },
   {
     id: 'slime',
+    namePt: 'Slime',
+    nameEn: 'Slime',
     name: 'Slime',
     emoji: '🫧',
     basePoints: 7,
@@ -38,6 +44,8 @@ export const FOREST_MONSTERS: MonsterTemplate[] = [
   },
   {
     id: 'bandit',
+    namePt: 'Bandido',
+    nameEn: 'Bandit',
     name: 'Bandido',
     emoji: '🗡️',
     basePoints: 5,
@@ -49,6 +57,8 @@ export const FOREST_MONSTERS: MonsterTemplate[] = [
   },
   {
     id: 'giant_spider',
+    namePt: 'Aranha Gigante',
+    nameEn: 'Giant Spider',
     name: 'Aranha Gigante',
     emoji: '🕷️',
     basePoints: 5,
@@ -63,6 +73,10 @@ export const FOREST_MONSTERS: MonsterTemplate[] = [
 ]
 
 export const FOREST_MONSTER_MAP = new Map(FOREST_MONSTERS.map(m => [m.id, m]))
+
+export function monsterName(template: MonsterTemplate, isEn: boolean): string {
+  return isEn ? template.nameEn : template.namePt
+}
 
 export function pickForestMonster(): MonsterTemplate {
   return FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)]

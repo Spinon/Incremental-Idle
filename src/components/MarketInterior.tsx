@@ -486,8 +486,13 @@ export default function MarketInterior() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={cn('text-[12px] font-bold', rarityText[word.rarity])}>
-                            {isEn ? word.nameEn : word.namePt}
+                            {word.nameEn}
                           </span>
+                          {!isEn && word.namePt !== word.nameEn && (
+                            <span className="text-[9px] text-indigo-500/60">
+                              {word.namePt}
+                            </span>
+                          )}
                           <span className={cn('text-[8px] font-semibold uppercase tracking-widest', rarityText[word.rarity])}>
                             {rarLbl}
                           </span>

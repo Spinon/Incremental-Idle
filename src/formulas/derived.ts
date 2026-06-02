@@ -16,6 +16,7 @@ const BASE = {
   moveSpeed: 1,
   vision: 100,
   dropChance: 0.025,
+  critChance: 0.05,
   goldMultiplier: 1,
   xpBonus: 1,
 }
@@ -61,7 +62,7 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
 
     // ── Advanced combat ──────────────────────────────────────────────────────
     //  Destreza: precision → critical hits + all-damage reduction (technique)
-    critChance:      Math.min(0.50, fa.destreza * 0.005),
+    critChance:      Math.min(0.50, BASE.critChance + fa.destreza * 0.006),
     critDamage:      1.5 + fa.forca * 0.01,        // Força amplifies crit damage
     damageReduction: Math.min(0.35, fa.destreza * 0.01),
     healBonus:       1 + fa.sabedoria * 0.02,       // Sabedoria: heal potency

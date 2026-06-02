@@ -5,6 +5,7 @@ import { ALL_WORDS, LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
 import { findSpell, SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
 import type { Word, Spell, SpellRarity } from '../types/spell'
+import { useSettingsStore } from '../store/settingsStore'
 
 // ─── Rarity styling ───────────────────────────────────────────────────────────
 const RARITY_BORDER: Record<SpellRarity, string> = {
@@ -48,6 +49,7 @@ function WordCard({ word, isSelected, onClick }: {
   isSelected: boolean
   onClick: () => void
 }) {
+  const isEn = useSettingsStore(s => s.lang === 'en')
   return (
     <button
       onClick={onClick}
@@ -57,14 +59,16 @@ function WordCard({ word, isSelected, onClick }: {
         RARITY_BG[word.rarity],
         isSelected && 'ring-2 ring-offset-1 ring-white dark:ring-slate-300 shadow-lg scale-105',
       )}
-      title={`${word.nameEn} — ${word.namePt}`}
+      title={isEn || word.namePt === word.nameEn ? word.nameEn : `${word.nameEn} — ${word.namePt}`}
     >
       <span className={cn('text-[11px] font-black tracking-wide', RARITY_TEXT[word.rarity])}>
         {word.nameEn}
       </span>
-      <span className="text-[8px] text-slate-400 dark:text-slate-500 mt-0.5">
-        {word.namePt}
-      </span>
+      {!isEn && word.namePt !== word.nameEn && (
+        <span className="text-[8px] text-slate-400 dark:text-slate-500 mt-0.5">
+          {word.namePt}
+        </span>
+      )}
       <span className={cn('text-[7px] uppercase tracking-widest mt-1 font-semibold opacity-60', RARITY_TEXT[word.rarity])}>
         {word.category === 'element' ? 'Elem' : 'Forma'}
       </span>

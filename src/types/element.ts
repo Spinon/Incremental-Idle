@@ -197,3 +197,18 @@ export const STATUS_LABEL_PT: Record<StatusType, string> = {
   marked:     'Marcado',          // eternum: recebe 1.5× dano
   distortion: 'Distorção',        // tempus:  força e destreza trocadas
 }
+
+export const STATUS_LABEL_EN: Record<StatusType, string> = {
+  burn:       'Burning',
+  freeze:     'Frozen',
+  shock:      'Shocked',
+  curse:      'Cursed',
+  blind:      'Blinded',
+  poison:     'Poisoned',
+  doom:       'Doomed',
+  regen:      'Regenerating',
+  blessed:    'Blessed',
+  gravity:    'Gravity',
+  marked:     'Marked',
+  distortion: 'Distortion',
+}

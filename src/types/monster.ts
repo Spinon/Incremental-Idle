@@ -13,6 +13,9 @@ import type { ElementType } from './element'
 
 export interface MonsterTemplate {
   id:             string
+  namePt:         string
+  nameEn:         string
+  /** Backward-compatible default display name. Prefer namePt/nameEn in UI. */
   name:           string
   emoji:          string
   /** Attribute points distributed at level 0 */

@@ -4,8 +4,8 @@ import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useUIStore } from '../store/uiStore'
-import { FOREST_MONSTER_MAP } from '../data/monsters'
-import { MONSTER_RARITY_COLOR, MONSTER_RARITY_LABEL } from '../formulas/monsters'
+import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
+import { MONSTER_RARITY_COLOR, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN } from '../formulas/monsters'
 import type { MonsterRarity } from '../types/monster'
 import { cn } from '../lib/utils'
 
@@ -115,8 +115,10 @@ export default function HouseInterior() {
                 defeatSnapshot.killerName.includes('[Rare')    ? 'rare'     :
                 defeatSnapshot.killerName.includes('[Incomum') ? 'uncommon' :
                 defeatSnapshot.killerName.includes('[Uncommon')? 'uncommon' : 'normal'
-              const rarityLabel = MONSTER_RARITY_LABEL[killerRarity]
+              const rarityLabel = isEn ? MONSTER_RARITY_LABEL_EN[killerRarity] : MONSTER_RARITY_LABEL[killerRarity]
               const rarityColor = MONSTER_RARITY_COLOR[killerRarity] || 'text-slate-300'
+              const killerDisplayName = template ? monsterName(template, isEn) : defeatSnapshot.killerName
+              const displayLogName = (name: string) => name === heroName ? name : killerDisplayName
               return (
                 <div className="w-full rounded-xl border border-red-900/40 bg-slate-950/60 p-3 flex flex-col gap-2">
                   {/* Killer info */}
@@ -127,7 +129,7 @@ export default function HouseInterior() {
                     <span className="text-xl leading-none">{template?.emoji ?? '⚔'}</span>
                     <span className={cn('text-sm font-bold', rarityColor)}>
                       {rarityLabel && <span className="text-[10px] mr-1 opacity-80">[{rarityLabel}]</span>}
-                      {template?.name ?? defeatSnapshot.killerName}
+                      {killerDisplayName}
                     </span>
                     <span className="text-xs text-red-400 font-bold bg-red-950/50 px-1.5 py-0.5 rounded-full">
                       Nv.{defeatSnapshot.killerLevel}
@@ -144,6 +146,7 @@ export default function HouseInterior() {
                         const isHero = entry.attacker === heroName
                         if (entry.spell) {
                           const { spell } = entry
+                          const spellName = isEn ? (spell.nameEn ?? spell.name) : spell.name
                           const color =
                             spell.effectType === 'damage'  ? 'text-orange-400/80 bg-orange-950/20'
                             : spell.effectType === 'heal'  ? 'text-emerald-400/80 bg-emerald-950/20'
@@ -153,7 +156,7 @@ export default function HouseInterior() {
                           return (
                             <div key={i} className={cn('text-[10px] px-2 py-0.5 rounded flex items-center gap-1', color)}>
                               <span>{spell.icon}</span>
-                              <span className="font-semibold">{spell.name}</span>
+                              <span className="font-semibold">{spellName}</span>
                               {spell.value > 0 && (
                                 <span className="ml-auto font-bold">
                                   {spell.effectType === 'heal' ? `+${spell.value}` : `-${spell.value}`}
@@ -168,11 +171,11 @@ export default function HouseInterior() {
                             isHero ? 'text-blue-400/80 bg-blue-950/20' : 'text-red-400/80 bg-red-950/20',
                           )}>
                             {entry.missed
-                              ? <span className="italic">{entry.attacker} <span className="font-bold">MISS</span></span>
+                              ? <span className="italic">{displayLogName(entry.attacker)} <span className="font-bold">MISS</span></span>
                               : <>
-                                  <span className="font-semibold">{entry.attacker}</span>
+                                  <span className="font-semibold">{displayLogName(entry.attacker)}</span>
                                   <span className="opacity-40">→</span>
-                                  <span>{entry.defender}</span>
+                                  <span>{displayLogName(entry.defender)}</span>
                                   <span className={cn(
                                     'ml-auto font-bold flex items-center gap-0.5',
                                     entry.isCrit && 'text-amber-300',

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { STATUS_ICONS, STATUS_COLOR, STATUS_LABEL_PT } from '../types/element'
+import { STATUS_ICONS, STATUS_COLOR, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
 import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
+import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
 import { getDerivedStats } from '../formulas/derived'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -64,6 +65,8 @@ const DEATH_RARITY_COLOR = {
   unique: 'text-orange-300',
 } as const
 
+const SEEN_DEATH_KEY = 'incremental_idle_seen_death_id'
+
 function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean }) {
   return (
     <div className="w-full rounded-xl border border-slate-700/70 bg-slate-950/95 shadow-xl overflow-hidden">
@@ -83,6 +86,8 @@ function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean 
       ) : (
         <div className="max-h-64 overflow-y-auto p-2 flex flex-col gap-1.5">
           {deaths.map((death) => {
+            const template = FOREST_MONSTER_MAP.get(death.monsterType)
+            const deathMonsterName = template ? monsterName(template, isEn) : death.monsterName
             const rarityLabel = isEn
               ? DEATH_RARITY_LABEL_EN[death.monsterRarity]
               : DEATH_RARITY_LABEL_PT[death.monsterRarity]
@@ -96,7 +101,7 @@ function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean 
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-base leading-none">🪦</span>
                   <p className="text-[11px] font-bold text-slate-200 truncate flex-1">
-                    {death.monsterName}
+                    {deathMonsterName}
                   </p>
                   <span className="text-[10px] font-black text-red-300 tabular-nums">
                     Lv.{death.monsterLevel}
@@ -195,6 +200,16 @@ export default function BattleArena() {
   const mana            = useHeroStore(s => s.mana)
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
+  const statusLabels = isEn ? STATUS_LABEL_EN : STATUS_LABEL_PT
+  const enemyDisplayName = isEn
+    ? (store.enemy.nameEn ?? store.enemy.name)
+    : (store.enemy.namePt ?? store.enemy.name)
+  const displayLogName = useCallback((name: string) => {
+    if (name === store.enemy.name || name === store.enemy.namePt || name === store.enemy.nameEn) {
+      return enemyDisplayName
+    }
+    return name
+  }, [enemyDisplayName, store.enemy.name, store.enemy.nameEn, store.enemy.namePt])
 
   const showMini       = useUIStore(s => s.showMiniPlayer)
   const toggleMini     = useUIStore(s => s.toggleMiniPlayer)
@@ -222,7 +237,19 @@ export default function BattleArena() {
 
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const [showDeathLog, setShowDeathLog] = useState(false)
+  const [seenDeathId, setSeenDeathId] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.localStorage.getItem(SEEN_DEATH_KEY) ?? ''
+  })
   const autoConfigRef = useRef<HTMLDivElement>(null)
+  const latestDeathId = deathHistory[0]?.id ?? ''
+  const hasUnseenDeath = latestDeathId !== '' && latestDeathId !== seenDeathId
+
+  const markDeathsSeen = useCallback(() => {
+    if (!latestDeathId) return
+    setSeenDeathId(latestDeathId)
+    window.localStorage.setItem(SEEN_DEATH_KEY, latestDeathId)
+  }, [latestDeathId])
 
   const closeAutoConfig = useCallback((e: MouseEvent) => {
     if (autoConfigRef.current && !autoConfigRef.current.contains(e.target as Node)) {
@@ -234,6 +261,10 @@ export default function BattleArena() {
     if (showAutoConfig) document.addEventListener('mousedown', closeAutoConfig)
     return () => document.removeEventListener('mousedown', closeAutoConfig)
   }, [showAutoConfig, closeAutoConfig])
+
+  useEffect(() => {
+    if (showDeathLog) markDeathsSeen()
+  }, [showDeathLog, markDeathsSeen])
 
   function useQuickslot(c: Consumable) {
     removeConsumable(c.id)
@@ -435,7 +466,7 @@ export default function BattleArena() {
               {store.heroStatuses.map(s => (
                 <span
                   key={s.element}
-                  title={`${STATUS_LABEL_PT[s.type]} — ${s.turnsLeft}t restantes`}
+                  title={`${statusLabels[s.type]} — ${s.turnsLeft}t${isEn ? ' left' : ' restantes'}`}
                   className={cn(
                     'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
                     'bg-slate-900/70 border border-slate-700/50',
@@ -468,7 +499,7 @@ export default function BattleArena() {
               {store.enemyStatuses.map(s => (
                 <span
                   key={s.element}
-                  title={`${STATUS_LABEL_PT[s.type]}${s.power > 1 ? ` (${s.power}/t)` : ''} — ${s.turnsLeft}t`}
+                  title={`${statusLabels[s.type]}${s.power > 1 ? ` (${s.power}/t)` : ''} — ${s.turnsLeft}t${isEn ? ' left' : ''}`}
                   className={cn(
                     'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
                     'bg-slate-900/80 border border-slate-700/50',
@@ -485,7 +516,7 @@ export default function BattleArena() {
             </div>
           )}
           <HpBar
-            name={store.enemy.name}
+            name={enemyDisplayName}
             level={store.enemy.level}
             current={store.enemy.hp}
             max={store.enemy.maxHp}
@@ -797,10 +828,13 @@ export default function BattleArena() {
           : store.log.map((entry, i) => {
               const isPlayerAttacker = entry.attacker === store.player.name
               const isNew = i === 0
+              const attackerName = displayLogName(entry.attacker)
+              const defenderName = displayLogName(entry.defender)
 
               // ── Spell entry ──────────────────────────────────────────────
               if (entry.spell) {
                 const { spell } = entry
+                const spellName = isEn ? (spell.nameEn ?? spell.name) : spell.name
                 const bgClass =
                   spell.effectType === 'damage'  ? (isNew ? 'bg-orange-50/70 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-600')
                   : spell.effectType === 'heal'   ? (isNew ? 'bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-600')
@@ -810,7 +844,7 @@ export default function BattleArena() {
                 return (
                   <div key={i} className={cn('text-[11px] leading-tight py-0.5 px-1.5 rounded mb-0.5 flex items-center gap-1', bgClass)}>
                     <span className="shrink-0">{spell.icon}</span>
-                    <span className={cn('truncate', isNew && 'font-semibold')}>{spell.name}</span>
+                    <span className={cn('truncate', isNew && 'font-semibold')}>{spellName}</span>
                     {spell.value > 0 && (
                       <span className={cn('ml-auto font-bold tabular-nums shrink-0', isNew && (
                         spell.effectType === 'damage' ? 'text-orange-600 dark:text-orange-300'
@@ -836,11 +870,11 @@ export default function BattleArena() {
                     : 'text-slate-400 dark:text-slate-600',
                 )}>
                   {entry.missed
-                    ? <span>{entry.attacker} <span className="font-bold">MISS</span></span>
+                    ? <span>{attackerName} <span className="font-bold">MISS</span></span>
                     : <>
-                        <span className={isNew ? 'font-semibold' : ''}>{entry.attacker}</span>
+                        <span className={isNew ? 'font-semibold' : ''}>{attackerName}</span>
                         <span className="opacity-40">→</span>
-                        <span className={isNew ? 'font-semibold' : ''}>{entry.defender}</span>
+                        <span className={isNew ? 'font-semibold' : ''}>{defenderName}</span>
                         <span className={cn(
                           'ml-auto font-bold tabular-nums shrink-0 flex items-center gap-0.5',
                           entry.isCrit
@@ -862,7 +896,10 @@ export default function BattleArena() {
 
       <div className="mt-2 flex flex-col gap-2">
         <button
-          onClick={() => setShowDeathLog(v => !v)}
+          onClick={() => {
+            setShowDeathLog(v => !v)
+            markDeathsSeen()
+          }}
           title={isEn ? 'Death history' : 'Histórico de mortes'}
           className={cn(
             'self-start h-8 px-2.5 rounded-lg text-sm flex items-center gap-1.5 transition-colors border',
@@ -876,7 +913,12 @@ export default function BattleArena() {
             {isEn ? 'Deaths' : 'Mortes'}
           </span>
           {deathHistory.length > 0 && (
-            <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+            <span className={cn(
+              'min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center leading-none transition-colors',
+              hasUnseenDeath
+                ? 'bg-red-600 text-white shadow-[0_0_8px_rgba(220,38,38,0.45)]'
+                : 'border border-amber-500/40 text-amber-500/80 bg-transparent',
+            )}>
               {deathHistory.length}
             </span>
           )}
