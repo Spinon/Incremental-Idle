@@ -70,10 +70,11 @@ export default function MapSection() {
 
   const maxDeck = Math.min(8, 3 + Math.floor(derived.vision / 50))
 
-  const activeQuests = useQuestStore(s => s.quests.filter(q => q.status === 'active'))
+  const allQuests    = useQuestStore(s => s.quests)
   const questMarkers = useMemo<QuestMapMarker[]>(() => {
     const markers: QuestMapMarker[] = []
-    for (const q of activeQuests) {
+    for (const q of allQuests) {
+      if (q.status !== 'active') continue
       const obj = q.objective
       if (obj.type === 'escort') {
         if (!obj.reached)
@@ -98,7 +99,7 @@ export default function MapSection() {
       }
     }
     return markers
-  }, [activeQuests])
+  }, [allQuests])
 
   const isPanned     = cameraPos.x !== playerPos.x || cameraPos.y !== playerPos.y
   const selectedTile = selectedPos ? (grid[gridKey(selectedPos.x, selectedPos.y)] ?? null) : null
