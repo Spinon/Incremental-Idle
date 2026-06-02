@@ -131,35 +131,39 @@ function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean 
   )
 }
 
-function PlayerManaBar({
+function ResourceBar({
   current,
   max,
-  regen,
   label,
+  regen,
+  color = 'bg-blue-500',
+  borderColor = 'border-blue-300/60 dark:border-blue-700/60',
 }: {
   current: number
   max: number
-  regen: number
   label: string
+  regen?: number
+  color?: string
+  borderColor?: string
 }) {
   const pct = Math.max(0, Math.min(100, (current / max) * 100))
 
   return (
-    <div className="w-44 flex flex-col gap-1">
-      <div className="relative w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-blue-300/60 dark:border-blue-700/60 shadow-inner">
+    <div className="w-44 flex flex-col">
+      <div className={cn('relative w-full h-4 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border shadow-inner', borderColor)}>
         <div
-          className="h-full rounded-full transition-[width] duration-200 bg-blue-500"
+          className={cn('h-full rounded-full transition-[width] duration-200', color)}
           style={{ width: `${pct}%` }}
         />
         <div
           className="absolute inset-0 rounded-full"
           style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, transparent 60%)' }}
         />
-        <span className="absolute inset-0 flex items-center justify-between px-2 text-[8px] font-bold tabular-nums select-none text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.75)]">
+        <span className="absolute inset-0 flex items-center justify-between px-2 text-[9px] font-bold tabular-nums select-none text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.75)]">
           <span>{label}</span>
           <span>
             {Math.floor(current)}/{Math.round(max)}
-            <span className="ml-1 text-white/65">+{regen.toFixed(1)}/s</span>
+            {regen !== undefined && <span className="ml-1 text-white/65">+{regen.toFixed(1)}/s</span>}
           </span>
         </span>
       </div>
@@ -201,9 +205,20 @@ export default function BattleArena() {
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
   const statusLabels = isEn ? STATUS_LABEL_EN : STATUS_LABEL_PT
+  const currentEnemyTemplate = FOREST_MONSTER_MAP.get(store.enemy.monsterType ?? '')
   const enemyDisplayName = isEn
-    ? (store.enemy.nameEn ?? store.enemy.name)
-    : (store.enemy.namePt ?? store.enemy.name)
+    ? (currentEnemyTemplate?.nameEn ?? store.enemy.nameEn ?? store.enemy.name)
+    : (currentEnemyTemplate?.namePt ?? store.enemy.namePt ?? store.enemy.name)
+  const enemyRarityLabel = store.enemy.rarity && store.enemy.rarity !== 'normal'
+    ? (isEn ? DEATH_RARITY_LABEL_EN[store.enemy.rarity] : DEATH_RARITY_LABEL_PT[store.enemy.rarity])
+    : null
+  const enemyModifierText = [
+    enemyRarityLabel,
+    store.enemy.enraged ? (isEn ? 'Enraged' : 'Furioso') : null,
+  ].filter(Boolean).join(' · ')
+  const heroModifierText = isEn ? 'Adventurer' : 'Aventureiro'
+  const levelLabel = isEn ? 'Lv.' : 'Nv.'
+  const enemyResourceLabel = isEn ? 'Fury' : 'Fúria'
   const displayLogName = useCallback((name: string) => {
     if (name === store.enemy.name || name === store.enemy.namePt || name === store.enemy.nameEn) {
       return enemyDisplayName
@@ -452,17 +467,26 @@ export default function BattleArena() {
         )}
 
         {/* Player */}
-        <div className="absolute left-10 bottom-[72px] flex flex-col items-start gap-2">
-          <HpBar name={store.player.name} current={store.player.hp} max={store.player.maxHp} side="player" />
-          <PlayerManaBar
-            current={mana}
-            max={derivedStats.maxMana}
-            regen={derivedStats.manaRegen * store.speed}
-            label={t.mana}
-          />
+        <div className="absolute left-10 top-10 flex flex-col items-start gap-1">
+          <div className="flex flex-col gap-0.5 items-start">
+            <HpBar
+              name={store.player.name}
+              current={store.player.hp}
+              max={store.player.maxHp}
+              side="player"
+              modifierText={heroModifierText}
+              modifierColor="text-sky-400/80"
+            />
+            <ResourceBar
+              current={mana}
+              max={derivedStats.maxMana}
+              regen={derivedStats.manaRegen * store.speed}
+              label={t.mana}
+            />
+          </div>
           {/* Hero elemental statuses (regen, blessed…) */}
           {store.heroStatuses.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="absolute left-[64px] top-[120px] w-[150px] flex flex-wrap gap-1 justify-start">
               {store.heroStatuses.map(s => (
                 <span
                   key={s.element}
@@ -484,7 +508,7 @@ export default function BattleArena() {
           )}
           <div
             key={`player-${store.turn}`}
-            className={isPlayerAttacking ? 'anim-attack-right' : ''}
+            className={cn('absolute left-0 top-[128px]', isPlayerAttacking && 'anim-attack-right')}
             style={isPlayerAttacking ? { animationDuration: attackDur } : undefined}
           >
             <UnitSprite side="player" isHit={playerHit} hitDuration={hitDur} />
@@ -492,10 +516,43 @@ export default function BattleArena() {
         </div>
 
         {/* Enemy */}
-        <div className="absolute right-10 bottom-[72px] flex flex-col items-end gap-2">
+        <div className="absolute right-10 top-10 flex flex-col items-end gap-1">
+          <div className="flex flex-col gap-0.5 items-end">
+            <HpBar
+              name={enemyDisplayName}
+              level={store.enemy.level}
+              levelLabel={levelLabel}
+              current={store.enemy.hp}
+              max={store.enemy.maxHp}
+              side="enemy"
+              rarityColor={
+                store.enemy.rarity === 'unique'   ? 'text-orange-400' :
+                store.enemy.rarity === 'epic'     ? 'text-purple-400' :
+                store.enemy.rarity === 'rare'     ? 'text-blue-400'   :
+                store.enemy.rarity === 'uncommon' ? 'text-green-400'  :
+                undefined
+              }
+              modifierText={enemyModifierText}
+              modifierColor={
+                store.enemy.enraged ? 'text-red-400' :
+                store.enemy.rarity === 'unique'   ? 'text-orange-400' :
+                store.enemy.rarity === 'epic'     ? 'text-purple-400' :
+                store.enemy.rarity === 'rare'     ? 'text-blue-400'   :
+                store.enemy.rarity === 'uncommon' ? 'text-green-400'  :
+                undefined
+              }
+            />
+            <ResourceBar
+              current={100}
+              max={100}
+              label={enemyResourceLabel}
+              color="bg-red-500"
+              borderColor="border-red-300/60 dark:border-red-800/70"
+            />
+          </div>
           {/* Enemy elemental statuses */}
           {store.enemyStatuses.length > 0 && (
-            <div className="flex flex-wrap gap-1 justify-end">
+            <div className="absolute right-[64px] top-[120px] w-[150px] flex flex-wrap gap-1 justify-end">
               {store.enemyStatuses.map(s => (
                 <span
                   key={s.element}
@@ -515,23 +572,9 @@ export default function BattleArena() {
               ))}
             </div>
           )}
-          <HpBar
-            name={enemyDisplayName}
-            level={store.enemy.level}
-            current={store.enemy.hp}
-            max={store.enemy.maxHp}
-            side="enemy"
-            rarityColor={
-              store.enemy.rarity === 'unique'   ? 'text-orange-400' :
-              store.enemy.rarity === 'epic'     ? 'text-purple-400' :
-              store.enemy.rarity === 'rare'     ? 'text-blue-400'   :
-              store.enemy.rarity === 'uncommon' ? 'text-green-400'  :
-              undefined
-            }
-          />
           <div
             key={`enemy-${store.turn}`}
-            className={isEnemyAttacking ? 'anim-attack-left' : ''}
+            className={cn('absolute right-0 top-[136px]', isEnemyAttacking && 'anim-attack-left')}
             style={isEnemyAttacking ? { animationDuration: attackDur } : undefined}
           >
             <UnitSprite

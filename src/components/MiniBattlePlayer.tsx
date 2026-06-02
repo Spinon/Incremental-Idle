@@ -265,7 +265,7 @@ export default function MiniBattlePlayer() {
 
   const playerLabel = player.name
   const enemyName   = isEn ? (enemy.nameEn ?? enemy.name) : (enemy.namePt ?? enemy.name)
-  const enemyLabel  = `${enemyName}  Nv.${enemy.level}`
+  const enemyLabel  = `${enemyName}  ${isEn ? 'Lv.' : 'Nv.'}${enemy.level}`
   const enemyVisual = enemyTemplate && MONSTER_PIXEL_SPRITES[enemyTemplate.id]
     ? (
       <MonsterSprite
