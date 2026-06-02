@@ -10,12 +10,13 @@ import { useSettingsStore } from '../../store/settingsStore'
 import MapViewport from './MapViewport'
 import TileDeck from './TileDeck'
 import { cn } from '../../lib/utils'
-import type { PlacedTile, TileContent } from '../../types/map'
+import type { PlacedTile } from '../../types/map'
 import type { MonsterRarity } from '../../types/monster'
 
 const ZOOM_MIN = 0.30
 const ZOOM_MAX = 2.50
 const ZOOM_STEP = 0.05
+const MAP_VIEWPORT_HEIGHT = 468
 
 function clampZoom(z: number) {
   return Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100
@@ -81,6 +82,13 @@ export default function MapSection() {
     } else {
       setSelectedPos({ x, y })
     }
+  }
+
+  function handleEnemySelect(x: number, y: number) {
+    if (!grid[gridKey(x, y)]) return
+    setDestination(x, y)
+    setSelectedPos({ x, y })
+    setCameraPos({ x, y })
   }
 
   return (
@@ -243,13 +251,12 @@ export default function MapSection() {
         <div className="flex-1 min-w-0">
           <NearbyPanel
             grid={grid}
-            sightedCells={sightedCells}
             playerPos={playerPos}
             visRadius={visRadius}
             heroLevel={heroLevel}
             tilesPlaced={tilesPlaced}
             selectedPos={selectedPos}
-            onSelect={(x, y) => handleTileClick(x, y)}
+            onSelect={handleEnemySelect}
           />
         </div>
       </div>
@@ -266,14 +273,12 @@ interface NearbyEntry {
   monsterRarity: MonsterRarity
   explored: boolean
   dist: number
-  fromGrid: boolean
   /** Pre-computed display stats (stable, no Math.random jitter per-render). */
   stats: { hp: number; atk: number; def: number }
 }
 
 interface NearbyPanelProps {
   grid: Record<string, PlacedTile>
-  sightedCells: Record<string, TileContent>
   playerPos: { x: number; y: number }
   visRadius: number
   heroLevel: number
@@ -282,9 +287,10 @@ interface NearbyPanelProps {
   onSelect(x: number, y: number): void
 }
 
-function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, tilesPlaced, selectedPos, onSelect }: NearbyPanelProps) {
+function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selectedPos, onSelect }: NearbyPanelProps) {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
+  const [collapsed, setCollapsed] = useState(false)
 
   const entries = useMemo<NearbyEntry[]>(() => {
     const result: NearbyEntry[] = []
@@ -303,28 +309,7 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, tile
       result.push({
         x: tile.x, y: tile.y, level: lvl,
         monsterType: mType, monsterRarity: mRarity,
-        explored: tile.explored, dist, fromGrid: true,
-        stats: { hp: monster.maxHp, atk: monster.atk, def: monster.def },
-      })
-    }
-
-    // Collect from sighted (unplaced) cells
-    for (const [key, content] of Object.entries(sightedCells)) {
-      if (content.type !== 'monster') continue
-      const [x, y] = key.split(',').map(Number)
-      const dist = Math.max(Math.abs(x - playerPos.x), Math.abs(y - playerPos.y))
-      if (dist > revealRange) continue
-      // Skip if there's already a grid tile at this position
-      if (grid[key]) continue
-      const lvl      = content.monsterLevel ?? 1
-      const mType    = content.monsterType ?? 'goblin'
-      const mRarity  = (content.monsterRarity ?? 'normal') as MonsterRarity
-      const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
-      const monster  = buildMonster(template, lvl, mRarity, tilesPlaced)
-      result.push({
-        x, y, level: lvl,
-        monsterType: mType, monsterRarity: mRarity,
-        explored: false, dist, fromGrid: false,
+        explored: tile.explored, dist,
         stats: { hp: monster.maxHp, atk: monster.atk, def: monster.def },
       })
     }
@@ -337,35 +322,58 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, tile
     })
 
     return result
-  }, [grid, sightedCells, playerPos, visRadius, tilesPlaced])
+  }, [grid, playerPos, visRadius, tilesPlaced])
 
-  if (entries.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-3 h-full flex items-center justify-center min-h-[120px]">
-        <p className="text-[10px] text-slate-400 dark:text-slate-600 italic text-center">
-          {isEn ? 'No enemies in sight' : 'Nenhum inimigo à vista'}
-        </p>
-      </div>
-    )
-  }
+  const unexploredCount = entries.filter(e => !e.explored).length
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-2 flex flex-col gap-1">
-      <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold px-1 mb-0.5">
+    <div
+      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 flex flex-col min-w-0 overflow-hidden"
+      style={{ maxHeight: MAP_VIEWPORT_HEIGHT }}
+    >
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        className="h-9 px-3 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/70 text-left hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors"
+        title={collapsed ? (isEn ? 'Show nearby enemies' : 'Mostrar inimigos próximos') : (isEn ? 'Hide nearby enemies' : 'Ocultar inimigos próximos')}
+      >
+        <span className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
+          {isEn ? 'Nearby enemies' : 'Inimigos próximos'}
+        </span>
+        <span className="ml-auto text-[10px] text-slate-500 dark:text-slate-500 tabular-nums">
+          {unexploredCount}/{entries.length}
+        </span>
+        <span className="w-4 text-center text-xs text-slate-500 dark:text-slate-400">
+          {collapsed ? '+' : '-'}
+        </span>
+      </button>
+      <p className="hidden">
         {isEn ? 'Nearby enemies' : 'Inimigos próximos'}
       </p>
-      {entries.map(e => {
+      {!collapsed && entries.length === 0 && (
+        <div className="p-3 flex items-center justify-center min-h-[120px]">
+          <p className="text-[10px] text-slate-400 dark:text-slate-600 italic text-center">
+            {isEn ? 'No enemies in sight' : 'Nenhum inimigo a vista'}
+          </p>
+        </div>
+      )}
+
+      {!collapsed && entries.length > 0 && (
+        <div className="p-2 flex flex-col gap-1 overflow-y-auto min-h-0">
+          {entries.map(e => {
         const template    = FOREST_MONSTER_MAP.get(e.monsterType) ?? FOREST_MONSTERS[0]
         const rarityLabel = MONSTER_RARITY_LABEL[e.monsterRarity]
         const rarityColor = MONSTER_RARITY_COLOR[e.monsterRarity]
         const isSelected  = selectedPos?.x === e.x && selectedPos?.y === e.y
         const isPlayer    = playerPos.x === e.x && playerPos.y === e.y
+        const statusLabel = e.explored
+          ? (isEn ? 'Explored' : 'Explorado')
+            : (isEn ? 'Unexplored' : 'Não explorado')
 
         return (
           <button
             key={`${e.x},${e.y}`}
-            onClick={() => e.fromGrid && onSelect(e.x, e.y)}
-            disabled={!e.fromGrid}
+            onClick={() => onSelect(e.x, e.y)}
+            title={isEn ? 'Set as movement target' : 'Definir como alvo de movimento'}
             className={cn(
               'w-full text-left rounded-lg px-2 py-1.5 border transition-colors',
               isSelected
@@ -374,7 +382,6 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, tile
                   ? 'border-indigo-400/50 bg-indigo-50 dark:bg-indigo-950/20'
                   : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600/40 hover:bg-slate-100 dark:hover:bg-slate-800/40',
               e.explored && 'opacity-50',
-              !e.fromGrid && 'cursor-default',
             )}
           >
             <div className="flex items-center gap-1.5 min-w-0">
@@ -392,12 +399,15 @@ function NearbyPanel({ grid, sightedCells, playerPos, visRadius, heroLevel, tile
               <span className="text-orange-500/80">⚔ {e.stats.atk}</span>
               <span className="text-blue-500/70">🛡 {e.stats.def}</span>
               <span className="text-slate-400">({e.x},{e.y})</span>
-              {e.explored && <span className="text-green-600 font-semibold">{isEn ? 'Defeated' : 'Derrotado'}</span>}
-              {!e.fromGrid && <span className="text-slate-400 italic">{isEn ? 'uncharted' : 'não mapeado'}</span>}
+              <span className={cn('font-semibold', e.explored ? 'text-green-600' : 'text-sky-500')}>
+                {statusLabel}
+              </span>
             </div>
           </button>
         )
-      })}
+          })}
+        </div>
+      )}
     </div>
   )
 }

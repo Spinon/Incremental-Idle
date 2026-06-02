@@ -36,6 +36,7 @@ export default function MapViewport({
   grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, onDrop, onTileClick, onCameraChange, onZoom,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
+  const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
   const visRadius = Math.max(2, Math.round(vision / 38))
 
   // Camera is stored directly in grid units — no rounding, no player follow
@@ -166,6 +167,7 @@ export default function MapViewport({
               isSelected={!!(selectedPos?.x === gx && selectedPos?.y === gy)}
               heroLevel={heroLevel}
               visibility={vis}
+              tileSize={tilePx}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
                 onTileClick(gx, gy)
@@ -190,9 +192,9 @@ export default function MapViewport({
                   'absolute inset-0 flex items-center justify-center pointer-events-none z-10',
                   vis === 'clear' ? 'opacity-60' : 'opacity-30',
                 )}>
-                  {sight.type === 'monster'  && <MonsterIcon  size={20} />}
-                  {sight.type === 'treasure' && <TreasureIcon size={20} />}
-                  {sight.type === 'market'   && <MarketIcon   size={20} />}
+                  {sight.type === 'monster'  && <MonsterIcon  size={previewIconSize} />}
+                  {sight.type === 'treasure' && <TreasureIcon size={previewIconSize} />}
+                  {sight.type === 'market'   && <MarketIcon   size={previewIconSize} />}
                 </div>
               )}
               {vis === 'penumbra' && (

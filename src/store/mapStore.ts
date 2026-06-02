@@ -41,6 +41,72 @@ function heroRelativeLevel(heroLevel: number): number {
   return Math.max(1, heroLevel + offset)
 }
 
+function enragedLevelBonus(tilesPlaced: number): number {
+  const maxBonus = Math.max(2, Math.ceil(tilesPlaced / 100 + 1))
+  return 1 + Math.floor(Math.random() * maxBonus)
+}
+
+interface TileEnemyQueue {
+  level: number
+  baseLevel: number
+  type?: string
+  rarity?: MonsterRarity
+  tilesPlaced: number
+  enraged: boolean
+}
+
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'tilesPlaced'>
+
+function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEnemyQueue | null {
+  if (tile.content.type === 'market') return null
+
+  const baseLevel        = Math.max(1, tile.level)
+  const isMonster        = tile.content.type === 'monster'
+  const isFirstEncounter = isMonster && !tile.explored
+  const enemyLevel       = isFirstEncounter
+    ? baseLevel + enragedLevelBonus(st.tilesPlaced)
+    : baseLevel
+
+  const queuedEnemy: TileEnemyQueue = {
+    level: enemyLevel,
+    baseLevel,
+    type: tile.content.monsterType,
+    rarity: tile.content.monsterRarity as MonsterRarity | undefined,
+    tilesPlaced: st.tilesPlaced,
+    enraged: isFirstEncounter,
+  }
+
+  if (isFirstEncounter) {
+    st.pendingGold += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
+    st.pendingMonsterXp = {
+      xp:           Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
+      monsterLevel: enemyLevel,
+    }
+  }
+
+  if (!tile.explored) {
+    tile.explored = true
+    if (tile.content.type === 'treasure' && tile.content.xpAmount) {
+      st.pendingXp += tile.content.xpAmount
+      tile.content = { type: 'empty' }
+    }
+  }
+
+  return queuedEnemy
+}
+
+function queueTileEnemy(enemy: TileEnemyQueue | null): void {
+  if (!enemy) return
+  useBattleStore.getState().queueEnemy(
+    enemy.level,
+    enemy.type,
+    enemy.rarity,
+    enemy.tilesPlaced,
+    enemy.enraged,
+    enemy.baseLevel,
+  )
+}
+
 export function generateContent(level: number, tilesPlaced = 0): TileContent {
   const r = Math.random()
   if (r < 0.015) return { type: 'market' }
@@ -373,48 +439,16 @@ export const useMapStore = create<MapStore>()(
       // encounter rewards, and queues the correct enemy (with tilesPlaced so
       // the stealth buff is applied).
       processMarketExitTile: () => {
-        let queueLevel:       number | null = null
-        let queueType:        string | undefined
-        let queueRarity:      MonsterRarity | undefined
-        let queueTilesPlaced  = 0
-        let queueEnraged      = false
+        let queuedEnemy: TileEnemyQueue | null = null
 
         set((st) => {
           const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
           if (!tile || tile.content.type === 'market') return
 
-          const isMonster        = tile.content.type === 'monster'
-          const isFirstEncounter = isMonster && !tile.explored
-          const enemyLevel       = isFirstEncounter
-            ? tile.level + Math.ceil(Math.random() * 5)
-            : tile.level
-
-          queueLevel       = Math.max(1, enemyLevel)
-          queueType        = tile.content.monsterType
-          queueRarity      = tile.content.monsterRarity as MonsterRarity | undefined
-          queueTilesPlaced = st.tilesPlaced
-          queueEnraged     = isFirstEncounter
-
-          if (isFirstEncounter) {
-            st.pendingGold += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
-            st.pendingMonsterXp = {
-              xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
-              monsterLevel: enemyLevel,
-            }
-          }
-
-          if (!tile.explored) {
-            tile.explored = true
-            if (tile.content.type === 'treasure' && tile.content.xpAmount) {
-              st.pendingXp   += tile.content.xpAmount
-              tile.content    = { type: 'empty' }
-            }
-          }
+          queuedEnemy = processTileEntry(st, tile)
         })
 
-        if (queueLevel !== null) {
-          useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity, queueTilesPlaced, queueEnraged)
-        }
+        queueTileEnemy(queuedEnemy)
       },
 
       // Exit market: move the player to a random connected adjacent tile and
@@ -556,11 +590,7 @@ export const useMapStore = create<MapStore>()(
       },
 
       moveOneStep: (heroLevel?: number) => {
-        let queueLevel:       number | null = null
-        let queueType:        string | undefined
-        let queueRarity:      MonsterRarity | undefined
-        let queueTilesPlaced  = 0
-        let queueEnraged      = false
+        let queuedEnemy: TileEnemyQueue | null = null
 
         set((st) => {
           if (!st.destination && st.autoExplore !== 'manual') {
@@ -586,32 +616,7 @@ export const useMapStore = create<MapStore>()(
                 st.scene = 'market'
                 if (!tile.explored) tile.explored = true
               } else {
-                const isMonster        = tile.content.type === 'monster'
-                const isFirstEncounter = isMonster && !tile.explored
-                const enemyLevel = isFirstEncounter
-                  ? tile.level + Math.ceil(Math.random() * 5)
-                  : tile.level
-                queueLevel       = Math.max(1, enemyLevel)
-                queueType        = tile.content.monsterType
-                queueRarity      = tile.content.monsterRarity as MonsterRarity | undefined
-                queueTilesPlaced = st.tilesPlaced
-                queueEnraged     = isFirstEncounter
-
-                if (isFirstEncounter) {
-                  st.pendingGold     += Math.round((15 + enemyLevel * 8) * (0.8 + Math.random() * 0.4))
-                  st.pendingMonsterXp = {
-                    xp:          Math.round((10 + enemyLevel * 4) * (0.8 + Math.random() * 0.4)),
-                    monsterLevel: enemyLevel,
-                  }
-                }
-
-                if (!tile.explored) {
-                  tile.explored = true
-                  if (tile.content.type === 'treasure' && tile.content.xpAmount) {
-                    st.pendingXp += tile.content.xpAmount
-                    tile.content = { type: 'empty' }
-                  }
-                }
+                queuedEnemy = processTileEntry(st, tile)
               }
             }
           } else {
@@ -619,9 +624,7 @@ export const useMapStore = create<MapStore>()(
           }
         })
 
-        if (queueLevel !== null) {
-          useBattleStore.getState().queueEnemy(queueLevel, queueType, queueRarity, queueTilesPlaced, queueEnraged)
-        }
+        queueTileEnemy(queuedEnemy)
       },
 
       resetMap: (startLevel) => set((st) => {

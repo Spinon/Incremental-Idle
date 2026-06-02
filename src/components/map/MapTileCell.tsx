@@ -13,6 +13,7 @@ interface Props {
   isSelected: boolean
   visibility: Visibility
   heroLevel: number
+  tileSize: number
   onClick(): void
 }
 
@@ -48,10 +49,17 @@ function levelColor(tileLv: number, heroLv: number): string {
 }
 
 function levelBadgeBg(content: PlacedTile['content']): string {
-  if (content.type === 'market')   return '#0a0a1a'
-  if (content.type === 'monster')  return '#1a0808'
-  if (content.type === 'treasure') return '#1a1808'
-  return '#0a1a0a'
+  if (content.type === 'market')   return 'rgba(10, 10, 26, 0.62)'
+  if (content.type === 'monster')  return 'rgba(26, 8, 8, 0.62)'
+  if (content.type === 'treasure') return 'rgba(26, 24, 8, 0.62)'
+  return 'rgba(10, 26, 10, 0.62)'
+}
+
+function visualContent(tile: PlacedTile, isPlayer: boolean): PlacedTile['content'] {
+  if (tile.content.type === 'monster' && tile.explored && !isPlayer) {
+    return { type: 'empty' }
+  }
+  return tile.content
 }
 
 function buildTitle(tile: PlacedTile): string {
@@ -68,22 +76,25 @@ function buildTitle(tile: PlacedTile): string {
 }
 
 export default function MapTileCell({
-  tile, isPlayer, isDestination, isSelected, visibility, heroLevel, onClick,
+  tile, isPlayer, isDestination, isSelected, visibility, heroLevel, tileSize, onClick,
 }: Props) {
   const explored = tile.explored && !isPlayer
-  const pipe     = tile.content.type === 'market'
+  const content  = visualContent(tile, isPlayer)
+  const pipe     = content.type === 'market'
     ? PIPE_MARKET
     : (explored ? PIPE_EXPLORED : PIPE_FRESH)
-  const node     = nodeColor(tile.content)
-  const bg       = tileBg(tile.content, explored)
+  const node     = nodeColor(content)
+  const bg       = tileBg(content, explored)
 
   const showContentIcon =
     visibility === 'clear' &&
-    tile.content.type !== 'empty' &&
-    (!tile.explored || tile.content.type === 'market')
+    content.type !== 'empty' &&
+    (!tile.explored || content.type === 'market')
 
   // Icon opacity: explored market is dimmed
   const iconOpacity = tile.explored ? 0.45 : 1
+  const contentIconSize = Math.max(9, Math.min(14, Math.floor(tileSize * 0.28)))
+  const playerMarkerSize = Math.max(18, Math.min(32, Math.floor(tileSize * 0.62)))
 
   return (
     <div
@@ -96,7 +107,7 @@ export default function MapTileCell({
       )}
     >
       {/* Paths + junction node */}
-      <svg viewBox="0 0 52 52" className="absolute inset-0 w-full h-full">
+      <svg viewBox="0 0 52 52" className="absolute inset-0 z-20 w-full h-full pointer-events-none">
         {tile.connections.includes('N') && (
           <rect x="21" y="0"  width="10" height="26" rx="2" fill={pipe} />
         )}
@@ -115,21 +126,21 @@ export default function MapTileCell({
       {/* Content icon — top-right badge */}
       {showContentIcon && (
         <div
-          className="absolute top-0.5 right-0.5 z-10 rounded overflow-hidden"
-          style={{ opacity: iconOpacity, width: 18, height: 18 }}
+          className="absolute top-0.5 right-0.5 z-10 rounded overflow-hidden pointer-events-none"
+          style={{ opacity: iconOpacity, width: contentIconSize, height: contentIconSize }}
         >
-          {tile.content.type === 'monster'  && <MonsterIcon  size={18} />}
-          {tile.content.type === 'treasure' && <TreasureIcon size={18} />}
-          {tile.content.type === 'market'   && <MarketIcon   size={18} />}
+          {content.type === 'monster'  && <MonsterIcon  size={contentIconSize} />}
+          {content.type === 'treasure' && <TreasureIcon size={contentIconSize} />}
+          {content.type === 'market'   && <MarketIcon   size={contentIconSize} />}
         </div>
       )}
 
       {/* Level badge — bottom-left */}
       {visibility === 'clear' && (
         <div
-          className="absolute bottom-0.5 left-0.5 z-10 rounded px-1"
+          className="absolute bottom-0.5 left-0.5 z-30 rounded px-1"
           style={{
-            backgroundColor: levelBadgeBg(tile.content),
+            backgroundColor: levelBadgeBg(content),
             opacity: explored ? 0.55 : 1,
             lineHeight: 1,
             paddingTop: 2,
@@ -139,7 +150,7 @@ export default function MapTileCell({
           <span
             className="text-[10px] font-black tracking-tight tabular-nums"
             style={{
-              color: tile.content.type === 'market'
+              color: content.type === 'market'
                 ? '#5a5aaa'
                 : levelColor(tile.level, heroLevel),
               fontFamily: 'monospace',
@@ -152,19 +163,19 @@ export default function MapTileCell({
 
       {/* Player marker */}
       {isPlayer && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-          <PlayerMarker size={36} />
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <PlayerMarker size={playerMarkerSize} />
         </div>
       )}
 
       {/* Selected ring */}
       {isSelected && (
-        <div className="absolute inset-0 rounded ring-2 ring-inset ring-sky-400/90 pointer-events-none z-20" />
+        <div className="absolute inset-0 z-40 rounded ring-2 ring-inset ring-sky-400/90 pointer-events-none" />
       )}
 
       {/* Destination ring */}
       {isDestination && !isSelected && (
-        <div className="absolute inset-0 rounded ring-2 ring-inset ring-indigo-400/80 pointer-events-none z-20" />
+        <div className="absolute inset-0 z-40 rounded ring-2 ring-inset ring-indigo-400/80 pointer-events-none" />
       )}
 
       {/* Penumbra overlay */}
