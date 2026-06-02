@@ -210,62 +210,86 @@ function WolfBase() {
   const d   = '#4a5560'  // pelo sombra
   const li  = '#9aa6b2'  // pelo brilho
   const out = '#252d36'  // contorno
-  const ey  = '#e0b028'  // olho âmbar
-  const ep  = '#2a1c00'  // pupila
-  const mz  = '#2a2230'  // focinho
+  const ey  = '#e8b830'  // olho âmbar
+  const ep  = '#1a1000'  // pupila
+  const mz  = '#3a3340'  // focinho
   const fang = '#f4f0dc'
   return (
     <g>
-      {/* rabo (esquerda → direita após mirror) */}
-      <rect x="0" y="9"  width="9"  height="7"  rx="3" fill={out} />
-      <rect x="1" y="9"  width="7"  height="6"  rx="3" fill={f} />
-      <rect x="1" y="6"  width="5"  height="6"  rx="3" fill={f} />
-      <rect x="2" y="6"  width="3"  height="5"  rx="2" fill={li} opacity="0.4" />
-      {/* corpo — contorno + base */}
-      <rect x="5"  y="13" width="22" height="12" rx="4" fill={out} />
-      <rect x="6"  y="13" width="20" height="11" rx="3" fill={f} />
-      {/* lombo (sombra superior) */}
-      <rect x="8"  y="13" width="16" height="3"  rx="2" fill={d} opacity="0.5" />
-      {/* ventre (brilho) */}
-      <rect x="9"  y="20" width="14" height="4"  rx="2" fill={li} opacity="0.25" />
-      {/* pescoço / juba */}
-      <rect x="18" y="9"  width="9"  height="9"  rx="3" fill={out} />
-      <rect x="18" y="9"  width="8"  height="8"  rx="2" fill={f} />
-      <rect x="19" y="10" width="3"  height="6"        fill={d} opacity="0.35" />
-      {/* cabeça */}
-      <rect x="19" y="2"  width="11" height="12" rx="3" fill={out} />
-      <rect x="20" y="3"  width="10" height="10" rx="3" fill={f} />
-      <rect x="21" y="3"  width="6"  height="3"  rx="1" fill={li} opacity="0.4" />
-      {/* orelhas pontudas */}
-      <rect x="20" y="0"  width="4"  height="5"  rx="1" fill={out} />
-      <rect x="20" y="0"  width="3"  height="4"  rx="1" fill={f} />
-      <rect x="26" y="0"  width="4"  height="5"  rx="1" fill={out} />
-      <rect x="27" y="0"  width="3"  height="4"  rx="1" fill={f} />
-      <rect x="21" y="1"  width="1"  height="2"  fill="#c87878" opacity="0.6" />
-      <rect x="28" y="1"  width="1"  height="2"  fill="#c87878" opacity="0.6" />
-      {/* focinho */}
-      <rect x="27" y="6"  width="3"  height="7"  rx="1" fill={out} />
-      <rect x="27" y="6"  width="3"  height="6"  rx="1" fill={mz} />
-      <rect x="28" y="6"  width="2"  height="2"  rx="1" fill="#0a0a0a" />
-      {/* olho âmbar */}
-      <rect x="22" y="5"  width="4"  height="3"  rx="1" fill={ey} />
-      <rect x="23" y="6"  width="2"  height="2"  fill={ep} />
-      <rect x="22" y="5"  width="1"  height="1"  fill="#fff0b0" opacity="0.9" />
-      {/* presas */}
-      <rect x="27" y="11" width="2"  height="3"  rx="1" fill={fang} />
-      <rect x="25" y="11" width="2"  height="2"  rx="1" fill={fang} opacity="0.75" />
-      {/* patas dianteiras */}
-      <rect x="20" y="23" width="5"  height="7"  rx="1" fill={out} />
-      <rect x="20" y="23" width="4"  height="6"  rx="1" fill={d} />
-      <rect x="20" y="23" width="1"  height="6"  fill={f} opacity="0.4" />
-      <rect x="20" y="29" width="5"  height="1"  fill="#15191e" />
-      {/* patas traseiras */}
-      <rect x="7"  y="23" width="5"  height="7"  rx="1" fill={out} />
-      <rect x="7"  y="23" width="4"  height="6"  rx="1" fill={d} />
-      <rect x="7"  y="23" width="1"  height="6"  fill={f} opacity="0.4" />
-      <rect x="7"  y="29" width="5"  height="1"  fill="#15191e" />
-      {/* perna do meio (profundidade) */}
-      <rect x="13" y="23" width="4"  height="5"  rx="1" fill={d} opacity="0.6" />
+      {/* ── juba / pescoço (fundo) ─────────────────────────────── */}
+      <rect x="4"  y="22" width="22" height="8" rx="3" fill={out} />
+      <rect x="5"  y="22" width="20" height="7" rx="2" fill={f} />
+      <rect x="6"  y="23" width="18" height="2" rx="1" fill={d} opacity="0.45" />
+      {/* tufos de pelo na base */}
+      <rect x="6"  y="29" width="2" height="1" fill={d} />
+      <rect x="10" y="29" width="2" height="1" fill={d} />
+      <rect x="14" y="29" width="2" height="1" fill={d} />
+      <rect x="18" y="29" width="2" height="1" fill={d} />
+      <rect x="22" y="29" width="2" height="1" fill={d} />
+
+      {/* ── orelhas pontudas (triângulos escalonados) ──────────── */}
+      {/* esquerda */}
+      <rect x="3"  y="0" width="4" height="3" fill={out} />
+      <rect x="2"  y="2" width="6" height="3" fill={out} />
+      <rect x="2"  y="4" width="7" height="3" fill={out} />
+      <rect x="4"  y="1" width="2" height="2" fill={f} />
+      <rect x="3"  y="3" width="4" height="3" fill={f} />
+      <rect x="4"  y="3" width="2" height="2" fill="#c87878" opacity="0.5" />
+      {/* direita */}
+      <rect x="23" y="0" width="4" height="3" fill={out} />
+      <rect x="22" y="2" width="6" height="3" fill={out} />
+      <rect x="21" y="4" width="7" height="3" fill={out} />
+      <rect x="24" y="1" width="2" height="2" fill={f} />
+      <rect x="23" y="3" width="4" height="3" fill={f} />
+      <rect x="24" y="3" width="2" height="2" fill="#c87878" opacity="0.5" />
+
+      {/* ── cabeça ──────────────────────────────────────────────── */}
+      <rect x="4"  y="5"  width="22" height="17" rx="6" fill={out} />
+      <rect x="5"  y="6"  width="20" height="15" rx="5" fill={f} />
+      {/* testa — brilho central */}
+      <rect x="10" y="7"  width="10" height="2" rx="1" fill={li} opacity="0.4" />
+      {/* listra escura da testa (marca do lobo) */}
+      <rect x="13" y="7"  width="4"  height="7" rx="1" fill={d} opacity="0.4" />
+      {/* sombra lateral direita */}
+      <rect x="21" y="8"  width="3"  height="12"     fill={d} opacity="0.3" />
+
+      {/* ── tufos nas bochechas ─────────────────────────────────── */}
+      <rect x="1"  y="13" width="4" height="3" fill={out} />
+      <rect x="2"  y="13" width="3" height="2" fill={f} />
+      <rect x="0"  y="15" width="4" height="2" fill={out} />
+      <rect x="1"  y="15" width="2" height="1" fill={d} />
+      <rect x="25" y="13" width="4" height="3" fill={out} />
+      <rect x="25" y="13" width="3" height="2" fill={f} />
+      <rect x="26" y="15" width="4" height="2" fill={out} />
+      <rect x="27" y="15" width="2" height="1" fill={d} />
+
+      {/* ── sobrancelhas (anguladas = bravo) + olhos âmbar ──────── */}
+      <rect x="6"  y="9"  width="7" height="2" rx="1" fill={out} />
+      <rect x="17" y="9"  width="7" height="2" rx="1" fill={out} />
+      <rect x="7"  y="10" width="6" height="4" rx="1" fill={ey} />
+      <rect x="17" y="10" width="6" height="4" rx="1" fill={ey} />
+      <rect x="9"  y="11" width="2" height="3" rx="1" fill={ep} />
+      <rect x="19" y="11" width="2" height="3" rx="1" fill={ep} />
+      <rect x="7"  y="10" width="2" height="1" fill="#fff0b0" opacity="0.85" />
+      <rect x="17" y="10" width="2" height="1" fill="#fff0b0" opacity="0.85" />
+
+      {/* ── focinho (afunila pra baixo) ─────────────────────────── */}
+      <rect x="10" y="14" width="10" height="9" rx="3" fill={out} />
+      <rect x="11" y="14" width="8"  height="8" rx="2" fill={f} />
+      <rect x="12" y="15" width="6"  height="2" rx="1" fill={li} opacity="0.3" />
+      <rect x="11" y="17" width="2"  height="5"      fill={d} opacity="0.4" />
+      {/* nariz */}
+      <rect x="11" y="19" width="8" height="4" rx="2" fill={mz} />
+      <rect x="12" y="20" width="6" height="3" rx="2" fill="#0a0a0a" />
+      <rect x="13" y="20" width="2" height="1" fill="#6a5a6a" opacity="0.6" />
+
+      {/* ── boca rosnando + presas ──────────────────────────────── */}
+      <rect x="8"  y="23" width="14" height="3" rx="1" fill="#180606" />
+      <rect x="9"  y="23" width="2"  height="3" rx="1" fill={fang} />
+      <rect x="19" y="23" width="2"  height="3" rx="1" fill={fang} />
+      <rect x="12" y="24" width="1"  height="2"      fill={fang} opacity="0.75" />
+      <rect x="17" y="24" width="1"  height="2"      fill={fang} opacity="0.75" />
+      <rect x="14" y="24" width="2"  height="1"      fill="#3a0c0c" />
     </g>
   )
 }
@@ -275,54 +299,56 @@ function WolfAccessory({ rarity, enraged }: AccessoryProps) {
   if (enraged) return (
     <g>
       <EnragedEffect />
-      {/* babas escorrendo */}
-      <rect x="27" y="12" width="1" height="4" rx="1" fill="white" opacity="0.6" />
-      <rect x="25" y="13" width="1" height="3" rx="1" fill="white" opacity="0.4" />
+      {/* babas escorrendo da boca */}
+      <rect x="10" y="26" width="1" height="4" rx="1" fill="white" opacity="0.6" />
+      <rect x="19" y="26" width="1" height="3" rx="1" fill="white" opacity="0.45" />
+      <rect x="14" y="26" width="1" height="2" rx="1" fill="white" opacity="0.35" />
     </g>
   )
   if (!rarity || rarity === 'normal') return null
   if (rarity === 'uncommon') return (
     <g>
-      {/* coleira com espinhos */}
-      <rect x="18" y="13" width="8" height="3" rx="1" fill="#4a3a2a" />
-      <rect x="19" y="12" width="1" height="2" rx="0" fill="#7a5a2a" />
-      <rect x="21" y="12" width="1" height="2" rx="0" fill="#7a5a2a" />
-      <rect x="23" y="12" width="1" height="2" rx="0" fill="#7a5a2a" />
+      {/* coleira com espinhos na juba */}
+      <rect x="6"  y="24" width="18" height="3" rx="1" fill="#4a3a2a" />
+      <rect x="8"  y="23" width="1"  height="2"      fill="#7a5a2a" />
+      <rect x="12" y="23" width="1"  height="2"      fill="#7a5a2a" />
+      <rect x="17" y="23" width="1"  height="2"      fill="#7a5a2a" />
+      <rect x="21" y="23" width="1"  height="2"      fill="#7a5a2a" />
     </g>
   )
   if (rarity === 'rare') return (
     <g>
       {/* colar de ossos / troféus */}
-      <rect x="18" y="13" width="8" height="2" rx="1" fill="#3a2a10" />
-      <rect x="19" y="11" width="2" height="3" rx="1" fill="#c8aa80" />
-      <rect x="22" y="10" width="2" height="4" rx="1" fill="#c8aa80" />
-      <rect x="25" y="11" width="2" height="3" rx="1" fill="#c8aa80" />
+      <rect x="6"  y="24" width="18" height="2" rx="1" fill="#3a2a10" />
+      <rect x="8"  y="25" width="2"  height="3" rx="1" fill="#c8aa80" />
+      <rect x="14" y="26" width="2"  height="3" rx="1" fill="#c8aa80" />
+      <rect x="20" y="25" width="2"  height="3" rx="1" fill="#c8aa80" />
     </g>
   )
   if (rarity === 'epic') return (
     <g>
-      {/* pontas das garras brilhantes */}
-      <rect x="20" y="28" width="1" height="2" fill={a} opacity="0.9" />
-      <rect x="22" y="28" width="1" height="2" fill={a} opacity="0.9" />
-      <rect x="24" y="28" width="1" height="2" fill={a} opacity="0.9" />
-      {/* olho incandescente */}
-      <rect x="22" y="5"  width="4" height="3" rx="1" fill={a} opacity="0.5" />
+      {/* olhos incandescentes */}
+      <rect x="7"  y="10" width="6" height="4" rx="1" fill={a} opacity="0.45" />
+      <rect x="17" y="10" width="6" height="4" rx="1" fill={a} opacity="0.45" />
+      {/* presas brilhantes */}
+      <rect x="9"  y="23" width="2" height="3" rx="1" fill={a} opacity="0.7" />
+      <rect x="19" y="23" width="2" height="3" rx="1" fill={a} opacity="0.7" />
       {/* manchas no pelo */}
-      <rect x="10" y="15" width="4" height="2" rx="1" fill={a} opacity="0.35" />
-      <rect x="16" y="14" width="3" height="2" rx="1" fill={a} opacity="0.25" />
+      <rect x="7"  y="17" width="3" height="2" rx="1" fill={a} opacity="0.3" />
+      <rect x="20" y="17" width="3" height="2" rx="1" fill={a} opacity="0.25" />
     </g>
   )
   /* unique */
   return (
     <g>
-      {/* runas no pelo */}
-      <rect x="9"  y="15" width="3" height="2" rx="1" fill={a} opacity="0.6" />
-      <rect x="15" y="15" width="3" height="2" rx="1" fill={a} opacity="0.6" />
-      <rect x="12" y="17" width="3" height="2" rx="1" fill={a} opacity="0.4" />
-      {/* rastro sombrio atrás */}
-      <rect x="0" y="8"  width="4" height="6" rx="2" fill={a} opacity="0.2" />
-      <rect x="0" y="14" width="3" height="4" rx="2" fill={a} opacity="0.15" />
-      <rect x="0" y="0"  width="30" height="30" fill={a} opacity="0.04" />
+      {/* runas na testa / bochechas */}
+      <rect x="13" y="8"  width="4" height="2" rx="1" fill={a} opacity="0.6" />
+      <rect x="7"  y="17" width="3" height="2" rx="1" fill={a} opacity="0.5" />
+      <rect x="20" y="17" width="3" height="2" rx="1" fill={a} opacity="0.5" />
+      {/* aura sombria nas orelhas */}
+      <rect x="1"  y="0"  width="8" height="7" rx="2" fill={a} opacity="0.18" />
+      <rect x="21" y="0"  width="8" height="7" rx="2" fill={a} opacity="0.18" />
+      <rect x="0"  y="0"  width="30" height="30" fill={a} opacity="0.04" />
     </g>
   )
 }
