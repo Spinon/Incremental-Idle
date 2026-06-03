@@ -1,9 +1,13 @@
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
+import { useInventoryStore } from '../store/inventoryStore'
+import { useSpellStore } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
 import { useUIStore, type AppTab } from '../store/uiStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, staminaDrainAt, getBaseSpeed } from '../formulas/derived'
+import { getEquipmentBonuses } from '../formulas/items'
+import { applySpellBuffs } from '../formulas/spells'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
@@ -41,10 +45,15 @@ export default function StickyBar() {
   const gold              = useHeroStore(s => s.gold)
   const lastGoldGain      = useHeroStore(s => s.lastGoldGain)
   const goldGainVersion   = useHeroStore(s => s.goldGainVersion)
+  const equipment         = useInventoryStore(s => s.equipment)
+  const activeBuffs       = useSpellStore(s => s.activeBuffs)
 
   const activeQuestCount = useQuestStore(s => s.quests.filter(q => q.status === 'active').length)
 
-  const derived    = getDerivedStats(attrs)
+  const derived    = applySpellBuffs(
+    getDerivedStats(attrs, getEquipmentBonuses(equipment), level),
+    activeBuffs,
+  )
   const t          = useT()
   const lang       = useSettingsStore(s => s.lang)
   const isEn       = lang === 'en'

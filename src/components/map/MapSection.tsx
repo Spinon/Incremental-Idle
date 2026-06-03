@@ -1,8 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
+import { useInventoryStore } from '../../store/inventoryStore'
+import { useSpellStore } from '../../store/spellStore'
 import { useQuestStore } from '../../store/questStore'
 import { getDerivedStats } from '../../formulas/derived'
+import { getEquipmentBonuses } from '../../formulas/items'
+import { applySpellBuffs } from '../../formulas/spells'
 import { buildMonster, estimateMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS, monsterName } from '../../data/monsters'
 import { useT } from '../../i18n/useT'
@@ -74,7 +78,12 @@ export default function MapSection() {
 
   const attrs     = useHeroStore(s => s.attributes)
   const heroLevel = useHeroStore(s => s.level)
-  const derived   = getDerivedStats(attrs)
+  const equipment = useInventoryStore(s => s.equipment)
+  const activeBuffs = useSpellStore(s => s.activeBuffs)
+  const derived   = applySpellBuffs(
+    getDerivedStats(attrs, getEquipmentBonuses(equipment), heroLevel),
+    activeBuffs,
+  )
   const t       = useT()
 
   const maxDeck = Math.min(8, 3 + Math.floor(derived.vision / 50))

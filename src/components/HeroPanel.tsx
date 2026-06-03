@@ -1,8 +1,11 @@
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
+import { useSpellStore } from '../store/spellStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
+import { getWeaponStatBonuses } from '../formulas/weapons'
+import { applySpellBuffs } from '../formulas/spells'
 import type { Attributes } from '../types/hero'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -29,8 +32,20 @@ function formatMultiplierBonus(value: number): string {
 export default function HeroPanel() {
   const { freePoints, attributes, level, spendPoint, optimizePoints, applyPreset } = useHeroStore()
   const equipment    = useInventoryStore(s => s.equipment)
+  const weaponProgress = useInventoryStore(s => s.weaponProgress)
+  const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
+  const activeBuffs  = useSpellStore(s => s.activeBuffs)
   const equipBonuses = getEquipmentBonuses(equipment)
-  const derived      = getDerivedStats(attributes, equipBonuses, level)
+  const weaponStats  = getWeaponStatBonuses(weaponProgress, equippedWeapons)
+  const baseDerived  = getDerivedStats(attributes, equipBonuses, level)
+  const derived      = applySpellBuffs({
+    ...baseDerived,
+    atk: baseDerived.atk + weaponStats.atk,
+    def: baseDerived.def + weaponStats.def,
+    attackSpeed: Math.max(0.1, baseDerived.attackSpeed + weaponStats.attackSpeed),
+    critChance: Math.min(0.75, baseDerived.critChance + weaponStats.critChance),
+    magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
+  }, activeBuffs)
   const maxSpeed     = getBaseSpeed(derived)
   const t            = useT()
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import type { Attributes, HeroConfig } from '../types/hero'
+import type { Attributes, DerivedStats, HeroConfig } from '../types/hero'
 import { DEFAULT_HERO_CONFIG } from '../types/hero'
 import { getDerivedStats, staminaDrainAt } from '../formulas/derived'
 import type { Speed } from './battleStore'
@@ -29,14 +29,14 @@ interface HeroStore {
   setHeroConfig(config: HeroConfig): void
   optimizePoints(): void
   applyPreset(preset: 'combat' | 'explorer' | 'mage'): void
-  gainXp(amount: number): void
+  gainXp(amount: number, xpBonusOverride?: number): void
   earnGold(amount: number): void
   spendGold(amount: number): boolean
   restoreStamina(amount: number, maxOverride?: number): void
   restoreMana(amount: number, maxOverride?: number): void
   consumeMana(amount: number): void
   gainSkipCharge(): void
-  tickResources(deltaMs: number, speed: Speed): void
+  tickResources(deltaMs: number, speed: Speed, derivedOverride?: DerivedStats): void
   consumeSkipCharge(): void
 }
 
@@ -195,9 +195,9 @@ export const useHeroStore = create<HeroStore>()(
       st.maxSkipCharges = Math.max(st.maxSkipCharges, Math.ceil(st.skipCharges))
     }),
 
-    gainXp: (amount) => set((st) => {
+    gainXp: (amount, xpBonusOverride) => set((st) => {
       const derived = getDerivedStats(st.attributes, undefined, st.level)
-      const actual = Math.round(amount * derived.xpBonus)
+      const actual = Math.round(amount * (xpBonusOverride ?? derived.xpBonus))
       st.lastXpGain = actual
       st.xpGainVersion += 1
       st.xp += actual
@@ -209,8 +209,8 @@ export const useHeroStore = create<HeroStore>()(
       }
     }),
 
-    tickResources: (deltaMs, speed) => set((st) => {
-      const derived = getDerivedStats(st.attributes, undefined, st.level)
+    tickResources: (deltaMs, speed, derivedOverride) => set((st) => {
+      const derived = derivedOverride ?? getDerivedStats(st.attributes, undefined, st.level)
       const deltaS = deltaMs / 1000
 
       // Net stamina change: positive = regenerating, negative = draining.

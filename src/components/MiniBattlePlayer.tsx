@@ -11,6 +11,7 @@ import { SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
+import { applySpellBuffs } from '../formulas/spells'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
@@ -151,6 +152,7 @@ export default function MiniBattlePlayer() {
   const spellSlots = useSpellStore(s => s.spellSlots)
   const cooldowns = useSpellStore(s => s.cooldowns)
   const autoSlots = useSpellStore(s => s.autoSlots)
+  const activeBuffs = useSpellStore(s => s.activeBuffs)
   const castSpell = useSpellStore(s => s.castSpell)
   const scene = useMapStore(s => s.scene)
   const defeatPending = useMapStore(s => s.defeatPending)
@@ -158,7 +160,7 @@ export default function MiniBattlePlayer() {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
   const equipBonuses = getEquipmentBonuses(equipment)
-  const derivedStats = getDerivedStats(attrs, equipBonuses, heroLevel)
+  const derivedStats = applySpellBuffs(getDerivedStats(attrs, equipBonuses, heroLevel), activeBuffs)
   const knownWordIds = getKnownWordIds(heroLevel, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
 

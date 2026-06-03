@@ -8,6 +8,7 @@ import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
+import { applySpellBuffs } from '../formulas/spells'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
@@ -68,9 +69,13 @@ export function useGameLoop() {
       const speed    = useBattleStore.getState().speed
       const attrs    = useHeroStore.getState().attributes
       const heroLvl  = useHeroStore.getState().level
-      const derived  = getDerivedStats(attrs, undefined, heroLvl)
+      const equip    = getEquipmentBonuses(useInventoryStore.getState().equipment)
+      const derived  = applySpellBuffs(
+        getDerivedStats(attrs, equip, heroLvl),
+        useSpellStore.getState().activeBuffs,
+      )
 
-      tickResources(TICK_MS, speed)
+      tickResources(TICK_MS, speed, derived)
       useSpellStore.getState().tick(TICK_MS / 1000)
 
       const turn     = useBattleStore.getState().turn
@@ -97,7 +102,7 @@ export function useGameLoop() {
 
       // Drain treasure XP and monster gold
       const xp = useMapStore.getState().drainXp()
-      if (xp > 0) gainXp(xp)
+      if (xp > 0) gainXp(xp, derived.xpBonus)
       const gold = useMapStore.getState().drainGold()
       if (gold > 0) earnGold(gold)
       collectWeaponMaterials()
@@ -114,7 +119,7 @@ export function useGameLoop() {
       if (prevScene.current === 'market' && scene === 'map') {
         useMapStore.getState().processMarketExitTile()
         const tileXp2 = useMapStore.getState().drainXp()
-        if (tileXp2 > 0) gainXp(tileXp2)
+        if (tileXp2 > 0) gainXp(tileXp2, derived.xpBonus)
         const gold2 = useMapStore.getState().drainGold()
         if (gold2 > 0) earnGold(gold2)
         collectWeaponMaterials()
@@ -168,7 +173,11 @@ export function useGameLoop() {
             // placed (map is geometrically enclosed, not just level-capped).
             const afterPlace = useMapStore.getState()
             const attrs2     = useHeroStore.getState().attributes
-            const d2         = getDerivedStats(attrs2, undefined, heroLv)
+            const equip2     = getEquipmentBonuses(useInventoryStore.getState().equipment)
+            const d2         = applySpellBuffs(
+              getDerivedStats(attrs2, equip2, heroLv),
+              useSpellStore.getState().activeBuffs,
+            )
             const maxDk      = Math.min(8, 3 + Math.floor(d2.vision / 50))
             if (
               afterPlace.scene === 'map' &&
@@ -180,14 +189,14 @@ export function useGameLoop() {
           }
 
           const tileXp = useMapStore.getState().drainXp()
-          if (tileXp > 0) gainXp(tileXp)
+          if (tileXp > 0) gainXp(tileXp, derived.xpBonus)
 
           // Monster boss XP — only granted if enemy is within ±5 hero levels
           const monsterReward = useMapStore.getState().drainMonsterXp()
           if (monsterReward) {
             const heroLevel = useHeroStore.getState().level
             if (Math.abs(heroLevel - monsterReward.monsterLevel) <= 5) {
-              gainXp(monsterReward.xp)
+              gainXp(monsterReward.xp, derived.xpBonus)
             }
           }
 
@@ -201,8 +210,11 @@ export function useGameLoop() {
           // Item drop
           const heroAttrs = useHeroStore.getState().attributes
           const equip     = getEquipmentBonuses(useInventoryStore.getState().equipment)
-          const derived   = getDerivedStats(heroAttrs, equip)
-          if (Math.random() < derived.dropChance) {
+          const dropDerived = applySpellBuffs(
+            getDerivedStats(heroAttrs, equip, useHeroStore.getState().level),
+            useSpellStore.getState().activeBuffs,
+          )
+          if (Math.random() < dropDerived.dropChance) {
             const enemyLevel = useBattleStore.getState().enemy.level
             const item = generateItem(Math.max(1, enemyLevel))
             const added = useInventoryStore.getState().addItem(item)

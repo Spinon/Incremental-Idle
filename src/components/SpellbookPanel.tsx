@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
 import { useHeroStore } from '../store/heroStore'
+import { useInventoryStore } from '../store/inventoryStore'
 import { ALL_WORDS, LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
 import { findSpell, SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
+import { getDerivedStats } from '../formulas/derived'
+import { getEquipmentBonuses } from '../formulas/items'
+import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
+import { applySpellBuffs } from '../formulas/spells'
 import { cn } from '../lib/utils'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
+import type { DerivedStats } from '../types/hero'
 import { useSettingsStore } from '../store/settingsStore'
 
 // ─── Rarity styling ───────────────────────────────────────────────────────────
@@ -43,6 +49,123 @@ const EFFECT_COLOR: Record<string, string> = {
   utility: 'text-amber-500 dark:text-amber-400',
 }
 
+const PERCENT_EFFECT_STATS = new Set([
+  'attackSpeed', 'dodgeChance', 'critChance', 'critDamage', 'damageReduction',
+  'healBonus', 'moveSpeed', 'dropChance', 'xpBonus',
+])
+
+const STAT_LABEL: Record<string, { pt: string; en: string }> = {
+  atk: { pt: 'ATK', en: 'ATK' },
+  def: { pt: 'DEF', en: 'DEF' },
+  attackSpeed: { pt: 'Vel. Atk', en: 'Atk Speed' },
+  dodgeChance: { pt: 'Esquiva', en: 'Dodge' },
+  magicDamage: { pt: 'Dano Magico', en: 'Magic Dmg' },
+  critChance: { pt: 'Crit', en: 'Crit' },
+  critDamage: { pt: 'Dano Crit', en: 'Crit Dmg' },
+  damageReduction: { pt: 'Reducao', en: 'Reduction' },
+  healBonus: { pt: 'Cura', en: 'Heal' },
+  staminaRegen: { pt: 'Stamina/s', en: 'Stamina/s' },
+  manaRegen: { pt: 'Mana/s', en: 'Mana/s' },
+  vision: { pt: 'Visao', en: 'Vision' },
+  moveSpeed: { pt: 'Movimento', en: 'Move Spd' },
+  dropChance: { pt: 'Drop', en: 'Drop' },
+  xpBonus: { pt: 'XP', en: 'XP' },
+  maxHp: { pt: 'HP Max', en: 'Max HP' },
+}
+
+function fmtNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
+}
+
+function fmtPercent(value: number): string {
+  return `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
+}
+
+function statLabel(stat: string, isEn: boolean): string {
+  return (isEn ? STAT_LABEL[stat]?.en : STAT_LABEL[stat]?.pt) ?? stat
+}
+
+function formatStatAdd(stat: string, value: number, isEn: boolean): string {
+  const amount = PERCENT_EFFECT_STATS.has(stat) ? fmtPercent(value) : fmtNumber(value)
+  return `+${amount} ${statLabel(stat, isEn)}`
+}
+
+function formatDebuffMult(mult: number): string {
+  return `-${fmtPercent(1 - mult)}`
+}
+
+function spellRawAmount(spell: Spell, derived: DerivedStats): number {
+  const { base = 0, scaling = 0, scalingStat } = spell.effect
+  const statValue = scalingStat ? (derived[scalingStat] as number) : 0
+  return Math.max(1, base + scaling * statValue)
+}
+
+function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean): {
+  primary: string
+  details: string[]
+} {
+  const e = spell.effect
+  const details: string[] = []
+
+  if (e.type === 'damage') {
+    const raw = spellRawAmount(spell, derived)
+    const valueText = e.chaos
+      ? `${Math.max(1, Math.round(raw * 0.5))}-${Math.max(1, Math.round(raw * 1.5))}`
+      : String(Math.round(raw))
+    if (e.scalingStat) details.push(`${statLabel(e.scalingStat, isEn)} ${fmtNumber(derived[e.scalingStat] as number)}`)
+    if (e.lifesteal) details.push(`${isEn ? 'Lifesteal' : 'Roubo de vida'} ${fmtPercent(e.lifesteal)}`)
+    if (e.enemyAtkMult !== undefined) details.push(`ATK ${formatDebuffMult(e.enemyAtkMult)}`)
+    if (e.enemyAtkSpeedMult !== undefined) details.push(`${isEn ? 'Speed' : 'Vel'} ${formatDebuffMult(e.enemyAtkSpeedMult)}`)
+    if (e.debuffDuration) details.push(`${e.debuffDuration}t`)
+    return {
+      primary: `${isEn ? 'Damage' : 'Dano'}: Base ${fmtNumber(e.base ?? 0)} -> ${valueText}`,
+      details,
+    }
+  }
+
+  if (e.type === 'heal') {
+    const raw = spellRawAmount(spell, derived)
+    const effective = Math.max(1, Math.round(raw * derived.healBonus))
+    if (e.scalingStat) details.push(`${statLabel(e.scalingStat, isEn)} ${fmtNumber(derived[e.scalingStat] as number)}`)
+    if (derived.healBonus !== 1) details.push(`${isEn ? 'Heal bonus' : 'Bonus cura'} ${fmtPercent(derived.healBonus - 1)}`)
+    if (e.statAdds) details.push(...Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)))
+    if (e.duration) details.push(`${e.duration}t`)
+    return {
+      primary: `${isEn ? 'Heal' : 'Cura'}: Base ${fmtNumber(e.base ?? 0)} -> ${effective}`,
+      details,
+    }
+  }
+
+  if (e.type === 'buff' || e.type === 'utility') {
+    if (e.statAdds) details.push(...Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)))
+    if (e.tileAction) {
+      const action = e.tileAction === 'create'
+        ? (isEn ? 'Create tiles' : 'Cria tiles')
+        : (isEn ? 'Refresh deck' : 'Renova deck')
+      details.push(`${action} x${e.tileCount ?? (e.tileAction === 'create' ? 2 : 3)}`)
+    }
+    if (e.duration) details.push(`${e.duration}t`)
+    return {
+      primary: e.statAdds
+        ? `${isEn ? 'Effect' : 'Efeito'}: ${Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)).join(' + ')}`
+        : `${isEn ? 'Effect' : 'Efeito'}: ${isEn ? 'Utility' : 'Utilidade'}`,
+      details,
+    }
+  }
+
+  if (e.type === 'debuff') {
+    if (e.enemyAtkMult !== undefined) details.push(`ATK ${formatDebuffMult(e.enemyAtkMult)}`)
+    if (e.enemyAtkSpeedMult !== undefined) details.push(`${isEn ? 'Speed' : 'Vel'} ${formatDebuffMult(e.enemyAtkSpeedMult)}`)
+    if (e.debuffDuration) details.push(`${e.debuffDuration}t`)
+    return {
+      primary: `${isEn ? 'Debuff' : 'Debuff'}: ${details.join(' + ')}`,
+      details,
+    }
+  }
+
+  return { primary: isEn ? 'No direct effect' : 'Sem efeito direto', details }
+}
+
 // ─── Word card ────────────────────────────────────────────────────────────────
 function WordCard({ word, isSelected, onClick }: {
   word: Word
@@ -77,13 +200,26 @@ function WordCard({ word, isSelected, onClick }: {
 }
 
 // ─── Spell card ───────────────────────────────────────────────────────────────
-function SpellCard({ spell, cooldownRemaining, onAssign, isAssigning }: {
+function SpellCard({
+  spell,
+  cooldownRemaining,
+  effectiveCooldown,
+  firstSlotManaCost,
+  derived,
+  onAssign,
+  isAssigning,
+}: {
   spell: Spell
   cooldownRemaining: number
+  effectiveCooldown: number
+  firstSlotManaCost: number | null
+  derived: DerivedStats
   onAssign: () => void
   isAssigning: boolean
 }) {
+  const isEn = useSettingsStore(s => s.lang === 'en')
   const pct = cooldownRemaining / spell.cooldown
+  const summary = spellEffectSummary(spell, derived, isEn)
   return (
     <div className={cn(
       'rounded-xl border-2 px-3 py-2.5 flex items-start gap-3',
@@ -117,8 +253,13 @@ function SpellCard({ spell, cooldownRemaining, onAssign, isAssigning }: {
           <span className="text-[9px] text-blue-500 dark:text-blue-400 font-semibold">
             {spell.manaCost} mana
           </span>
+          {firstSlotManaCost !== null && firstSlotManaCost !== spell.manaCost && (
+            <span className="text-[9px] text-blue-400 dark:text-blue-300 font-semibold">
+              slot 1: {firstSlotManaCost}
+            </span>
+          )}
           <span className="text-[9px] text-slate-400 dark:text-slate-500">
-            CD {spell.cooldown}t
+            CD {spell.cooldown}t{effectiveCooldown !== spell.cooldown ? ` -> ${effectiveCooldown}t` : ''}
           </span>
           <span className="text-[8px] text-slate-400 dark:text-slate-500">
             {spell.word1Id} + {spell.word2Id}
@@ -127,6 +268,23 @@ function SpellCard({ spell, cooldownRemaining, onAssign, isAssigning }: {
         <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-0.5 leading-tight">
           {spell.description}
         </p>
+        <div className="mt-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-white/45 dark:bg-slate-950/25 px-2 py-1">
+          <p className={cn('text-[9px] font-bold leading-tight', EFFECT_COLOR[spell.effect.type])}>
+            {summary.primary}
+          </p>
+          {summary.details.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {summary.details.map((detail, i) => (
+                <span
+                  key={`${spell.id}-detail-${i}`}
+                  className="rounded border border-slate-200/70 dark:border-slate-700/70 bg-slate-100/70 dark:bg-slate-900/60 px-1.5 py-0.5 text-[8px] font-semibold text-slate-500 dark:text-slate-400"
+                >
+                  {detail}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         {cooldownRemaining > 0 && (
           <div className="mt-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
             <div
@@ -159,6 +317,9 @@ export default function SpellbookPanel() {
   const level      = useHeroStore(s => s.level)
   const attrs      = useHeroStore(s => s.attributes)
   const mana       = useHeroStore(s => s.mana)
+  const equipment  = useInventoryStore(s => s.equipment)
+  const weaponProgress = useInventoryStore(s => s.weaponProgress)
+  const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
 
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
   const spellSlots    = useSpellStore(s => s.spellSlots)
@@ -171,6 +332,14 @@ export default function SpellbookPanel() {
 
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
+  const equipBonuses = getEquipmentBonuses(equipment)
+  const weaponStats = getWeaponStatBonuses(weaponProgress, equippedWeapons)
+  const weaponProfile = getWeaponCombatProfile(weaponProgress, equippedWeapons)
+  const baseDerived = getDerivedStats(attrs, equipBonuses, level)
+  const spellDerived: DerivedStats = applySpellBuffs({
+    ...baseDerived,
+    magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
+  }, activeBuffs)
 
   const wordSlotCount = getAutoWordSlots(level, attrs.inteligencia, attrs.sabedoria)
   const nextSlotAt  = (Math.floor(level / 5) + 1) * 5  // next level milestone
@@ -478,6 +647,11 @@ export default function SpellbookPanel() {
                   key={spell.id}
                   spell={spell}
                   cooldownRemaining={cooldowns[spell.id] ?? 0}
+                  effectiveCooldown={Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))}
+                  firstSlotManaCost={spellSlots[0] === spell.id
+                    ? Math.max(1, Math.round(spell.manaCost * (1 - weaponProfile.staffSlotOneManaDiscount)))
+                    : null}
+                  derived={spellDerived}
                   onAssign={() => setAssigningSpell(a => a === spell.id ? null : spell.id)}
                   isAssigning={assigningSpell === spell.id}
                 />

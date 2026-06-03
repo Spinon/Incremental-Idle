@@ -3,13 +3,14 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { LEARNABLE_WORDS, WORD_MAP, getAutoWordSlots } from '../data/words'
 import { SPELL_MAP, SPELL_ICONS, getAvailableSpells } from '../data/spells'
-import { calcSpellDamage, calcSpellHeal } from '../formulas/spells'
+import { applySpellBuffs, calcSpellDamage, calcSpellHeal } from '../formulas/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
 import { useMapStore } from './mapStore'
 import { useInventoryStore } from './inventoryStore'
-import { getWeaponCombatProfile } from '../formulas/weapons'
+import { getEquipmentBonuses } from '../formulas/items'
+import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
@@ -79,6 +80,7 @@ export const useSpellStore = create<SpellStore>()(
       const heroState = useHeroStore.getState()
       const weaponState = useInventoryStore.getState()
       const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
+      const weaponStats = getWeaponStatBonuses(weaponState.weaponProgress, weaponState.equippedWeapons)
       const isSlotOneSpell = get().spellSlots[0] === spellId
       const manaCost = Math.max(1, Math.round(
         spell.manaCost * (isSlotOneSpell ? (1 - weaponProfile.staffSlotOneManaDiscount) : 1),
@@ -89,7 +91,12 @@ export const useSpellStore = create<SpellStore>()(
       heroState.consumeMana(manaCost)
 
       const { effect } = spell
-      const derived    = getDerivedStats(heroState.attributes)
+      const equip = getEquipmentBonuses(weaponState.equipment)
+      const baseDerived = getDerivedStats(heroState.attributes, equip, heroState.level)
+      const derived = applySpellBuffs({
+        ...baseDerived,
+        magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
+      }, get().activeBuffs)
 
       // ── Compute values that require derived stats ─────────────────────
       let dmg  = 0

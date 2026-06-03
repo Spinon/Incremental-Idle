@@ -17,12 +17,14 @@ import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
 import { useMapStore } from './store/mapStore'
 import { useInventoryStore } from './store/inventoryStore'
+import { useSpellStore } from './store/spellStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useNotifStore } from './store/notifStore'
 import { useUIStore } from './store/uiStore'
 import { getDerivedStats, getBaseSpeed } from './formulas/derived'
 import { getEquipmentBonuses } from './formulas/items'
 import { getWeaponStatBonuses } from './formulas/weapons'
+import { applySpellBuffs } from './formulas/spells'
 import { useT } from './i18n/useT'
 
 function GameRoot() {
@@ -37,6 +39,7 @@ function GameRoot() {
   const equipment    = useInventoryStore((s) => s.equipment)
   const weaponProgress = useInventoryStore((s) => s.weaponProgress)
   const equippedWeapons = useInventoryStore((s) => s.equippedWeapons)
+  const activeBuffs  = useSpellStore((s) => s.activeBuffs)
   const activeTab    = useUIStore((s) => s.activeTab)
   const setShowMini  = useUIStore((s) => s.setShowMiniPlayer)
   const pushNotif    = useNotifStore((s) => s.push)
@@ -114,10 +117,10 @@ function GameRoot() {
   useEffect(() => {
     if (scene !== 'map') {
       const equip = getEquipmentBonuses(equipment)
-      const d     = getDerivedStats(attributes, equip, heroLevel)
+      const d     = applySpellBuffs(getDerivedStats(attributes, equip, heroLevel), activeBuffs)
       setSpeed(getBaseSpeed(d))
     }
-  }, [scene, setSpeed]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeBuffs, attributes, equipment, heroLevel, scene, setSpeed])
 
   // Home and market scenes live inside the battle tab; expose them through
   // the mini player when the user is currently looking at another tab.
@@ -132,16 +135,24 @@ function GameRoot() {
   useEffect(() => {
     const equip = getEquipmentBonuses(equipment)
     const weaponStats = getWeaponStatBonuses(weaponProgress, equippedWeapons)
-    const d     = getDerivedStats(attributes, equip, heroLevel)
+    const base  = getDerivedStats(attributes, equip, heroLevel)
+    const d     = applySpellBuffs({
+      ...base,
+      atk: base.atk + weaponStats.atk,
+      def: base.def + weaponStats.def,
+      attackSpeed: Math.max(0.1, base.attackSpeed + weaponStats.attackSpeed),
+      critChance: Math.min(0.75, base.critChance + weaponStats.critChance),
+      magicDamage: base.magicDamage + weaponStats.magicDamage,
+    }, activeBuffs)
     syncFromHero({
-      atk: d.atk + weaponStats.atk, def: d.def + weaponStats.def, maxHp: d.maxHp,
-      atkSpeed: Math.max(0.1, d.attackSpeed + weaponStats.attackSpeed), dodgeChance: d.dodgeChance,
-      critChance: Math.min(0.75, d.critChance + weaponStats.critChance), critDamage: d.critDamage,
+      atk: d.atk, def: d.def, maxHp: d.maxHp,
+      atkSpeed: Math.max(0.1, d.attackSpeed), dodgeChance: d.dodgeChance,
+      critChance: Math.min(0.75, d.critChance), critDamage: d.critDamage,
       damageReduction: d.damageReduction,
       resIgnea: d.resIgnea, resGlacial: d.resGlacial,
       resSombria: d.resSombria, resVital: d.resVital,
     })
-  }, [attributes, equipment, equippedWeapons, heroLevel, syncFromHero, weaponProgress])
+  }, [activeBuffs, attributes, equipment, equippedWeapons, heroLevel, syncFromHero, weaponProgress])
 
   // Level-up notification
   useEffect(() => {

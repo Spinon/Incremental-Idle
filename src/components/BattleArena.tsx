@@ -8,6 +8,8 @@ import { useUIStore } from '../store/uiStore'
 import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
 import { getDerivedStats } from '../formulas/derived'
+import { getEquipmentBonuses } from '../formulas/items'
+import { applySpellBuffs } from '../formulas/spells'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 import { useSettingsStore } from '../store/settingsStore'
@@ -57,6 +59,18 @@ function formatDebuffMultiplier(mult: number): string {
   const diff = mult - 1
   const sign = diff >= 0 ? '+' : ''
   return `${sign}${formatPercent(diff)}`
+}
+
+function abbreviateSpellName(name?: string): string {
+  if (!name) return 'SP'
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 0)
+    .filter(w => !['de', 'da', 'do', 'das', 'dos', 'the', 'of'].includes(w.toLowerCase()))
+  if (words.length === 0) return name.slice(0, 3).toUpperCase()
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase()
+  return words.slice(0, 3).map(w => w[0]?.toUpperCase() ?? '').join('')
 }
 
 function statusBadgeTone(type: StatusType) {
@@ -211,11 +225,11 @@ export default function BattleArena() {
 
   // Consumable quickslots
   const attrs          = useHeroStore(s => s.attributes)
-  const derivedStats   = getDerivedStats(attrs)
   const restoreStamina = useHeroStore(s => s.restoreStamina)
   const restoreMana    = useHeroStore(s => s.restoreMana)
   const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
   const consumables    = useInventoryStore(s => s.consumables)
+  const equipment      = useInventoryStore(s => s.equipment)
   const quickslots     = useInventoryStore(s => s.quickslots)
   const removeConsumable = useInventoryStore(s => s.removeConsumable)
 
@@ -230,6 +244,10 @@ export default function BattleArena() {
   const activeDebuff    = useSpellStore(s => s.activeDebuff)
   const setAutoSlot     = useSpellStore(s => s.setAutoSlot)
   const mana            = useHeroStore(s => s.mana)
+  const derivedStats    = applySpellBuffs(
+    getDerivedStats(attrs, getEquipmentBonuses(equipment), heroLevel),
+    activeBuffs,
+  )
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
   const statusLabels = isEn ? STATUS_LABEL_EN : STATUS_LABEL_PT
@@ -541,13 +559,12 @@ export default function BattleArena() {
               {activeBuffs.map(b => {
                 const spell = SPELL_MAP.get(b.spellId)
                 const icon  = SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'
-                const label = spell
-                  ? Object.entries(b.statAdds ?? {}).map(([k, v]) => formatBuffValue(k, v)).join(' ')
-                  : b.spellId
+                const details = Object.entries(b.statAdds ?? {}).map(([k, v]) => formatBuffValue(k, v)).join(' ')
+                const label = abbreviateSpellName(spell?.name ?? b.spellId)
                 return (
                   <span
                     key={b.spellId}
-                    title={spell?.name ?? b.spellId}
+                    title={`${spell?.name ?? b.spellId}${details ? ` - ${details}` : ''}`}
                     className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-950/35 border border-blue-700/35 text-blue-300"
                   >
                     <span>{icon}</span>
@@ -638,13 +655,14 @@ export default function BattleArena() {
                 const parts: string[] = []
                 if (activeDebuff.atkMult !== 1)      parts.push(`ATK ${formatDebuffMultiplier(activeDebuff.atkMult)}`)
                 if (activeDebuff.atkSpeedMult !== 1)  parts.push(`Vel ${formatDebuffMultiplier(activeDebuff.atkSpeedMult)}`)
+                const label = abbreviateSpellName(spell?.name ?? activeDebuff.spellId)
                 return (
                   <span
-                    title={spell?.name ?? activeDebuff.spellId}
+                    title={`${spell?.name ?? activeDebuff.spellId}${parts.length > 0 ? ` - ${parts.join(' ')}` : ''}`}
                     className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-950/35 border border-purple-700/35 text-purple-300"
                   >
                     <span>{icon}</span>
-                    <span>{parts.join(' ') || (isEn ? 'Debuff' : 'Debuff')}</span>
+                    <span>{label}</span>
                     <span className="text-[8px] opacity-60 ml-0.5">{activeDebuff.remaining}t</span>
                   </span>
                 )

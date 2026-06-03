@@ -459,44 +459,20 @@ export const useBattleStore = create<BattleStore>()(
       st.comboSize = st.hitsLeft
     }),
 
-    skipBattle: () => set((st) => {
-      if (st.phase === 'over') return
-      let pHp = st.player.hp, eHp = st.enemy.hp
-      let cur: Side = st.attacker
-      let hitsLeft  = st.hitsLeft
+    skipBattle: () => {
       let guard = 2000
-
-      while (pHp > 0 && eHp > 0 && guard-- > 0) {
-        if (cur === 'player') {
-          if (checkDodge(st.enemy)) {
-            st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg: 0, missed: true })
-          } else {
-            const { dmg, isCrit } = calcDmg(st.player, st.enemy)
-            eHp = Math.max(0, eHp - dmg)
-            st.log.unshift({ attacker: st.player.name, defender: st.enemy.name, dmg, isCrit })
+      while (useBattleStore.getState().phase !== 'over' && guard-- > 0) {
+        useBattleStore.getState().applyHit()
+        const afterHit = useBattleStore.getState()
+        if (afterHit.phase === 'over') break
+        if (afterHit.hitsLeft <= 0) {
+          useBattleStore.getState().switchAttacker()
+          if (useBattleStore.getState().attacker === 'enemy') {
+            useBattleStore.getState().tickStatuses()
           }
-        } else {
-          if (checkDodge(st.player)) {
-            st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg: 0, missed: true })
-          } else {
-            const { dmg, isCrit } = calcDmg(st.enemy, st.player)
-            pHp = Math.max(0, pHp - dmg)
-            st.log.unshift({ attacker: st.enemy.name, defender: st.player.name, dmg, isCrit })
-          }
-        }
-        hitsLeft--
-        if (hitsLeft <= 0) {
-          cur = cur === 'player' ? 'enemy' : 'player'
-          const next = cur === 'player' ? st.player : st.enemy
-          const opp  = cur === 'player' ? st.enemy  : st.player
-          hitsLeft = calcHits(next.atkSpeed, opp.atkSpeed)
         }
       }
-
-      st.player.hp = pHp; st.enemy.hp = eHp
-      st.winner = pHp <= 0 ? 'enemy' : 'player'
-      st.phase  = 'over'
-    }),
+    },
 
     logSpell: ({ casterName, name, icon, effectType, value }) => set((st) => {
       // For damage/debuff the target is the enemy; for heal/buff the caster benefits
