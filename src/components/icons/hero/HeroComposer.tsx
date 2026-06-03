@@ -1,87 +1,65 @@
-/**
- * HeroComposer — combina todas as partes do herói em um sprite coeso.
- *
- * Todas as partes usam viewBox "0 0 20 30" e são empilhadas como <g> dentro
- * de um único <svg>. A ordem de renderização respeita o z-order correto:
- *   1. Arma (se for "atrás" — cajado / arco)
- *   2. Pernas
- *   3. Corpo
- *   4. Cabeça
- *   5. Cabelo
- *   6. Arma (se for "na frente" — espada)
- */
-
-import { Head1, Head2, Head3 } from './HeroHead'
-import { Hair1, Hair2, Hair3, Hair4 } from './HeroHair'
-import { Body1, Body2, Body3 } from './HeroBody'
-import { Weapon0, Weapon1, Weapon2, Weapon3, WEAPON_BEHIND } from './HeroWeapon'
-import { Legs1, Legs2, Legs3 } from './HeroLegs'
+import type { CSSProperties } from 'react'
 import type { HeroConfig } from '../../../types/hero'
 import { DEFAULT_HERO_CONFIG } from '../../../types/hero'
+import heroBattle from '../../../assets/hero/hero-pixellab-b6fc494e.png'
+
 export type { HeroConfig }
 export { DEFAULT_HERO_CONFIG }
 
-// ── Lookup maps ──────────────────────────────────────────────────────────────
-
-const HEAD_MAP   = { 1: Head1,   2: Head2,   3: Head3 }
-const HAIR_MAP   = { 1: Hair1,   2: Hair2,   3: Hair3,  4: Hair4 }
-const BODY_MAP   = { 1: Body1,   2: Body2,   3: Body3 }
-const WEAPON_MAP = { 0: Weapon0, 1: Weapon1, 2: Weapon2, 3: Weapon3 }
-const LEGS_MAP   = { 1: Legs1,   2: Legs2,   3: Legs3 }
-
-// ── Componente principal ─────────────────────────────────────────────────────
-
 interface HeroSpriteProps {
   config?: HeroConfig
-  /** Largura em px — altura calculada automaticamente (ratio 20:30) */
   size?: number
   className?: string
 }
 
 export function HeroSprite({
-  config = DEFAULT_HERO_CONFIG,
-  size   = 40,
+  config: _config = DEFAULT_HERO_CONFIG,
+  size = 40,
   className,
 }: HeroSpriteProps) {
-  const HeadComp   = HEAD_MAP[config.head]
-  const HairComp   = HAIR_MAP[config.hair]
-  const BodyComp   = BODY_MAP[config.body]
-  const WeaponComp = WEAPON_MAP[config.weapon]
-  const LegsComp   = LEGS_MAP[config.legs]
+  const frameSize = Math.round(size * 1.5)
+  const sourceSize = 128
+  const crop = { x: 32, y: 18, width: 64, height: 104 }
+  const scale = frameSize / crop.height
+  const imageSize = Math.round(sourceSize * scale)
+  const imageLeft = Math.round((size - crop.width * scale) / 2 - crop.x * scale)
+  const imageTop = Math.round(-crop.y * scale)
 
-  const isBehind = WEAPON_BEHIND[config.weapon] ?? false
+  const imageStyle: CSSProperties = {
+    width: imageSize,
+    height: imageSize,
+    maxWidth: 'none',
+    flexShrink: 0,
+    position: 'absolute',
+    left: imageLeft,
+    top: imageTop,
+    imageRendering: 'pixelated',
+    filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.55))',
+  }
 
   return (
-    <svg
-      width={size}
-      height={Math.round(size * 1.5)}
-      viewBox="0 0 20 30"
-      xmlns="http://www.w3.org/2000/svg"
+    <span
       className={className}
-      aria-label="Herói"
+      style={{
+        width: size,
+        height: frameSize,
+        display: 'inline-flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        overflow: 'visible',
+        position: 'relative',
+      }}
+      aria-label="Hero"
     >
-      {/* 1. Arma atrás (cajado / arco) */}
-      {isBehind && <WeaponComp />}
-
-      {/* 2. Pernas */}
-      <LegsComp />
-
-      {/* 3. Corpo */}
-      <BodyComp />
-
-      {/* 4. Cabeça */}
-      <HeadComp />
-
-      {/* 5. Cabelo / capacete / capuz */}
-      <HairComp />
-
-      {/* 6. Arma na frente (espada) */}
-      {!isBehind && <WeaponComp />}
-    </svg>
+      <img
+        src={heroBattle}
+        alt=""
+        draggable={false}
+        style={imageStyle}
+      />
+    </span>
   )
 }
-
-// ── Gerador aleatório ────────────────────────────────────────────────────────
 
 function rand<T extends number>(max: T): T {
   return (Math.floor(Math.random() * max) + 1) as T
@@ -89,10 +67,10 @@ function rand<T extends number>(max: T): T {
 
 export function randomHeroConfig(): HeroConfig {
   return {
-    head:   rand(3),
-    hair:   rand(4),
-    body:   rand(3),
+    head: rand(3),
+    hair: rand(4),
+    body: rand(3),
     weapon: Math.floor(Math.random() * 4) as 0 | 1 | 2 | 3,
-    legs:   rand(3),
+    legs: rand(3),
   }
 }
