@@ -37,7 +37,9 @@ const RARITY_LABEL_EN: Record<string, string> = {
   epic: 'Epic', set: 'Set', unique: 'Unique',
 }
 
-const TICK_MS = 200
+const STEP_MS = 200
+const MAX_CATCHUP_MS = 10 * 60 * 1000
+const MAX_STEPS_PER_WAKE = 60
 
 export function useGameLoop() {
   const setSpeed      = useBattleStore((s) => s.setSpeed)
@@ -65,7 +67,7 @@ export function useGameLoop() {
       }
     }
 
-    const id = setInterval(() => {
+    const runStep = (deltaMs: number) => {
       const speed    = useBattleStore.getState().speed
       const attrs    = useHeroStore.getState().attributes
       const heroLvl  = useHeroStore.getState().level
@@ -75,8 +77,8 @@ export function useGameLoop() {
         useSpellStore.getState().activeBuffs,
       )
 
-      tickResources(TICK_MS, speed, derived)
-      useSpellStore.getState().tick(TICK_MS / 1000)
+      tickResources(deltaMs, speed, derived)
+      useSpellStore.getState().tick(deltaMs / 1000)
 
       const turn     = useBattleStore.getState().turn
       const attacker = useBattleStore.getState().attacker
@@ -98,7 +100,7 @@ export function useGameLoop() {
 
       const maxDeck   = Math.min(8, 3 + Math.floor(derived.vision / 50))
       const heroLevel = useHeroStore.getState().level
-      useMapStore.getState().tickMap(TICK_MS, derived.moveSpeed, maxDeck, derived.vision, heroLevel)
+      useMapStore.getState().tickMap(deltaMs, derived.moveSpeed, maxDeck, derived.vision, heroLevel)
 
       // Drain treasure XP and monster gold
       const xp = useMapStore.getState().drainXp()
@@ -283,8 +285,38 @@ export function useGameLoop() {
 
       // Always update prevPhase — avoids stale 'over' when returning from home
       prevPhase.current = phase
-    }, TICK_MS)
+    }
 
-    return () => clearInterval(id)
+    let lastTickAt = performance.now()
+    let lagMs = 0
+
+    function pump() {
+      const now = performance.now()
+      const elapsedMs = now - lastTickAt
+      lastTickAt = now
+
+      lagMs += Math.min(Math.max(0, elapsedMs), MAX_CATCHUP_MS)
+
+      let steps = 0
+      while (lagMs >= STEP_MS && steps < MAX_STEPS_PER_WAKE) {
+        runStep(STEP_MS)
+        lagMs -= STEP_MS
+        steps += 1
+      }
+    }
+
+    function pumpOnResume() {
+      pump()
+    }
+
+    const id = setInterval(pump, STEP_MS)
+    window.addEventListener('focus', pumpOnResume)
+    document.addEventListener('visibilitychange', pumpOnResume)
+
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', pumpOnResume)
+      document.removeEventListener('visibilitychange', pumpOnResume)
+    }
   }, [tickResources, setSpeed, gainXp, earnGold])
 }
