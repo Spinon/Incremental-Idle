@@ -12,6 +12,7 @@ import QuestPanel from './components/QuestPanel'
 import StickyBar from './components/StickyBar'
 import NotifToast from './components/NotifToast'
 import { SpriteGallery } from './components/icons/__SpriteGallery'
+import { useCloudSaveSync } from './hooks/useCloudSaveSync'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
@@ -119,6 +120,7 @@ function OfflineSyncOverlay({
 }
 
 function GameRoot() {
+  useCloudSaveSync()
   const { offlineSync, acceptOfflineProgress, discardOfflineProgress } = useGameLoop()
 
   const theme        = useSettingsStore((s) => s.theme)
