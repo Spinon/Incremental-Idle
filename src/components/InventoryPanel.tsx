@@ -255,6 +255,10 @@ function weaponEffectText(type: WeaponType, progress: Record<WeaponType, WeaponP
   }
 }
 
+function equippedWeaponCount(type: WeaponType, loadout: EquippedWeapons): number {
+  return Number(loadout.mainHand === type) + Number(loadout.offHand === type)
+}
+
 function WeaponMasteryPanel({
   progress,
   equipped,
@@ -369,6 +373,10 @@ function WeaponMasteryPanel({
           const owned = materials[materialTier] ?? 0
           const canForge = atCap && owned >= forgeCost
           const equippedHere = loadout.mainHand === type || loadout.offHand === type
+          const equippedCount = equippedWeaponCount(type, loadout)
+          const effectLoadout: EquippedWeapons = equippedHere
+            ? loadout
+            : { mainHand: type === 'shield' ? 'sword' : type, offHand: type === 'shield' ? 'shield' : null }
 
           return (
             <div key={type} className={cn(
@@ -386,16 +394,31 @@ function WeaponMasteryPanel({
                   </p>
                 </div>
                 {equippedHere && (
-                  <span className="text-[8px] font-bold text-indigo-500 dark:text-indigo-400">
-                    {isEn ? 'ON' : 'EQP'}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    {equippedCount > 1 && (
+                      <span
+                        title={isEn ? 'Effect stacks from both hands' : 'Efeito acumulado pelas duas maos'}
+                        className="rounded border border-amber-300/70 dark:border-amber-600/60 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.5 text-[8px] font-black text-amber-600 dark:text-amber-300"
+                      >
+                        x{equippedCount}
+                      </span>
+                    )}
+                    <span className="text-[8px] font-bold text-indigo-500 dark:text-indigo-400">
+                      {isEn ? 'ON' : 'EQP'}
+                    </span>
+                  </div>
                 )}
               </div>
               <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                 <div className="h-full rounded-full bg-indigo-500" style={{ width: `${xpPct}%` }} />
               </div>
               <p className="mt-1 text-[9px] text-slate-500 dark:text-slate-500 min-h-4">
-                {weaponEffectText(type, weaponProgress, { mainHand: type === 'shield' ? 'sword' : type, offHand: type === 'shield' ? 'shield' : null }, isEn)}
+                {weaponEffectText(type, weaponProgress, effectLoadout, isEn)}
+                {equippedCount > 1 && (
+                  <span className="ml-1 font-bold text-amber-500 dark:text-amber-300">
+                    {isEn ? '(x2 stacked)' : '(x2 acumulado)'}
+                  </span>
+                )}
               </p>
               <div className="mt-1 flex items-center gap-1.5">
                 <span className="text-[8px] text-slate-400 dark:text-slate-600 flex-1">

@@ -388,7 +388,7 @@ export const useBattleStore = create<BattleStore>()(
           const idx = st.enemyStatuses.findIndex(s => s.type === 'poison')
           const status: ActiveStatus = { element: 'toxicum', type: 'poison', power: weaponProfile.daggerPoisonPower, turnsLeft: 4 }
           if (idx >= 0) {
-            st.enemyStatuses[idx].power = Math.max(st.enemyStatuses[idx].power, status.power)
+            st.enemyStatuses[idx].power += status.power
             st.enemyStatuses[idx].turnsLeft = Math.max(st.enemyStatuses[idx].turnsLeft, status.turnsLeft)
           } else {
             st.enemyStatuses.push(status)
