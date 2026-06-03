@@ -3,14 +3,14 @@ import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
 import { useQuestStore } from '../../store/questStore'
 import { getDerivedStats } from '../../formulas/derived'
-import { buildMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
+import { buildMonster, estimateMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS, monsterName } from '../../data/monsters'
 import { useT } from '../../i18n/useT'
 import { useSettingsStore } from '../../store/settingsStore'
 import MapViewport from './MapViewport'
 import TileDeck from './TileDeck'
 import { cn } from '../../lib/utils'
-import type { PlacedTile } from '../../types/map'
+import type { PlacedTile, TileContent } from '../../types/map'
 import type { MonsterRarity } from '../../types/monster'
 import type { QuestMapMarker, QuestObjectiveExtermination } from '../../types/quest'
 
@@ -29,6 +29,16 @@ function levelColor(tileLv: number, heroLv: number): string {
   if (diff <= 2)  return 'text-yellow-300'
   if (diff <= 5)  return 'text-orange-400'
   return 'text-red-400'
+}
+
+function stableMonsterForTile(tile: PlacedTile) {
+  const hash = Math.abs((tile.x * 73856093) ^ (tile.y * 19349663) ^ (tile.level * 83492791))
+  return FOREST_MONSTERS[hash % FOREST_MONSTERS.length]
+}
+
+function previewEnragedLevel(baseLevel: number, tilesPlaced: number): number {
+  const maxBonus = Math.max(2, Math.ceil(tilesPlaced / 100 + 1))
+  return baseLevel + Math.ceil(maxBonus / 2)
 }
 
 export default function MapSection() {
@@ -102,18 +112,25 @@ export default function MapSection() {
 
   const isPanned     = cameraPos.x !== playerPos.x || cameraPos.y !== playerPos.y
   const selectedTile = selectedPos ? (grid[gridKey(selectedPos.x, selectedPos.y)] ?? null) : null
+  const selectedSight = selectedPos && !selectedTile
+    ? (sightedCells[gridKey(selectedPos.x, selectedPos.y)] ?? null)
+    : null
 
   // Vision radius (same formula as MapViewport)
   const visRadius = Math.max(2, Math.round(derived.vision / 38))
 
   function handleTileClick(x: number, y: number) {
-    setDestination(x, y)
-    setCameraPos({ x: playerPos.x, y: playerPos.y })
     if (selectedPos?.x === x && selectedPos?.y === y) {
-      setSelectedPos(null)
+      if (grid[gridKey(x, y)]) setDestination(x, y)
     } else {
       setSelectedPos({ x, y })
     }
+  }
+
+  function handleGoToSelected() {
+    if (!selectedPos) return
+    if (!grid[gridKey(selectedPos.x, selectedPos.y)]) return
+    setDestination(selectedPos.x, selectedPos.y)
   }
 
   function handleEnemySelect(x: number, y: number) {
@@ -263,9 +280,17 @@ export default function MapSection() {
           />
 
           {/* Tile info panel — shows below viewport when a tile is selected */}
-          {selectedTile && (
+          {selectedPos && (
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3">
-              <TileInfoPanel tile={selectedTile} onClose={() => setSelectedPos(null)} tilesPlaced={tilesPlaced} />
+              <ActiveTileInfoPanel
+                pos={selectedPos}
+                tile={selectedTile}
+                sight={selectedSight}
+                heroLevel={heroLevel}
+                tilesPlaced={tilesPlaced}
+                isDestination={!!(destination?.x === selectedPos.x && destination?.y === selectedPos.y)}
+                onGo={handleGoToSelected}
+              />
             </div>
           )}
 
@@ -301,9 +326,11 @@ export default function MapSection() {
 
 interface NearbyEntry {
   x: number; y: number
+  baseLevel: number
   level: number
   monsterType: string
   monsterRarity: MonsterRarity
+  enraged: boolean
   explored: boolean
   dist: number
   /** Pre-computed display stats (stable, no Math.random jitter per-render). */
@@ -329,20 +356,24 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
     const result: NearbyEntry[] = []
     const revealRange = visRadius + 2   // same as MapViewport penumbra edge
 
-    // Collect from placed grid tiles
+    // Collect from placed grid tiles. Every non-service tile can lead to a
+    // battle; monster lairs that are still unexplored are the enraged variant.
     for (const [, tile] of Object.entries(grid)) {
-      if (tile.content.type !== 'monster') continue
+      if (tile.content.type === 'market' || tile.content.type === 'quest') continue
       const dist = Math.max(Math.abs(tile.x - playerPos.x), Math.abs(tile.y - playerPos.y))
       if (dist > revealRange) continue
-      const lvl      = tile.content.monsterLevel ?? tile.level
-      const mType    = tile.content.monsterType ?? 'goblin'
+      const isEnraged = tile.content.type === 'monster' && !tile.explored
+      const baseLevel = tile.content.monsterLevel ?? tile.level
+      const lvl       = isEnraged ? previewEnragedLevel(baseLevel, tilesPlaced) : baseLevel
+      const fallback  = stableMonsterForTile(tile)
+      const mType     = tile.content.monsterType ?? fallback.id
       const mRarity  = (tile.content.monsterRarity ?? 'normal') as MonsterRarity
       const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
       const monster  = buildMonster(template, lvl, mRarity, tilesPlaced)
       result.push({
-        x: tile.x, y: tile.y, level: lvl,
+        x: tile.x, y: tile.y, baseLevel, level: lvl,
         monsterType: mType, monsterRarity: mRarity,
-        explored: tile.explored, dist,
+        enraged: isEnraged, explored: tile.explored, dist,
         stats: { hp: monster.maxHp, atk: monster.atk, def: monster.def },
       })
     }
@@ -423,8 +454,13 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
                 {rarityLabel && <span className={cn('mr-1 text-[10px]', rarityColor)}>[{rarityLabel}]</span>}
                 {monsterName(template, isEn)}
               </span>
-              <span className={cn('ml-auto text-[10px] font-black tabular-nums shrink-0', levelColor(e.level, heroLevel))}>
-                Nv.{e.level}
+              {e.enraged && (
+                <span className="ml-auto text-[9px] font-black uppercase text-red-400 shrink-0">
+                  {isEn ? 'Enraged' : 'Furioso'}
+                </span>
+              )}
+              <span className={cn(e.enraged ? 'ml-1' : 'ml-auto', 'text-[10px] font-black tabular-nums shrink-0', levelColor(e.level, heroLevel))}>
+                Nv.{e.enraged ? `${e.baseLevel}+` : e.level}
               </span>
             </div>
             <div className="flex gap-2 mt-0.5 text-[9px] text-slate-500 tabular-nums">
@@ -447,7 +483,155 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
 
 // ─── Tile info sub-component ─────────────────────────────────────────────────
 
-function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: PlacedTile; onClose(): void; tilesPlaced?: number }) {
+function ActiveTileInfoPanel({
+  pos,
+  tile,
+  sight,
+  heroLevel,
+  tilesPlaced = 0,
+  isDestination,
+  onGo,
+}: {
+  pos: { x: number; y: number }
+  tile: PlacedTile | null
+  sight: TileContent | null
+  heroLevel: number
+  tilesPlaced?: number
+  isDestination: boolean
+  onGo(): void
+}) {
+  const lang = useSettingsStore(s => s.lang)
+  const isEn = lang === 'en'
+
+  const content = tile?.content ?? sight
+  const level = tile?.level ?? content?.monsterLevel ?? null
+  const explored = tile?.explored ?? false
+  const isBlocked = !tile
+  const isUnexplored = !!tile && !explored
+
+  const stateLabel = isBlocked
+    ? (isEn ? 'Obstructed' : 'Obstruido')
+    : isUnexplored
+      ? (isEn ? 'Unexplored' : 'Inexplorado')
+      : (isEn ? 'Explored' : 'Explorado')
+
+  const contentLabel =
+    !content                   ? (isEn ? 'Unknown' : 'Desconhecido') :
+    content.type === 'market'  ? (isEn ? 'Market' : 'Mercado') :
+    content.type === 'monster' ? (isEn ? 'Monster Lair' : 'Covil') :
+    content.type === 'treasure'? (isEn ? 'Treasure' : 'Tesouro') :
+    content.type === 'quest'   ? 'Quest' :
+                                  (isEn ? 'Wild Path' : 'Caminho selvagem')
+
+  const headerColor =
+    isBlocked                  ? 'text-slate-400' :
+    content?.type === 'market' ? 'text-indigo-400' :
+    content?.type === 'monster'? 'text-red-400' :
+    content?.type === 'treasure'? 'text-yellow-400' :
+    content?.type === 'quest'  ? 'text-emerald-400' : 'text-slate-400'
+
+  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'quest'
+    ? (() => {
+        const baseLevel = content.monsterLevel ?? tile.level
+        const enraged = !tile.explored && content.type === 'monster'
+        const lvl = enraged ? previewEnragedLevel(baseLevel, tilesPlaced) : baseLevel
+        const rarity = (content.monsterRarity ?? 'normal') as MonsterRarity
+        const template = content.monsterType
+          ? (FOREST_MONSTER_MAP.get(content.monsterType) ?? stableMonsterForTile(tile))
+          : stableMonsterForTile(tile)
+        return {
+          template,
+          stats: estimateMonster(template, lvl, rarity, tilesPlaced),
+          level: lvl,
+          baseLevel,
+          enraged,
+          rarity,
+        }
+      })()
+    : null
+
+  const levelDelta = level == null ? null : level - heroLevel
+  const canGo = !!tile && !isDestination
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={cn('text-[10px] font-bold uppercase tracking-widest', headerColor)}>
+          {stateLabel}
+        </span>
+        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+          {contentLabel}
+        </span>
+        <span className="text-[10px] text-slate-500 dark:text-slate-600 tabular-nums">
+          ({pos.x}, {pos.y}){level == null ? '' : ` - L${level}`}
+        </span>
+        <button
+          onClick={onGo}
+          disabled={!canGo}
+          className={cn(
+            'ml-auto rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border transition-colors',
+            canGo
+              ? 'border-sky-400/50 text-sky-500 hover:bg-sky-500/10'
+              : 'border-slate-300/50 dark:border-slate-700 text-slate-400 cursor-default',
+          )}
+        >
+          {isDestination ? (isEn ? 'Target' : 'Alvo') : (isEn ? 'Go' : 'Ir')}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-2 text-[10px] text-slate-500 dark:text-slate-500">
+        {levelDelta != null && (
+          <span className={cn('rounded border px-1.5 py-0.5 font-semibold border-current/20', levelColor(level ?? heroLevel, heroLevel))}>
+            {isEn ? 'Level delta' : 'Dif. nivel'} {levelDelta > 0 ? '+' : ''}{levelDelta}
+          </span>
+        )}
+        {enemyInfo?.enraged && (
+          <span className="rounded border border-red-400/20 px-1.5 py-0.5 font-semibold text-red-400">
+            {isEn ? 'Enraged' : 'Furioso'} +{enemyInfo.level - enemyInfo.baseLevel}
+          </span>
+        )}
+        {enemyInfo && enemyInfo.rarity !== 'normal' && (
+          <span className={cn('rounded border px-1.5 py-0.5 font-semibold border-current/20', MONSTER_RARITY_COLOR[enemyInfo.rarity])}>
+            {isEn ? MONSTER_RARITY_LABEL_EN[enemyInfo.rarity] : MONSTER_RARITY_LABEL[enemyInfo.rarity]}
+          </span>
+        )}
+      </div>
+
+      {isBlocked && (
+        <div className="text-[11px] text-slate-500">
+          {isEn ? 'No valid tile has been placed here yet.' : 'Ainda nao existe tile valido nesta celula.'}
+        </div>
+      )}
+
+      {enemyInfo && (
+        <div className="flex flex-wrap gap-3 text-[11px] text-slate-400">
+          <span>{enemyInfo.template.emoji} {monsterName(enemyInfo.template, isEn)} <span className="text-red-400 font-semibold">Nv.{enemyInfo.level}</span></span>
+          <span>HP <span className="text-slate-300">{enemyInfo.stats.maxHp}</span></span>
+          <span>ATK <span className="text-slate-300">{enemyInfo.stats.atk}</span></span>
+          <span>DEF <span className="text-slate-300">{enemyInfo.stats.def}</span></span>
+          {explored && <span className="text-green-700 text-[10px]">{isEn ? 'Resolved' : 'Resolvido'}</span>}
+        </div>
+      )}
+
+      {content?.type === 'treasure' && (
+        <div className="text-[11px] text-slate-400">
+          {explored
+            ? <span className="text-green-700">{isEn ? 'Collected' : 'Coletado'}</span>
+            : <span>{isEn ? 'Reward' : 'Recompensa'}: <span className="text-yellow-400 font-semibold">+{content.xpAmount} XP</span></span>
+          }
+        </div>
+      )}
+
+      {content?.type === 'market' && (
+        <div className="text-[11px] text-indigo-400/80">
+          {isEn ? 'Walk here to enter the shop.' : 'Va ate aqui para entrar na loja.'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: PlacedTile; onClose(): void; tilesPlaced?: number }) {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
 

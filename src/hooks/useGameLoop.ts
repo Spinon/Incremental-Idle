@@ -8,6 +8,7 @@ import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
+import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
 import type { MonsterRarity } from '../types/monster'
@@ -47,6 +48,22 @@ export function useGameLoop() {
   const prevScene     = useRef<string>('map')
 
   useEffect(() => {
+    function collectWeaponMaterials() {
+      const drops = useMapStore.getState().drainWeaponMaterials()
+      for (const drop of drops) {
+        useInventoryStore.getState().addWeaponMaterial(drop.tier, drop.count)
+        useNotifStore.getState().push({
+          title:    'Material de forja!',
+          titleEn:  'Forge material!',
+          body:     `${WEAPON_MATERIAL_LABELS.pt} T${drop.tier} x${drop.count}`,
+          bodyEn:   `${WEAPON_MATERIAL_LABELS.en} T${drop.tier} x${drop.count}`,
+          rarity:   drop.tier >= 4 ? 'epic' : drop.tier >= 2 ? 'rare' : 'uncommon',
+          scrollTo: 'equips',
+          actions:  [{ label: 'Ver Armas', labelEn: 'View Weapons', kind: 'scroll', payload: 'equips' }],
+        })
+      }
+    }
+
     const id = setInterval(() => {
       const speed    = useBattleStore.getState().speed
       const attrs    = useHeroStore.getState().attributes
@@ -83,6 +100,7 @@ export function useGameLoop() {
       if (xp > 0) gainXp(xp)
       const gold = useMapStore.getState().drainGold()
       if (gold > 0) earnGold(gold)
+      collectWeaponMaterials()
 
       // Battle-end handling — always track phase, react only in map scene
       const phase = useBattleStore.getState().phase
@@ -99,6 +117,7 @@ export function useGameLoop() {
         if (tileXp2 > 0) gainXp(tileXp2)
         const gold2 = useMapStore.getState().drainGold()
         if (gold2 > 0) earnGold(gold2)
+        collectWeaponMaterials()
         useBattleStore.getState().reset()
         prevTurn.current = -1
       }
@@ -170,6 +189,13 @@ export function useGameLoop() {
             if (Math.abs(heroLevel - monsterReward.monsterLevel) <= 5) {
               gainXp(monsterReward.xp)
             }
+          }
+
+          {
+            const enemy = useBattleStore.getState().enemy
+            useInventoryStore.getState().grantWeaponXp(
+              Math.max(5, Math.round(enemy.maxHp * 0.25 + enemy.level * 8)),
+            )
           }
 
           // Item drop

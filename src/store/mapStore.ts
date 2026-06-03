@@ -6,10 +6,12 @@ import { useQuestStore } from './questStore'
 import { pickForestMonster } from '../data/monsters'
 import { pickMonsterRarity } from '../formulas/monsters'
 import { generateQuest } from '../formulas/quests'
+import { rollWeaponMaterialDrop } from '../formulas/weapons'
 import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
 import type { Direction, MapTile, PlacedTile, TileContent } from '../types/map'
 import type { MarketOffer } from '../types/item'
+import type { WeaponMaterialDrop } from '../types/weapon'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 export const DIR_OPPOSITE: Record<Direction, Direction> = { N: 'S', S: 'N', E: 'W', W: 'E' }
@@ -65,7 +67,7 @@ interface TileEntryResult {
   questTileLevel: number | null
 }
 
-type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'tilesPlaced' | 'bountyTiles'>
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'tilesPlaced' | 'bountyTiles'>
 
 function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult {
   const tileKey = `${tile.x},${tile.y}`
@@ -117,6 +119,8 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
     tile.explored = true
     if (tile.content.type === 'treasure' && tile.content.xpAmount) {
       st.pendingXp += tile.content.xpAmount
+      const weaponMaterial = rollWeaponMaterialDrop(tile.level)
+      if (weaponMaterial) st.pendingWeaponMaterials.push(weaponMaterial)
       tile.content  = { type: 'empty' }
     }
   }
@@ -305,6 +309,7 @@ interface MapStore {
   deckAccum: number
   pendingXp: number
   pendingGold: number
+  pendingWeaponMaterials: WeaponMaterialDrop[]
   /** Monster-specific XP kept separate so a hero-level range check can be applied. */
   pendingMonsterXp: { xp: number; monsterLevel: number } | null
   sightedCells: Record<string, TileContent>
@@ -352,6 +357,7 @@ interface MapStore {
   toggleRiskMode(): void
   drainXp(): number
   drainGold(): number
+  drainWeaponMaterials(): WeaponMaterialDrop[]
   drainMonsterXp(): { xp: number; monsterLevel: number } | null
   goHome(): void
   leaveScene(): void
@@ -402,6 +408,7 @@ export const useMapStore = create<MapStore>()(
       deckAccum: 0,
       pendingXp: 0,
       pendingGold: 0,
+      pendingWeaponMaterials: [],
       pendingMonsterXp: null,
       sightedCells: {},
       autoExplore: 'move' as 'manual' | 'move' | 'full',
@@ -540,6 +547,8 @@ export const useMapStore = create<MapStore>()(
               exitTile.explored = true
               if (exitTile.content.xpAmount) {
                 st.pendingXp       += exitTile.content.xpAmount
+                const weaponMaterial = rollWeaponMaterialDrop(exitTile.level)
+                if (weaponMaterial) st.pendingWeaponMaterials.push(weaponMaterial)
                 exitTile.content    = { type: 'empty' }
               }
             }
@@ -643,6 +652,12 @@ export const useMapStore = create<MapStore>()(
         return gold
       },
 
+      drainWeaponMaterials: () => {
+        const drops = get().pendingWeaponMaterials
+        if (drops.length > 0) set((st) => { st.pendingWeaponMaterials = [] })
+        return drops
+      },
+
       drainMonsterXp: () => {
         const m = get().pendingMonsterXp
         if (m) set((st) => { st.pendingMonsterXp = null })
@@ -710,6 +725,7 @@ export const useMapStore = create<MapStore>()(
         st.deckAccum          = 0
         st.pendingXp          = 0
         st.pendingGold        = 0
+        st.pendingWeaponMaterials = []
         st.pendingMonsterXp   = null
         st.sightedCells       = {}
         st.scene              = 'map'

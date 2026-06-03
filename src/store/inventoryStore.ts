@@ -2,6 +2,23 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { Item, ItemRarity, EquipSlot, EquipmentSlots, EquipmentKey, Consumable } from '../types/item'
+import type { EquippedWeapons, WeaponHand, WeaponMaterials, WeaponProgress, WeaponType } from '../types/weapon'
+import {
+  canEquipWeapon,
+  createWeaponProgress,
+  enforceWeaponLoadout,
+  equippedWeaponTypes,
+  hasWeaponMaterial,
+  isWeaponAtForgeCap,
+  normalizeEquippedWeapons,
+  normalizeWeaponProgress,
+  weaponForgeCost,
+  weaponForgeMaterialTier,
+  weaponMaxLevelForTier,
+  weaponXpForLevel,
+  WEAPON_MAX_TIER,
+  WEAPON_TYPES,
+} from '../formulas/weapons'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 
 const BASE_SLOTS      = 12
@@ -67,6 +84,9 @@ interface InventoryStore {
   consumables:  Consumable[]
   /** IDs of consumables assigned to quickslots 0-3 (null = empty slot). */
   quickslots:   (string | null)[]
+  weaponProgress: Record<WeaponType, WeaponProgress>
+  equippedWeapons: EquippedWeapons
+  weaponMaterials: WeaponMaterials
 
   /** Returns true if added successfully; false if inventory is full. */
   addItem(item: Item): boolean
@@ -97,6 +117,10 @@ interface InventoryStore {
   removeConsumable(id: string): Consumable | null
   /** Assigns or clears a quickslot. Moves any duplicate assignment first. */
   assignQuickslot(slot: number, id: string | null): void
+  equipWeapon(hand: WeaponHand, type: WeaponType): void
+  grantWeaponXp(amount: number): void
+  addWeaponMaterial(tier: number, count?: number): void
+  forgeWeapon(type: WeaponType): boolean
 
   // ── Manual sell mode ──────────────────────────────────────────────────────
   sellMode: boolean
@@ -124,6 +148,9 @@ export const useInventoryStore = create<InventoryStore>()(
       autoSell:        { ...DEFAULT_AUTO_SELL },
       consumables:     [],
       quickslots:      Array(QUICKSLOT_COUNT).fill(null) as (string | null)[],
+      weaponProgress:  Object.fromEntries(WEAPON_TYPES.map(t => [t, createWeaponProgress(t)])) as Record<WeaponType, WeaponProgress>,
+      equippedWeapons: { mainHand: 'sword', offHand: 'shield' },
+      weaponMaterials: {},
       sellMode:        false,
       selectedForSale: [],
 
@@ -242,6 +269,69 @@ export const useInventoryStore = create<InventoryStore>()(
       }),
 
       // ── Manual sell mode ────────────────────────────────────────────────────
+
+      equipWeapon: (hand, type) => set((st) => {
+        st.weaponProgress = normalizeWeaponProgress(st.weaponProgress)
+        st.equippedWeapons = normalizeEquippedWeapons(st.equippedWeapons)
+        if (!canEquipWeapon(hand, type, st.equippedWeapons)) return
+
+        if (hand === 'mainHand') {
+          st.equippedWeapons.mainHand = type
+        } else {
+          st.equippedWeapons.offHand = type
+        }
+        st.equippedWeapons = enforceWeaponLoadout(st.equippedWeapons)
+      }),
+
+      grantWeaponXp: (amount) => set((st) => {
+        st.weaponProgress = normalizeWeaponProgress(st.weaponProgress)
+        st.equippedWeapons = normalizeEquippedWeapons(st.equippedWeapons)
+        const equipped = equippedWeaponTypes(st.equippedWeapons)
+        if (equipped.length === 0) return
+
+        for (const type of equipped) {
+          const p = st.weaponProgress[type]
+          if (isWeaponAtForgeCap(p)) continue
+          const share = equipped.length === 1 ? 1 : (type === st.equippedWeapons.mainHand ? 0.75 : 0.55)
+          p.xp += Math.max(1, Math.round(amount * share))
+
+          while (p.xp >= p.xpToNext && p.level < p.maxLevel) {
+            p.xp -= p.xpToNext
+            p.level += 1
+            p.xpToNext = weaponXpForLevel(p.level, p.tier)
+          }
+          if (p.level >= p.maxLevel) {
+            p.level = p.maxLevel
+            p.xp = 0
+            p.xpToNext = weaponXpForLevel(p.level, p.tier)
+          }
+        }
+      }),
+
+      addWeaponMaterial: (tier, count = 1) => set((st) => {
+        const key = Math.max(1, Math.round(tier))
+        st.weaponMaterials[key] = (st.weaponMaterials[key] ?? 0) + Math.max(1, Math.round(count))
+      }),
+
+      forgeWeapon: (type) => {
+        let forged = false
+        set((st) => {
+          st.weaponProgress = normalizeWeaponProgress(st.weaponProgress)
+          const p = st.weaponProgress[type]
+          if (!p || p.tier >= WEAPON_MAX_TIER || !isWeaponAtForgeCap(p)) return
+          const materialTier = weaponForgeMaterialTier(p)
+          const cost = weaponForgeCost(p)
+          if (!hasWeaponMaterial(st.weaponMaterials, materialTier, cost)) return
+
+          st.weaponMaterials[materialTier] -= cost
+          p.tier += 1
+          p.maxLevel = weaponMaxLevelForTier(p.tier)
+          p.xp = 0
+          p.xpToNext = weaponXpForLevel(p.level, p.tier)
+          forged = true
+        })
+        return forged
+      },
 
       setSellMode: (v) => set((st) => {
         st.sellMode        = v

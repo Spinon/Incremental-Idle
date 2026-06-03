@@ -8,6 +8,8 @@ import { getDerivedStats } from '../formulas/derived'
 import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
 import { useMapStore } from './mapStore'
+import { useInventoryStore } from './inventoryStore'
+import { getWeaponCombatProfile } from '../formulas/weapons'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
@@ -75,10 +77,16 @@ export const useSpellStore = create<SpellStore>()(
       if ((get().cooldowns[spellId] ?? 0) > 0) return
 
       const heroState = useHeroStore.getState()
-      if (heroState.mana < spell.manaCost) return
+      const weaponState = useInventoryStore.getState()
+      const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
+      const isSlotOneSpell = get().spellSlots[0] === spellId
+      const manaCost = Math.max(1, Math.round(
+        spell.manaCost * (isSlotOneSpell ? (1 - weaponProfile.staffSlotOneManaDiscount) : 1),
+      ))
+      if (heroState.mana < manaCost) return
 
       // ── Consume mana (outside Immer) ─────────────────────────────────
-      heroState.consumeMana(spell.manaCost)
+      heroState.consumeMana(manaCost)
 
       const { effect } = spell
       const derived    = getDerivedStats(heroState.attributes)
@@ -160,7 +168,7 @@ export const useSpellStore = create<SpellStore>()(
       // ── Update spellStore state (Immer set — no side effects here) ────
       set((st) => {
         // Cooldown in turns
-        st.cooldowns[spellId] = spell.cooldown
+        st.cooldowns[spellId] = Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))
 
         // Buff / utility side-effects
         if (effect.statAdds && effect.duration) {

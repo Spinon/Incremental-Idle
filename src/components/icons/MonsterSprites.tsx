@@ -56,21 +56,6 @@ function rect(g: Grid, x: number, y: number, w: number, h: number, ch: string) {
   }
 }
 
-/** Triângulo apontando para CIMA (estreito no topo). apex em (cx, yTop). */
-function triUp(g: Grid, cx: number, yTop: number, height: number, halfBaseMax: number, ch: string) {
-  for (let i = 0; i < height; i++) {
-    const half = Math.round((i / (height - 1)) * halfBaseMax)
-    rect(g, cx - half, yTop + i, half * 2 + 1, 1, ch)
-  }
-}
-
-/** Triângulo apontando para a DIREITA (ponta à direita). base em xLeft. */
-function triRight(g: Grid, xLeft: number, cy: number, length: number, halfBaseMax: number, ch: string) {
-  for (let i = 0; i < length; i++) {
-    const half = Math.round(((length - 1 - i) / (length - 1)) * halfBaseMax)
-    rect(g, xLeft + i, cy - half, 1, half * 2 + 1, ch)
-  }
-}
 
 /** Adiciona contorno (ch) em toda célula vazia adjacente a uma célula preenchida. */
 function outline(g: Grid, ch: string) {
@@ -87,6 +72,31 @@ function outline(g: Grid, ch: string) {
     }
   }
   for (const [x, y] of todo) g[y][x] = ch
+}
+
+type Pt = [number, number]
+
+/** Preenche um polígono (lista de vértices) via scanline — bordas diagonais/curvas. */
+function fillPoly(g: Grid, pts: Pt[], ch: string) {
+  const ys = pts.map(p => p[1])
+  const minY = Math.max(0, Math.floor(Math.min(...ys)))
+  const maxY = Math.min(g.length - 1, Math.ceil(Math.max(...ys)))
+  for (let y = minY; y <= maxY; y++) {
+    const xs: number[] = []
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, y1] = pts[i]
+      const [x2, y2] = pts[(i + 1) % pts.length]
+      if ((y1 <= y && y2 > y) || (y2 <= y && y1 > y)) {
+        xs.push(x1 + ((y - y1) / (y2 - y1)) * (x2 - x1))
+      }
+    }
+    xs.sort((a, b) => a - b)
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const xa = Math.round(xs[k])
+      const xb = Math.round(xs[k + 1])
+      if (xb > xa) rect(g, xa, y, xb - xa, 1, ch)
+    }
+  }
 }
 
 function PixelMap({ grid, palette }: { grid: Grid; palette: Record<string, string> }) {
@@ -305,82 +315,84 @@ function GoblinAccessory({ rarity, enraged }: AccessoryProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const WOLF_PALETTE: Record<string, string> = {
-  B: '#2c313b',  // pelo base
-  S: '#1b2028',  // sombra
-  D: '#12151c',  // sombra profunda
-  L: '#3e4654',  // brilho
-  H: '#515b6b',  // brilho forte
-  G: '#14171e',  // pata escura / casco
-  R: '#d83030',  // olho vermelho
-  r: '#ff7058',  // brilho do olho
-  N: '#050507',  // nariz
-  F: '#e8e2cc',  // presa
-  i: '#5a2a2a',  // interior da orelha
-  K: '#090b10',  // contorno
+  // rampa de cinza CLARA — espaço amplo p/ sombra e luz lerem
+  H: '#a6b1c0',  // brilho forte
+  L: '#8a96a6',  // brilho
+  M: '#737f8f',  // médio-claro
+  B: '#5c6776',  // base (pelo)
+  S: '#414a59',  // sombra (juba/peito)
+  D: '#2c333f',  // sombra profunda (separações)
+  G: '#242a34',  // garra / dedo
+  R: '#ff3b3b',  // olho vermelho
+  r: '#ff9a7a',  // brilho do olho
+  N: '#0e1118',  // nariz
+  F: '#f4f0e0',  // presa
+  i: '#6a3232',  // interior da orelha
+  t: '#b04a4a',  // língua
+  K: '#14181f',  // contorno
 }
 
 function buildWolfGrid(): Grid {
   const g = mkGrid(64)
 
-  // ── cauda peluda (rear esquerda, caída) ──
-  rect(g, 2, 26, 12, 9, 'B')
-  rect(g, 0, 33, 11, 9, 'B')
-  rect(g, 1, 41, 9, 9, 'B')
-  rect(g, 3, 27, 6, 5, 'L')
-  rect(g, 1, 45, 8, 5, 'S')
-  rect(g, 1, 48, 7, 2, 'D')
+  // ════ Lobo FRONTAL rosnando · 64px · simétrico, encara o jogador ════
+  // Método pixel-map (polígonos + rects). Vista de frente lê muito melhor que perfil.
 
-  // ── corpo: anca + tronco + cernelha (longo, lombo arqueado) ──
-  rect(g, 6,  24, 22, 18, 'B')   // anca traseira
-  rect(g, 18, 25, 28, 14, 'B')   // tronco
-  rect(g, 38, 22, 13, 18, 'B')   // cernelha/peito (sobe pra cabeça)
-  // arredonda quinas do lombo/garupa
-  rect(g, 6,  24, 2, 2, '.')
-  rect(g, 6,  40, 2, 2, '.')
-  // brilho do lombo + sombra do ventre
-  rect(g, 8,  24, 38, 2, 'L')
-  rect(g, 12, 25, 28, 1, 'H')
-  rect(g, 10, 37, 34, 2, 'S')
+  // ── juba / peito (ESCURA, atrás — contrasta com a cabeça clara) ──
+  fillPoly(g, [[14,33],[50,33],[59,47],[56,62],[8,62],[5,47]], 'S')
+  fillPoly(g, [[27,37],[37,37],[34,58],[30,58]], 'M')   // pelo claro central
+  rect(g, 31, 40, 3, 16, 'L')
+  rect(g, 6, 49, 7, 12, 'D'); rect(g, 51, 49, 7, 12, 'D')   // sombras laterais
 
-  // ── patas (longas, passada aberta; distantes mais escuras) ──
-  rect(g, 13, 39, 5, 20, 'S')   // traseira distante (recuada)
-  rect(g, 47, 41, 5, 18, 'S')   // dianteira distante (adiantada)
-  rect(g, 22, 39, 5, 20, 'B')   // traseira próxima (adiantada)
-  rect(g, 39, 41, 5, 18, 'B')   // dianteira próxima (recuada)
-  rect(g, 22, 39, 2, 16, 'L')
-  rect(g, 39, 41, 2, 14, 'L')
-  // cascos
-  rect(g, 13, 57, 5, 2, 'G')
-  rect(g, 22, 57, 5, 2, 'G')
-  rect(g, 39, 57, 5, 2, 'G')
-  rect(g, 47, 57, 5, 2, 'G')
+  // ── patas dianteiras (CLARAS, saltam da juba escura) ──
+  fillPoly(g, [[15,54],[27,54],[27,63],[13,63]], 'B')
+  fillPoly(g, [[37,54],[49,54],[51,63],[37,63]], 'B')
+  rect(g, 13, 53, 14, 2, 'D'); rect(g, 37, 53, 14, 2, 'D')   // sombra no topo (separa do peito)
+  rect(g, 15, 55, 3, 7, 'M'); rect(g, 47, 56, 3, 6, 'S')
+  rect(g, 20, 59, 1, 4, 'G'); rect(g, 23, 59, 1, 4, 'G')     // dedos
+  rect(g, 41, 59, 1, 4, 'G'); rect(g, 44, 59, 1, 4, 'G')
 
-  // ── cabeça (direita, baixa) ──
-  rect(g, 45, 20, 16, 18, 'B')
-  rect(g, 60, 19, 1, 2, '.')    // suaviza topo-direita
-  rect(g, 46, 21, 9, 2, 'L')    // brilho da testa
-  rect(g, 46, 33, 14, 4, 'S')   // sombra da bochecha/mandíbula
+  // ── orelhas pontudas (anguladas pra fora) ──
+  fillPoly(g, [[12,3],[21,11],[15,21],[7,15]], 'B')
+  fillPoly(g, [[52,3],[57,15],[49,21],[43,11]], 'B')
+  fillPoly(g, [[13,8],[18,13],[14,18]], 'i')
+  fillPoly(g, [[51,8],[46,13],[50,18]], 'i')
 
-  // ── focinho — cunha afiada à direita ──
-  triRight(g, 56, 33, 8, 4, 'B')
-  rect(g, 60, 33, 3, 4, 'S')
-  rect(g, 62, 33, 2, 3, 'N')    // nariz
-  rect(g, 52, 35, 10, 2, 'D')   // linha da boca
+  // ── cabeça (CLARA, larga) ──
+  fillPoly(g, [[12,12],[24,7],[40,7],[52,12],[54,26],[46,35],[18,35],[10,26]], 'B')
+  fillPoly(g, [[10,24],[3,28],[10,33]], 'B'); fillPoly(g, [[54,24],[61,28],[54,33]], 'B')  // tufos bochecha
+  // sombra do FIM DO ROSTO — arco curvo (separa a cabeça do peito)
+  fillPoly(g, [
+    [10,31],[18,38],[26,42],[32,43],[38,42],[46,38],[54,31],
+    [54,34],[46,41],[38,45],[32,46],[26,45],[18,41],[10,34],
+  ], 'D')
+  // testa clara + listra escura
+  fillPoly(g, [[20,10],[44,10],[42,16],[22,16]], 'L'); rect(g, 24, 11, 16, 2, 'H')
+  rect(g, 30, 12, 4, 11, 'S')   // listra central
+  rect(g, 11, 26, 4, 7, 'S'); rect(g, 49, 26, 4, 7, 'S')   // laterais em sombra
 
-  // ── orelhas pontudas ──
-  triUp(g, 48, 9, 12, 4, 'B')   // próxima
-  rect(g, 47, 16, 3, 4, 'i')    // interior
-  triUp(g, 55, 10, 11, 3, 'S')  // distante (atrás)
+  // ── sobrancelhas bravas (V) ──
+  fillPoly(g, [[16,16],[29,20],[29,22],[16,18]], 'D')
+  fillPoly(g, [[48,16],[35,20],[35,22],[48,18]], 'D')
 
-  // ── olho vermelho ──
-  rect(g, 49, 27, 4, 3, 'R')
-  rect(g, 49, 27, 2, 2, 'r')
+  // ── olhos vermelhos brilhantes ──
+  fillPoly(g, [[18,18],[27,19],[26,24],[18,23]], 'R')
+  fillPoly(g, [[46,18],[37,19],[38,24],[46,23]], 'R')
+  rect(g, 19, 19, 3, 2, 'r'); rect(g, 42, 19, 3, 2, 'r')
+  rect(g, 23, 21, 3, 3, 'K'); rect(g, 38, 21, 3, 3, 'K')   // pupila
 
-  // ── presas ──
-  rect(g, 57, 36, 2, 3, 'F')
-  rect(g, 61, 35, 1, 2, 'F')
+  // ── focinho (claro no alto, sombra nas laterais) ──
+  fillPoly(g, [[26,22],[38,22],[37,37],[27,37]], 'L')
+  rect(g, 26, 27, 2, 10, 'S'); rect(g, 36, 27, 2, 10, 'S')
+  fillPoly(g, [[27,32],[37,32],[35,38],[29,38]], 'N')   // nariz
+  rect(g, 30, 33, 3, 1, 'L')
 
-  // ── contorno automático ──
+  // ── boca rosnando + presas + língua ──
+  fillPoly(g, [[18,37],[46,37],[44,45],[20,45]], 'K')
+  rect(g, 30, 41, 4, 4, 't')                            // língua
+  rect(g, 21, 37, 3, 5, 'F'); rect(g, 40, 37, 3, 5, 'F')   // presas superiores
+  rect(g, 27, 42, 2, 3, 'F'); rect(g, 35, 42, 2, 3, 'F')   // presas inferiores
+
   outline(g, 'K')
   return g
 }

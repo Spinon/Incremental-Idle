@@ -22,6 +22,7 @@ import { useNotifStore } from './store/notifStore'
 import { useUIStore } from './store/uiStore'
 import { getDerivedStats, getBaseSpeed } from './formulas/derived'
 import { getEquipmentBonuses } from './formulas/items'
+import { getWeaponStatBonuses } from './formulas/weapons'
 import { useT } from './i18n/useT'
 
 function GameRoot() {
@@ -34,6 +35,8 @@ function GameRoot() {
   const setSpeed     = useBattleStore((s) => s.setSpeed)
   const scene        = useMapStore((s) => s.scene)
   const equipment    = useInventoryStore((s) => s.equipment)
+  const weaponProgress = useInventoryStore((s) => s.weaponProgress)
+  const equippedWeapons = useInventoryStore((s) => s.equippedWeapons)
   const activeTab    = useUIStore((s) => s.activeTab)
   const setShowMini  = useUIStore((s) => s.setShowMiniPlayer)
   const pushNotif    = useNotifStore((s) => s.push)
@@ -128,16 +131,17 @@ function GameRoot() {
   // heroLevel is included so passive level bonuses take effect on level-up.
   useEffect(() => {
     const equip = getEquipmentBonuses(equipment)
+    const weaponStats = getWeaponStatBonuses(weaponProgress, equippedWeapons)
     const d     = getDerivedStats(attributes, equip, heroLevel)
     syncFromHero({
-      atk: d.atk, def: d.def, maxHp: d.maxHp,
-      atkSpeed: d.attackSpeed, dodgeChance: d.dodgeChance,
-      critChance: d.critChance, critDamage: d.critDamage,
+      atk: d.atk + weaponStats.atk, def: d.def + weaponStats.def, maxHp: d.maxHp,
+      atkSpeed: Math.max(0.1, d.attackSpeed + weaponStats.attackSpeed), dodgeChance: d.dodgeChance,
+      critChance: Math.min(0.75, d.critChance + weaponStats.critChance), critDamage: d.critDamage,
       damageReduction: d.damageReduction,
       resIgnea: d.resIgnea, resGlacial: d.resGlacial,
       resSombria: d.resSombria, resVital: d.resVital,
     })
-  }, [attributes, equipment, heroLevel, syncFromHero])
+  }, [attributes, equipment, equippedWeapons, heroLevel, syncFromHero, weaponProgress])
 
   // Level-up notification
   useEffect(() => {

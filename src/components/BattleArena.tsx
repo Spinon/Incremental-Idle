@@ -344,10 +344,14 @@ export default function BattleArena() {
 
       if (entry.missed) {
         floatValue = 0
+      } else if (entry.blocked) {
+        floatIcon = entry.weaponEffect?.icon ?? 'blk'
       } else if (entry.spell) {
         if (entry.spell.effectType === 'damage')   floatValue = -(entry.spell.value)
         else if (entry.spell.effectType === 'heal') floatValue = entry.spell.value
         else floatIcon = entry.spell.icon
+      } else if (entry.weaponEffect && entry.dmg === 0) {
+        floatIcon = entry.weaponEffect.icon
       } else {
         floatValue = -entry.dmg
       }
@@ -598,8 +602,17 @@ export default function BattleArena() {
             />
           </div>
           {/* Enemy elemental statuses */}
-          {(store.enemyStatuses.length > 0 || activeDebuff) && (
+          {(store.enemyStatuses.length > 0 || activeDebuff || store.enemyBleedPower > 0) && (
             <div className="absolute right-[92px] top-[118px] z-0 w-[176px] flex flex-wrap gap-1 justify-end pointer-events-none">
+              {store.enemyBleedPower > 0 && (
+                <span
+                  title={isEn ? `Bleeding (${Math.round(store.enemyBleedPower)}/t)` : `Sangrando (${Math.round(store.enemyBleedPower)}/t)`}
+                  className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-red-950/35 border-red-800/35 text-red-300"
+                >
+                  *
+                  <span className="text-[9px] font-bold">{Math.round(store.enemyBleedPower)}</span>
+                </span>
+              )}
               {store.enemyStatuses.map(s => (
                 <span
                   key={s.element}
@@ -954,7 +967,7 @@ export default function BattleArena() {
                               : '',
                         )}>
                           {entry.isCrit && <span className="text-[9px]">⚡</span>}
-                          -{entry.dmg}
+                          {entry.blocked && entry.dmg === 0 ? 'BLOCK' : entry.weaponEffect && entry.dmg === 0 ? entry.weaponEffect.icon : `-${entry.dmg}`}
                         </span>
                       </>
                   }

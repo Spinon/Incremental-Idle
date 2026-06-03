@@ -213,13 +213,17 @@ export default function MapViewport({
                 onTileClick(gx, gy)
               }}
             />
-          ) : (sight || isValidTarget) ? (
+          ) : (
             <div
               className={cn(
-                'w-full h-full rounded relative overflow-hidden transition-colors',
+                'w-full h-full rounded relative overflow-hidden transition-colors cursor-pointer hover:bg-slate-800/30',
                 sight ? ghostBg(sight) : '',
                 isValidTarget && 'border-2 border-dashed border-indigo-500/50 hover:border-indigo-400 hover:bg-indigo-900/25 cursor-copy',
               )}
+              onClick={() => {
+                if (suppressNextClick.current) { suppressNextClick.current = false; return }
+                onTileClick(gx, gy)
+              }}
               onDragOver={isValidTarget ? e => e.preventDefault() : undefined}
               onDrop={isValidTarget ? e => {
                 e.preventDefault()
@@ -241,8 +245,17 @@ export default function MapViewport({
               {vis === 'penumbra' && (
                 <div className="absolute inset-0 bg-slate-950/65 rounded pointer-events-none z-20" />
               )}
+              {vis === 'fog' && (
+                <div className="absolute inset-0 bg-slate-950/70 rounded pointer-events-none z-20" />
+              )}
+              {selectedPos?.x === gx && selectedPos?.y === gy && !(destination?.x === gx && destination?.y === gy) && (
+                <div className="absolute inset-0 z-40 rounded ring-2 ring-inset ring-sky-400/90 pointer-events-none" />
+              )}
+              {destination?.x === gx && destination?.y === gy && (
+                <div className="absolute inset-0 z-40 rounded border-4 border-double border-indigo-300/90 shadow-[inset_0_0_0_1px_rgba(129,140,248,0.7)] pointer-events-none" />
+              )}
             </div>
-          ) : null}
+          )}
         </div>
       ))}
 

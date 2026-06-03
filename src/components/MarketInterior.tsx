@@ -132,6 +132,15 @@ export default function MarketInterior() {
   const clearSceneAuto = useUIStore(s => s.clearSceneAuto)
   const setActiveTab = useUIStore(s => s.setActiveTab)
 
+  function leaveMarket() {
+    setSellMode(false)
+    exitMarket()
+  }
+
+  useEffect(() => {
+    return () => setSellMode(false)
+  }, [setSellMode])
+
   // Tile level and position — shop is generated at the tile's level
   const marketPos = useMapStore(s => s.playerPos)
   const marketKey = gridKey(marketPos.x, marketPos.y)
@@ -195,8 +204,8 @@ export default function MarketInterior() {
   // Keep a separate alias for clarity in word-offer JSX
   const wordOffers = offer.words
 
-  // Track what was bought (id-set)
-  const [bought, setBought]   = useState<Set<string>>(new Set())
+  // Track what was bought from this persisted market tile.
+  const [bought, setBought]   = useState<Set<string>>(() => new Set(savedOffer?.boughtIds ?? []))
   const [soldGold, setSoldGold] = useState(0)
   const elapsed = sceneAuto.kind === 'market' ? sceneAuto.elapsedMs : 0
   const paused  = sceneAuto.kind === 'market' ? sceneAuto.paused : false
@@ -225,7 +234,7 @@ export default function MarketInterior() {
         // exitMarket repositions the hero to a random adjacent tile and
         // sets scene='map'. The game loop will call moveOneStep on the next
         // tick to start the first battle after the market naturally.
-        exitMarket()
+        leaveMarket()
       } else {
         setSceneAutoElapsed(current)
       }
@@ -238,29 +247,41 @@ export default function MarketInterior() {
     setTimeout(() => setFailId(f => f === id ? null : f), 1400)
   }
 
+  function markBought(id: string) {
+    setBought(prev => {
+      const next = new Set(prev)
+      next.add(id)
+      saveOffer(marketKey, { ...offer, boughtIds: Array.from(next) })
+      return next
+    })
+  }
+
   function buyConsumable(c: Consumable) {
     pauseSceneAuto()
+    if (bought.has(c.id)) return
     const price = eff(c.price)
     if (!spendGold(price)) return
     const ok = addConsumable(c)
     if (!ok) { useHeroStore.getState().earnGold(price); showFail(c.id); return }
-    setBought(b => new Set(b).add(c.id))
+    markBought(c.id)
   }
 
   function buyWord(wo: WordOffer) {
     pauseSceneAuto()
+    if (bought.has(wo.wordId)) return
     if (!spendGold(eff(wo.price))) return
     earnWord(wo.wordId)
-    setBought(b => new Set(b).add(wo.wordId))
+    markBought(wo.wordId)
   }
 
   function buyEquipment(item: Item) {
     pauseSceneAuto()
+    if (bought.has(item.id)) return
     const price = eff(item.price!)
     if (!spendGold(price)) return
     const ok = addItem(item as Item)
     if (!ok) { useHeroStore.getState().earnGold(price); showFail(item.id); return }
-    setBought(b => new Set(b).add(item.id))
+    markBought(item.id)
   }
 
   // Apply consumable effect immediately on buy (market items are also instantly usable at purchase? No — they go to inventory)
@@ -565,7 +586,7 @@ export default function MarketInterior() {
               onClick={() => {
                 // exitMarket repositions to a random adjacent tile.
                 // No resetBattle — the next battle starts naturally via moveOneStep.
-                exitMarket()
+                leaveMarket()
               }}
               className="w-full py-2 rounded-lg text-sm font-semibold border border-indigo-700/40 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-900/40 transition-colors relative z-10"
             >

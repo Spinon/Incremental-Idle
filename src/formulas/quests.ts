@@ -71,6 +71,11 @@ export function pickQuestDifficulty(): QuestDifficulty {
 }
 
 const DIFFICULTY_MULT: Record<QuestDifficulty, number> = { easy: 1, medium: 2.5, hard: 5 }
+const DISTANCE_BY_DIFFICULTY: Record<QuestDifficulty, { min: number; max: number }> = {
+  easy:   { min: 5,  max: 7 },
+  medium: { min: 8,  max: 10 },
+  hard:   { min: 11, max: 16 },
+}
 
 export const DIFFICULTY_LABEL_PT: Record<QuestDifficulty, string> = { easy: 'Fácil', medium: 'Média', hard: 'Difícil' }
 export const DIFFICULTY_LABEL_EN: Record<QuestDifficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
@@ -89,18 +94,105 @@ function baseRewards(tileLevel: number, difficulty: QuestDifficulty): QuestRewar
   }
 }
 
-function pickQuestType(grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }): QuestType {
+function tileDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
+}
+
+interface QuestTarget {
+  x: number
+  y: number
+  level: number
+  tile?: PlacedTile
+  monsterType?: string
+  monsterRarity?: MonsterRarity
+  future: boolean
+}
+
+function placedTargets(
+  grid: Record<string, PlacedTile>,
+  playerPos: { x: number; y: number },
+  difficulty: QuestDifficulty,
+  predicate: (tile: PlacedTile) => boolean,
+): QuestTarget[] {
+  const range = DISTANCE_BY_DIFFICULTY[difficulty]
+  return Object.values(grid)
+    .filter(t => !(t.x === playerPos.x && t.y === playerPos.y) && predicate(t))
+    .map(t => ({ x: t.x, y: t.y, level: t.level, tile: t, future: false }))
+    .filter(t => {
+      const d = tileDistance(t, playerPos)
+      return d >= range.min && d <= range.max
+    })
+}
+
+function fallbackPlacedTargets(
+  grid: Record<string, PlacedTile>,
+  playerPos: { x: number; y: number },
+  predicate: (tile: PlacedTile) => boolean,
+): QuestTarget[] {
+  return Object.values(grid)
+    .filter(t => !(t.x === playerPos.x && t.y === playerPos.y) && predicate(t))
+    .map(t => ({ x: t.x, y: t.y, level: t.level, tile: t, future: false }))
+    .sort((a, b) => tileDistance(a, playerPos) - tileDistance(b, playerPos))
+}
+
+function futureTargets(
+  grid: Record<string, PlacedTile>,
+  playerPos: { x: number; y: number },
+  difficulty: QuestDifficulty,
+  tileLevel: number,
+): QuestTarget[] {
+  const range = DISTANCE_BY_DIFFICULTY[difficulty]
+  const occupied = new Set(Object.values(grid).map(t => `${t.x},${t.y}`))
+  const candidates: QuestTarget[] = []
+
+  for (let y = playerPos.y - range.max; y <= playerPos.y + range.max; y++) {
+    for (let x = playerPos.x - range.max; x <= playerPos.x + range.max; x++) {
+      const d = tileDistance({ x, y }, playerPos)
+      if (d < range.min || d > range.max) continue
+      if (occupied.has(`${x},${y}`)) continue
+      candidates.push({ x, y, level: Math.max(1, tileLevel + (difficulty === 'hard' ? 2 : 1)), future: true })
+    }
+  }
+  return candidates
+}
+
+function pickQuestTarget(
+  tileLevel: number,
+  difficulty: QuestDifficulty,
+  grid: Record<string, PlacedTile>,
+  playerPos: { x: number; y: number },
+  predicate: (tile: PlacedTile) => boolean,
+  allowFuture = false,
+): QuestTarget | null {
+  const placed = placedTargets(grid, playerPos, difficulty, predicate)
+  const future = allowFuture ? futureTargets(grid, playerPos, difficulty, tileLevel) : []
+
+  if (difficulty === 'hard' && future.length > 0 && (placed.length === 0 || Math.random() < 0.70)) {
+    return pickRandom(future)
+  }
+  if (difficulty === 'medium' && future.length > 0 && Math.random() < 0.25) {
+    return pickRandom(future)
+  }
+  if (placed.length > 0) return pickRandom(placed)
+  if (future.length > 0) return pickRandom(future)
+
+  const fallback = fallbackPlacedTargets(grid, playerPos, predicate)
+  return fallback[0] ?? null
+}
+
+function pickQuestType(grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }, difficulty: QuestDifficulty): QuestType {
   const tiles = Object.values(grid)
   const hasUnexplored = tiles.some(t => !t.explored && !(t.x === playerPos.x && t.y === playerPos.y))
   const hasExplored   = tiles.some(t => t.explored  && !(t.x === playerPos.x && t.y === playerPos.y))
   const hasMonster    = tiles.some(t => !t.explored && t.content.type === 'monster')
+  const canUseFuture  = difficulty !== 'easy'
 
   const weights: [QuestType, number][] = [
-    ['escort',         hasUnexplored ? 22 : 0],
-    ['delivery',       hasExplored   ? 20 : 0],
-    ['extermination',  hasMonster    ? 20 : 0],
-    ['bounty_monster', hasMonster    ? 15 : 0],
-    ['bounty_npc',     hasMonster    ? 10 : 0],
+    ['escort',         hasUnexplored || canUseFuture ? 22 : 0],
+    ['delivery',       hasExplored   || canUseFuture ? 20 : 0],
+    ['extermination',  hasMonster    || canUseFuture ? 20 : 0],
+    ['bounty_monster', hasMonster    || canUseFuture ? 15 : 0],
+    ['bounty_npc',     hasMonster    || canUseFuture ? 10 : 0],
     ['collection',     18],
   ]
   const valid = weights.filter(([, w]) => w > 0)
@@ -125,11 +217,8 @@ function pickBountyRarity(tileLevel: number): MonsterRarity {
 // ── Quest generators ──────────────────────────────────────────────────────────
 
 function makeEscort(tileLevel: number, difficulty: QuestDifficulty, grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }): Quest | null {
-  const candidates = Object.values(grid).filter(t =>
-    !t.explored && !(t.x === playerPos.x && t.y === playerPos.y)
-  )
-  if (candidates.length === 0) return null
-  const target = pickRandom(candidates)
+  const target = pickQuestTarget(tileLevel, difficulty, grid, playerPos, t => !t.explored, difficulty !== 'easy')
+  if (!target) return null
   const loc_pt = pickRandom(ESCORT_LOCATIONS_PT)
   const loc_en = pickRandom(ESCORT_LOCATIONS_EN)
   return {
@@ -144,11 +233,8 @@ function makeEscort(tileLevel: number, difficulty: QuestDifficulty, grid: Record
 }
 
 function makeDelivery(tileLevel: number, difficulty: QuestDifficulty, grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }): Quest | null {
-  const candidates = Object.values(grid).filter(t =>
-    t.explored && !(t.x === playerPos.x && t.y === playerPos.y)
-  )
-  if (candidates.length === 0) return null
-  const target = pickRandom(candidates)
+  const target = pickQuestTarget(tileLevel, difficulty, grid, playerPos, t => t.explored, difficulty !== 'easy')
+  if (!target) return null
   const item_pt = pickRandom(DELIVERY_TARGETS_PT)
   const item_en = pickRandom(DELIVERY_TARGETS_EN)
   return {
@@ -163,12 +249,8 @@ function makeDelivery(tileLevel: number, difficulty: QuestDifficulty, grid: Reco
 }
 
 function makeExtermination(tileLevel: number, difficulty: QuestDifficulty, grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }): Quest | null {
-  const monsterTiles = Object.values(grid).filter(t =>
-    !t.explored && t.content.type === 'monster' &&
-    !(t.x === playerPos.x && t.y === playerPos.y)
-  )
-  if (monsterTiles.length === 0) return null
-  const center = pickRandom(monsterTiles)
+  const center = pickQuestTarget(tileLevel, difficulty, grid, playerPos, t => !t.explored && t.content.type === 'monster', difficulty !== 'easy')
+  if (!center) return null
   const radius = difficulty === 'easy' ? 2 : difficulty === 'medium' ? 3 : 4
   const required = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 6 : 10
   return {
@@ -187,13 +269,11 @@ function makeExtermination(tileLevel: number, difficulty: QuestDifficulty, grid:
 }
 
 function makeBountyMonster(tileLevel: number, difficulty: QuestDifficulty, grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }): Quest | null {
-  const candidates = Object.values(grid).filter(t =>
-    !t.explored && t.content.type === 'monster' &&
-    !(t.x === playerPos.x && t.y === playerPos.y)
-  )
-  if (candidates.length === 0) return null
-  const target   = pickRandom(candidates)
-  const template = FOREST_MONSTERS.find(m => m.id === target.content.monsterType) ?? FOREST_MONSTERS[0]
+  const target = pickQuestTarget(tileLevel, difficulty, grid, playerPos, t => !t.explored && t.content.type === 'monster', difficulty !== 'easy')
+  if (!target) return null
+  const template = target.tile
+    ? (FOREST_MONSTERS.find(m => m.id === target.tile!.content.monsterType) ?? FOREST_MONSTERS[0])
+    : pickRandom(FOREST_MONSTERS)
   const epithetPt = pickRandom(MONSTER_EPITHETS_PT)
   const epithetEn = pickRandom(MONSTER_EPITHETS_EN)
   const namePt = `${template.namePt} ${epithetPt}`
@@ -223,12 +303,8 @@ function makeBountyMonster(tileLevel: number, difficulty: QuestDifficulty, grid:
 }
 
 function makeBountyNpc(tileLevel: number, difficulty: QuestDifficulty, grid: Record<string, PlacedTile>, playerPos: { x: number; y: number }): Quest | null {
-  const candidates = Object.values(grid).filter(t =>
-    !t.explored && t.content.type === 'monster' &&
-    !(t.x === playerPos.x && t.y === playerPos.y)
-  )
-  if (candidates.length === 0) return null
-  const target = pickRandom(candidates)
+  const target = pickQuestTarget(tileLevel, difficulty, grid, playerPos, t => !t.explored && t.content.type === 'monster', difficulty !== 'easy')
+  if (!target) return null
   const firstName  = pickRandom(NPC_NAMES)
   const titleIdx   = Math.floor(Math.random() * NPC_TITLES_PT.length)
   const namePt     = `${firstName} ${NPC_TITLES_PT[titleIdx]}`
@@ -289,7 +365,7 @@ export function generateQuest(
   playerPos: { x: number; y: number },
 ): Quest | null {
   const difficulty = pickQuestDifficulty()
-  const type       = pickQuestType(grid, playerPos)
+  const type       = pickQuestType(grid, playerPos, difficulty)
 
   switch (type) {
     case 'escort':         return makeEscort(tileLevel, difficulty, grid, playerPos)

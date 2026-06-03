@@ -3,10 +3,13 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../data/monsters'
+import { useInventoryStore } from './inventoryStore'
+import { getWeaponCombatProfile, WEAPON_EFFECT_LABELS } from '../formulas/weapons'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
 import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
 import type { ActiveStatus } from '../types/element'
+import type { WeaponType } from '../types/weapon'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 export type { ActiveStatus }
 
@@ -82,6 +85,13 @@ export interface LogEntry {
   isCrit?: boolean
   /** Present when this entry was produced by a spell cast, not a physical attack. */
   spell?: SpellLogData
+  blocked?: boolean
+  weaponEffect?: {
+    type: WeaponType
+    name: string
+    nameEn: string
+    icon: string
+  }
 }
 
 interface HeroSync {
@@ -119,6 +129,7 @@ interface BattleStore {
   deathHistory: DeathRecord[]
   enemyStatuses: ActiveStatus[]
   heroStatuses:  ActiveStatus[]
+  enemyBleedPower: number
 
   setSpeed(s: Speed): void
   setSkipAnim(v: boolean): void
@@ -204,6 +215,20 @@ function calcHits(mySpeed: number, theirSpeed: number): number {
   return Math.max(1, Math.round(mySpeed / theirSpeed))
 }
 
+const WEAPON_LOG_ICON: Record<WeaponType, string> = {
+  sword: 'x2',
+  dagger: 'tox',
+  axe: 'bleed',
+  staff: 'arc',
+  bow: 'mark',
+  shield: 'blk',
+}
+
+function weaponLog(type: WeaponType): LogEntry['weaponEffect'] {
+  const label = WEAPON_EFFECT_LABELS[type]
+  return { type, name: label.pt, nameEn: label.en, icon: WEAPON_LOG_ICON[type] }
+}
+
 export const useBattleStore = create<BattleStore>()(
   persist(
   immer((set) => ({
@@ -229,6 +254,7 @@ export const useBattleStore = create<BattleStore>()(
     deathHistory: [],
     enemyStatuses: [],
     heroStatuses:  [],
+    enemyBleedPower: 0,
 
     setSpeed:    (s) => set((st) => { st.speed    = s }),
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
@@ -324,19 +350,65 @@ export const useBattleStore = create<BattleStore>()(
       if (defSt.some(s => s.type === 'curse')) effDef.damageReduction = 0
 
       // ── Compute base damage ───────────────────────────────────────────────
+      const weaponState = useInventoryStore.getState()
+      const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
       const { dmg: rawDmg, isCrit } = calcDmg(effAtk, effDef)
 
       // Marked  → defender takes 1.5× damage (eternum brands the target)
       // Blessed → defender takes 0.5× damage (caelum protects the hero)
       const marked  = defSt.some(s => s.type === 'marked')  ? 1.5 : 1.0
       const blessed = defSt.some(s => s.type === 'blessed') ? 0.5 : 1.0
-      const dmg = Math.max(1, Math.round(rawDmg * marked * blessed))
+      let dmg = Math.max(1, Math.round(rawDmg * marked * blessed))
+
+      let blocked = false
+      let weaponEffect: LogEntry['weaponEffect'] | undefined
+      if (st.attacker === 'enemy' && weaponProfile.shieldBlockChance > 0 && Math.random() < weaponProfile.shieldBlockChance) {
+        blocked = true
+        weaponEffect = weaponLog('shield')
+        const perfect = Math.random() < weaponProfile.shieldPerfectBlockChance
+        dmg = perfect ? 0 : Math.max(1, Math.round(dmg * (1 - weaponProfile.shieldBlockReduction)))
+      }
 
       const newHp = Math.max(0, defUnit.hp - dmg)
       if (st.attacker === 'player') st.enemy.hp  = newHp
       else                          st.player.hp = newHp
 
-      st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg, isCrit })
+      st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg, isCrit, blocked, weaponEffect })
+      if (st.attacker === 'player' && newHp > 0) {
+        if (weaponProfile.swordExtraHitChance > 0 && Math.random() < weaponProfile.swordExtraHitChance) {
+          const { dmg: extraRaw, isCrit: extraCrit } = calcDmg(effAtk, st.enemy)
+          const extraDmg = Math.max(1, Math.round(extraRaw * marked * blessed))
+          const hpAfterExtra = Math.max(0, st.enemy.hp - extraDmg)
+          st.enemy.hp = hpAfterExtra
+          st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: extraDmg, isCrit: extraCrit, weaponEffect: weaponLog('sword') })
+          if (hpAfterExtra === 0) { st.winner = 'player'; st.phase = 'over' }
+        }
+
+        if (st.phase !== 'over' && weaponProfile.daggerPoisonChance > 0 && Math.random() < weaponProfile.daggerPoisonChance) {
+          const idx = st.enemyStatuses.findIndex(s => s.type === 'poison')
+          const status: ActiveStatus = { element: 'toxicum', type: 'poison', power: weaponProfile.daggerPoisonPower, turnsLeft: 4 }
+          if (idx >= 0) {
+            st.enemyStatuses[idx].power = Math.max(st.enemyStatuses[idx].power, status.power)
+            st.enemyStatuses[idx].turnsLeft = Math.max(st.enemyStatuses[idx].turnsLeft, status.turnsLeft)
+          } else {
+            st.enemyStatuses.push(status)
+          }
+          st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, weaponEffect: weaponLog('dagger') })
+        }
+
+        if (st.phase !== 'over' && weaponProfile.axeBleedChance > 0 && Math.random() < weaponProfile.axeBleedChance) {
+          st.enemyBleedPower += weaponProfile.axeBleedPower
+          st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, weaponEffect: weaponLog('axe') })
+        }
+
+        if (st.phase !== 'over' && weaponProfile.bowMarkChance > 0 && Math.random() < weaponProfile.bowMarkChance) {
+          const idx = st.enemyStatuses.findIndex(s => s.type === 'marked')
+          const status: ActiveStatus = { element: 'eternum', type: 'marked', power: 1, turnsLeft: weaponProfile.bowMarkTurns }
+          if (idx >= 0) st.enemyStatuses[idx].turnsLeft = Math.max(st.enemyStatuses[idx].turnsLeft, status.turnsLeft)
+          else st.enemyStatuses.push(status)
+          st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, weaponEffect: weaponLog('bow') })
+        }
+      }
       st.hitsLeft -= 1
       if (newHp === 0) { st.winner = st.attacker; st.phase = 'over' }
 
@@ -468,6 +540,25 @@ export const useBattleStore = create<BattleStore>()(
     tickStatuses: () => set((st) => {
       if (st.phase === 'over') return
 
+      if (st.enemyBleedPower > 0) {
+        const dmg = Math.max(1, Math.round(st.enemyBleedPower))
+        const newHp = Math.max(0, st.enemy.hp - dmg)
+        st.enemy.hp = newHp
+        st.log.unshift({
+          attacker: 'Sangramento',
+          defender: st.enemy.name,
+          dmg,
+          spell: {
+            name: 'Sangramento',
+            nameEn: 'Bleeding',
+            icon: '*',
+            effectType: 'damage',
+            value: dmg,
+          },
+        })
+        if (newHp === 0) { st.winner = 'player'; st.phase = 'over'; return }
+      }
+
       // ── DoTs on enemy ─────────────────────────────────────────────────────
       for (const s of st.enemyStatuses) {
         if (s.type === 'burn' || s.type === 'poison') {
@@ -544,6 +635,7 @@ export const useBattleStore = create<BattleStore>()(
     clearStatuses: () => set((st) => {
       st.enemyStatuses = []
       st.heroStatuses  = []
+      st.enemyBleedPower = 0
     }),
 
     restoreMidFight: (playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses, attacker, hitsLeft, comboSize) => set((st) => {
@@ -551,6 +643,7 @@ export const useBattleStore = create<BattleStore>()(
       st.enemy.hp      = Math.max(1, Math.min(st.enemy.maxHp,  Math.round(st.enemy.maxHp  * enemyHpRatio)))
       st.enemyStatuses = enemyStatuses
       st.heroStatuses  = heroStatuses
+      st.enemyBleedPower = 0
       st.attacker      = attacker
       st.hitsLeft      = hitsLeft
       st.comboSize     = comboSize
@@ -593,6 +686,7 @@ export const useBattleStore = create<BattleStore>()(
       st.defeatSnapshot = null
       st.enemyStatuses  = []
       st.heroStatuses   = []
+      st.enemyBleedPower = 0
       const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
       st.hitsLeft     = hits
       st.comboSize    = hits

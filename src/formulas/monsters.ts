@@ -115,6 +115,72 @@ function distributePoints(prefs: MonsterPreferences, total: number): Attributes 
   return attrs
 }
 
+function distributeAveragePoints(prefs: MonsterPreferences, total: number): Attributes {
+  const keys = Object.keys(prefs) as (keyof MonsterPreferences)[]
+  const totalWeight = keys.reduce((s, k) => s + prefs[k], 0)
+  const attrs: Attributes = {
+    forca: 0, vitalidade: 0, agilidade: 0, destreza: 0,
+    inteligencia: 0, sabedoria: 0, carisma: 0,
+  }
+
+  let allocated = 0
+  for (const key of keys) {
+    const val = Math.max(0, Math.round((prefs[key] / totalWeight) * total))
+    attrs[key] = val
+    allocated += val
+  }
+
+  const topKey = keys.reduce((a, b) => prefs[a] > prefs[b] ? a : b)
+  attrs[topKey] = Math.max(prefs[topKey] > 0 ? 1 : 0, attrs[topKey] + (total - allocated))
+  return attrs
+}
+
+export function estimateMonster(
+  template:    MonsterTemplate,
+  level:       number,
+  rarity:      MonsterRarity = 'normal',
+  tilesPlaced  = 0,
+): Unit {
+  const tileMult = 1 + Math.floor(tilesPlaced / 10) * 0.05
+  const totalPoints = Math.round(
+    (template.basePoints + level * template.pointsPerLevel + MONSTER_RARITY_BONUS[rarity])
+    * tileMult,
+  )
+  const attrs = distributeAveragePoints(template.preferences, totalPoints)
+  const s = monsterStats(attrs)
+  const labelPt  = MONSTER_RARITY_LABEL[rarity]
+  const labelEn  = MONSTER_RARITY_LABEL_EN[rarity]
+  const namePt = labelPt ? `[${labelPt}] ${template.namePt}` : template.namePt
+  const nameEn = labelEn ? `[${labelEn}] ${template.nameEn}` : template.nameEn
+  const resIgnea   = Math.min(0.5, attrs.vitalidade   * 0.008)
+  const resGlacial = Math.min(0.5, attrs.destreza     * 0.008)
+  const resSombria = Math.min(0.5, attrs.inteligencia * 0.008)
+  const resVital   = Math.min(0.5, attrs.sabedoria    * 0.008)
+
+  return {
+    name: namePt,
+    namePt,
+    nameEn,
+    level,
+    hp: s.maxHp,
+    maxHp: s.maxHp,
+    atk: s.atk,
+    def: s.def,
+    atkSpeed: s.attackSpeed,
+    dodgeChance: s.dodgeChance,
+    critChance: s.critChance,
+    critDamage: s.critDamage,
+    damageReduction: s.damageReduction,
+    element: template.element,
+    statusChance: template.statusChance,
+    weakTo: template.weakTo ?? [],
+    resIgnea, resGlacial, resSombria, resVital,
+    rarity,
+    monsterType: template.id,
+    enraged: false,
+  }
+}
+
 export function buildMonster(
   template:    MonsterTemplate,
   level:       number,

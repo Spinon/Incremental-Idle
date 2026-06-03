@@ -173,13 +173,13 @@ export default function MapTileCell({
       )}
 
       {/* Selected ring */}
-      {isSelected && (
+      {isSelected && !isDestination && (
         <div className="absolute inset-0 z-40 rounded ring-2 ring-inset ring-sky-400/90 pointer-events-none" />
       )}
 
-      {/* Destination ring */}
-      {isDestination && !isSelected && (
-        <div className="absolute inset-0 z-40 rounded ring-2 ring-inset ring-indigo-400/80 pointer-events-none" />
+      {/* Destination double border */}
+      {isDestination && (
+        <div className="absolute inset-0 z-40 rounded border-4 border-double border-indigo-300/90 shadow-[inset_0_0_0_1px_rgba(129,140,248,0.7)] pointer-events-none" />
       )}
 
       {/* Penumbra overlay */}
