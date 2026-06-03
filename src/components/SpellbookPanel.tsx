@@ -38,6 +38,9 @@ const RARITY_TEXT: Record<SpellRarity, string> = {
 const RARITY_LABEL: Record<SpellRarity, string> = {
   common: 'Comum', uncommon: 'Incomum', rare: 'Raro', epic: 'Épico', unique: 'Único',
 }
+const RARITY_LABEL_EN: Record<SpellRarity, string> = {
+  common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', unique: 'Unique',
+}
 const EFFECT_ICON: Record<string, string> = {
   damage: '⚔', heal: '✦', buff: '▲', debuff: '▼', utility: '◎',
 }
@@ -166,6 +169,114 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean):
   return { primary: isEn ? 'No direct effect' : 'Sem efeito direto', details }
 }
 
+const SPELLBOOK_TEXT = {
+  pt: {
+    words: 'Palavras',
+    spells: 'Magias',
+    mana: 'Mana',
+    effect: {
+      damage: 'Dano',
+      heal: 'Cura',
+      buff: 'Bônus',
+      debuff: 'Debuff',
+      utility: 'Util',
+    },
+    category: {
+      element: 'Elem',
+      form: 'Forma',
+    },
+    assignTitle: 'Atribuir a slot de magia',
+    levelSlots: 'Slots de nível',
+    nextLevel: 'próx. Nv.',
+    obtainedWord: 'palavra obtida',
+    obtainedWords: 'palavras obtidas',
+    noWords: 'Nenhuma palavra conhecida ainda.',
+    combination: 'Combinação',
+    rareHint: 'Palavras raras+ podem ser obtidas por drops ou compradas na loja.',
+    slots: 'Slots:',
+    removeSlot: 'clique para remover',
+    emptySlot: 'vazio',
+    chooseSlot: '← escolha um slot',
+    auto: 'Auto',
+    autoTitle: 'Configurar auto-uso',
+    autoCast: 'Auto-uso de Magias',
+    always: 'sempre',
+    noSpells: 'Aprenda pelo menos 2 palavras para desbloquear magias.',
+  },
+  en: {
+    words: 'Words',
+    spells: 'Spells',
+    mana: 'Mana',
+    effect: {
+      damage: 'Damage',
+      heal: 'Heal',
+      buff: 'Buff',
+      debuff: 'Debuff',
+      utility: 'Util',
+    },
+    category: {
+      element: 'Elem',
+      form: 'Form',
+    },
+    assignTitle: 'Assign to spell slot',
+    levelSlots: 'Level slots',
+    nextLevel: 'next Lv.',
+    obtainedWord: 'word obtained',
+    obtainedWords: 'words obtained',
+    noWords: 'No known words yet.',
+    combination: 'Combination',
+    rareHint: 'Rare+ words can be obtained from drops or bought at the shop.',
+    slots: 'Slots:',
+    removeSlot: 'click to remove',
+    emptySlot: 'empty',
+    chooseSlot: '← choose a slot',
+    auto: 'Auto',
+    autoTitle: 'Configure auto-cast',
+    autoCast: 'Spell Auto-cast',
+    always: 'always',
+    noSpells: 'Learn at least 2 words to unlock spells.',
+  },
+} as const
+
+function statList(stats?: Record<string, number>): string {
+  if (!stats) return ''
+  return Object.entries(stats)
+    .map(([stat, value]) => `${value > 0 ? '+' : ''}${value} ${stat}`)
+    .join(', ')
+}
+
+function spellDescription(spell: Spell, isEn: boolean): string {
+  if (!isEn) return spell.description
+
+  const { effect } = spell
+  if (effect.type === 'damage') {
+    const pieces = [`Deals ${effect.base ?? 0} base damage`]
+    if (effect.scaling) pieces.push(`scales with ${effect.scalingStat ?? 'magic'}`)
+    if (effect.lifesteal) pieces.push(`heals for ${Math.round(effect.lifesteal * 100)}% of damage dealt`)
+    if (effect.enemyAtkMult || effect.enemyAtkSpeedMult) pieces.push(`weakens the enemy for ${effect.debuffDuration ?? 0} turns`)
+    return `${pieces.join(', ')}.`
+  }
+  if (effect.type === 'heal') {
+    const pieces = [`Restores ${effect.base ?? 0} base HP`]
+    if (effect.scaling) pieces.push(`scales with ${effect.scalingStat ?? 'magic'}`)
+    if (effect.statAdds) pieces.push(`also grants ${statList(effect.statAdds)} for ${effect.duration ?? 0} turns`)
+    return `${pieces.join(', ')}.`
+  }
+  if (effect.type === 'buff') {
+    return `Grants ${statList(effect.statAdds)} for ${effect.duration ?? 0} turns.`
+  }
+  if (effect.type === 'debuff') {
+    return `Weakens the enemy for ${effect.debuffDuration ?? 0} turns.`
+  }
+  if (effect.tileAction === 'create') {
+    return `Creates ${effect.tileCount ?? 2} new map tiles.`
+  }
+  if (effect.tileAction === 'refresh') {
+    return `Refreshes ${effect.tileCount ?? 3} map tiles.`
+  }
+  return 'A utility spell with no direct combat effect.'
+}
+
 // ─── Word card ────────────────────────────────────────────────────────────────
 function WordCard({ word, isSelected, onClick }: {
   word: Word
@@ -173,6 +284,7 @@ function WordCard({ word, isSelected, onClick }: {
   onClick: () => void
 }) {
   const isEn = useSettingsStore(s => s.lang === 'en')
+  const tx = SPELLBOOK_TEXT[isEn ? 'en' : 'pt']
   return (
     <button
       onClick={onClick}
@@ -193,7 +305,7 @@ function WordCard({ word, isSelected, onClick }: {
         </span>
       )}
       <span className={cn('text-[7px] uppercase tracking-widest mt-1 font-semibold opacity-60', RARITY_TEXT[word.rarity])}>
-        {word.category === 'element' ? 'Elem' : 'Forma'}
+        {word.category === 'element' ? tx.category.element : tx.category.form}
       </span>
     </button>
   )
@@ -218,6 +330,7 @@ function SpellCard({
   isAssigning: boolean
 }) {
   const isEn = useSettingsStore(s => s.lang === 'en')
+  const tx = SPELLBOOK_TEXT[isEn ? 'en' : 'pt']
   const pct = cooldownRemaining / spell.cooldown
   const summary = spellEffectSummary(spell, derived, isEn)
   return (
@@ -232,10 +345,7 @@ function SpellCard({
           {SPELL_ICONS[spell.id] ?? WORD_ICONS[spell.word1Id] ?? EFFECT_ICON[spell.effect.type]}
         </span>
         <span className={cn('text-[8px] font-semibold', EFFECT_COLOR[spell.effect.type])}>
-          {spell.effect.type === 'damage'  ? 'Dano'   :
-           spell.effect.type === 'heal'    ? 'Cura'   :
-           spell.effect.type === 'buff'    ? 'Bônus'  :
-           spell.effect.type === 'debuff'  ? 'Debuff' : 'Util'}
+          {tx.effect[spell.effect.type]}
         </span>
       </div>
 
@@ -246,7 +356,7 @@ function SpellCard({
             {spell.name}
           </span>
           <span className={cn('text-[8px] uppercase tracking-widest font-semibold opacity-60', RARITY_TEXT[spell.rarity])}>
-            {RARITY_LABEL[spell.rarity]}
+            {(isEn ? RARITY_LABEL_EN : RARITY_LABEL)[spell.rarity]}
           </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
@@ -266,7 +376,7 @@ function SpellCard({
           </span>
         </div>
         <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-0.5 leading-tight">
-          {spell.description}
+          {spellDescription(spell, isEn)}
         </p>
         <div className="mt-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-white/45 dark:bg-slate-950/25 px-2 py-1">
           <p className={cn('text-[9px] font-bold leading-tight', EFFECT_COLOR[spell.effect.type])}>
@@ -304,7 +414,7 @@ function SpellCard({
             ? 'border-indigo-400 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
             : 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-700',
         )}
-        title="Atribuir a slot de magia"
+        title={tx.assignTitle}
       >
         ⌨
       </button>
@@ -314,6 +424,9 @@ function SpellCard({
 
 // ─── Main SpellbookPanel ──────────────────────────────────────────────────────
 export default function SpellbookPanel() {
+  const lang       = useSettingsStore(s => s.lang)
+  const isEn       = lang === 'en'
+  const tx         = SPELLBOOK_TEXT[isEn ? 'en' : 'pt']
   const level      = useHeroStore(s => s.level)
   const attrs      = useHeroStore(s => s.attributes)
   const mana       = useHeroStore(s => s.mana)
@@ -398,11 +511,11 @@ export default function SpellbookPanel() {
                 : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
             )}
           >
-            {t === 'words' ? `Palavras (${knownWords.length})` : `Magias (${availableSpells.length})`}
+            {t === 'words' ? `${tx.words} (${knownWords.length})` : `${tx.spells} (${availableSpells.length})`}
           </button>
         ))}
         <span className="ml-auto text-[9px] text-slate-400 dark:text-slate-600 self-center">
-          Mana: {Math.floor(mana)}
+          {tx.mana}: {Math.floor(mana)}
         </span>
       </div>
 
@@ -411,10 +524,12 @@ export default function SpellbookPanel() {
         <div>
           {/* Progress info */}
           <div className="mb-2 text-[9px] text-slate-400 dark:text-slate-600 flex gap-3 flex-wrap">
-            <span>Slots de nível: {wordSlotCount}/{LEARNABLE_WORDS.length} (próx. Nv.{nextSlotAt})</span>
+            <span>{tx.levelSlots}: {wordSlotCount}/{LEARNABLE_WORDS.length} ({tx.nextLevel}{nextSlotAt})</span>
             <span>+INT: +{Math.floor(attrs.inteligencia / 10)} &nbsp; +SAB: +{Math.floor(attrs.sabedoria / 10)}</span>
             {earnedWordIds.length > 0 && (
-              <span className="text-purple-500 dark:text-purple-400">+{earnedWordIds.length} palavra{earnedWordIds.length !== 1 ? 's' : ''} obtida{earnedWordIds.length !== 1 ? 's' : ''}</span>
+              <span className="text-purple-500 dark:text-purple-400">
+                +{earnedWordIds.length} {earnedWordIds.length === 1 ? tx.obtainedWord : tx.obtainedWords}
+              </span>
             )}
           </div>
 
@@ -430,7 +545,7 @@ export default function SpellbookPanel() {
             ))}
             {knownWords.length === 0 && (
               <p className="text-[10px] text-slate-400 dark:text-slate-600 italic">
-                Nenhuma palavra conhecida ainda.
+                {tx.noWords}
               </p>
             )}
           </div>
@@ -439,7 +554,7 @@ export default function SpellbookPanel() {
           {selectedWords.length > 0 && (
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
               <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2">
-                Combinação
+                {tx.combination}
               </p>
               <div className="flex items-center gap-2">
                 {selectedWords.map((id, i) => {
@@ -457,7 +572,7 @@ export default function SpellbookPanel() {
               </div>
               {previewSpell && (
                 <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-1">
-                  {previewSpell.description} · {previewSpell.manaCost} mana · CD {previewSpell.cooldown}t
+                  {spellDescription(previewSpell, isEn)} · {previewSpell.manaCost} mana · CD {previewSpell.cooldown}t
                 </p>
               )}
             </div>
@@ -466,7 +581,7 @@ export default function SpellbookPanel() {
           {/* Locked words hint */}
           {LEARNABLE_WORDS.length - knownWords.filter(w => ['common','uncommon'].includes(w.rarity)).length > 0 && (
             <p className="mt-2 text-[9px] text-slate-400 dark:text-slate-600 italic">
-              Palavras raras+ podem ser obtidas por drops ou compradas na loja.
+              {tx.rareHint}
             </p>
           )}
         </div>
@@ -481,7 +596,7 @@ export default function SpellbookPanel() {
             className="sticky top-[76px] z-30 mb-3 flex items-center gap-1.5 flex-wrap rounded-xl border border-slate-200/80 dark:border-slate-800/90 bg-slate-50/95 dark:bg-slate-950/95 px-2.5 py-2 shadow-sm backdrop-blur"
           >
             <span className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest shrink-0">
-              Slots:
+              {tx.slots}
             </span>
             {spellSlots.map((sid, i) => {
               const spell = sid ? availableSpells.find(s => s.id === sid) : null
@@ -504,7 +619,7 @@ export default function SpellbookPanel() {
                         ? 'border-indigo-400 dark:border-indigo-500 border-dashed bg-indigo-50/60 dark:bg-indigo-900/20'
                         : 'border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50',
                   )}
-                  title={spell ? `Slot ${i+1}: ${spell.name} (clique para remover)` : `Slot ${i+1} (vazio)`}
+                  title={spell ? `Slot ${i+1}: ${spell.name} (${tx.removeSlot})` : `Slot ${i+1} (${tx.emptySlot})`}
                 >
                   {spell ? (
                     <>
@@ -531,17 +646,17 @@ export default function SpellbookPanel() {
             })}
             {assigningSpell && (
               <span className="text-[9px] text-indigo-500 dark:text-indigo-400 italic ml-1">
-                ← escolha um slot
+                {tx.chooseSlot}
               </span>
             )}
             <div className="relative ml-auto flex items-center gap-1">
               <span className="text-[8px] text-slate-400 dark:text-slate-600 uppercase tracking-widest">
-                Auto
+                {tx.auto}
               </span>
               <button
                 type="button"
                 onClick={() => setShowAutoConfig(v => !v)}
-                title="Configurar auto-uso"
+                title={tx.autoTitle}
                 className={cn(
                   'w-7 h-7 rounded-full flex items-center justify-center text-[12px] transition-colors',
                   showAutoConfig
@@ -555,7 +670,7 @@ export default function SpellbookPanel() {
               {showAutoConfig && (
                 <div className="absolute top-full right-0 mt-2 z-50 w-72 max-h-[60vh] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-xl">
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-                    Auto-uso de Magias
+                    {tx.autoCast}
                   </p>
                   {spellSlots.map((sid, i) => {
                     const spell = sid ? availableSpells.find(s => s.id === sid) : null
@@ -584,7 +699,7 @@ export default function SpellbookPanel() {
                                 <option value={0.7}>HP &lt; 70%</option>
                                 <option value={0.8}>HP &lt; 80%</option>
                                 <option value={0.9}>HP &lt; 90%</option>
-                                <option value={1.0}>sempre</option>
+                                <option value={1.0}>{tx.always}</option>
                               </select>
                             )}
                             <button
@@ -602,7 +717,7 @@ export default function SpellbookPanel() {
                           </>
                         ) : (
                           <span className="text-xs text-slate-400 dark:text-slate-600 italic">
-                            vazio
+                            {tx.emptySlot}
                           </span>
                         )}
                       </div>
@@ -638,7 +753,7 @@ export default function SpellbookPanel() {
           {/* Spell list */}
           {availableSpells.length === 0 ? (
             <p className="text-[10px] text-slate-400 dark:text-slate-600 italic text-center py-3">
-              Aprenda pelo menos 2 palavras para desbloquear magias.
+              {tx.noSpells}
             </p>
           ) : (
             <div className="flex flex-col gap-1.5">

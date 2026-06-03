@@ -1,20 +1,30 @@
+import { useState } from 'react'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useSpellStore } from '../store/spellStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
+import { applySpellBuffs } from '../formulas/spells'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponStatBonuses } from '../formulas/weapons'
-import { applySpellBuffs } from '../formulas/spells'
-import type { Attributes } from '../types/hero'
+import type { Attributes, DerivedStats } from '../types/hero'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function StatRow({ label, base, value }: { label: string; base?: string; value: string }) {
+  const modified = base !== undefined && base !== value
   return (
     <div className="flex justify-between py-0.5">
       <span className="text-xs text-slate-500 dark:text-slate-500">{label}</span>
-      <span className="text-xs text-slate-700 dark:text-slate-300 tabular-nums font-medium">{value}</span>
+      <span className="text-xs text-slate-700 dark:text-slate-300 tabular-nums font-medium">
+        {modified ? (
+          <>
+            <span className="text-slate-400 dark:text-slate-600">{base}</span>
+            <span className="mx-1 text-slate-400 dark:text-slate-600">→</span>
+            <span className="text-indigo-600 dark:text-indigo-400">{value}</span>
+          </>
+        ) : value}
+      </span>
     </div>
   )
 }
@@ -29,7 +39,42 @@ function formatMultiplierBonus(value: number): string {
   return `${sign}${formatPercent(bonus)}`
 }
 
+type SubAttrPage = 'combat' | 'magic' | 'explore' | 'economy' | 'resist'
+type StatKey = keyof DerivedStats | 'maxSpeed' | 'goldEfficiency'
+
+function formatStatValue(key: StatKey, value: number): string {
+  switch (key) {
+    case 'attackSpeed':
+    case 'critDamage':
+    case 'healBonus':
+    case 'staminaEfficiency':
+    case 'manaEfficiency':
+    case 'moveSpeed':
+    case 'goldMultiplier':
+    case 'xpBonus':
+      return formatMultiplierBonus(value)
+    case 'dodgeChance':
+    case 'critChance':
+    case 'damageReduction':
+    case 'dropChance':
+    case 'resIgnea':
+    case 'resGlacial':
+    case 'resSombria':
+    case 'resVital':
+      return formatPercent(value)
+    case 'def':
+      return value.toFixed(1)
+    case 'goldEfficiency':
+      return `${((value - 1) * 100).toFixed(0)}% desc.`
+    case 'maxSpeed':
+      return `${value}×`
+    default:
+      return String(Math.round(value))
+  }
+}
+
 export default function HeroPanel() {
+  const [subPage, setSubPage] = useState<SubAttrPage>('combat')
   const { freePoints, attributes, level, spendPoint, optimizePoints, applyPreset } = useHeroStore()
   const equipment    = useInventoryStore(s => s.equipment)
   const weaponProgress = useInventoryStore(s => s.weaponProgress)
@@ -37,20 +82,88 @@ export default function HeroPanel() {
   const activeBuffs  = useSpellStore(s => s.activeBuffs)
   const equipBonuses = getEquipmentBonuses(equipment)
   const weaponStats  = getWeaponStatBonuses(weaponProgress, equippedWeapons)
-  const baseDerived  = getDerivedStats(attributes, equipBonuses, level)
+  const baseDerived  = getDerivedStats(attributes, undefined, level)
+  const equipmentDerived = getDerivedStats(attributes, equipBonuses, level)
   const derived      = applySpellBuffs({
-    ...baseDerived,
-    atk: baseDerived.atk + weaponStats.atk,
-    def: baseDerived.def + weaponStats.def,
-    attackSpeed: Math.max(0.1, baseDerived.attackSpeed + weaponStats.attackSpeed),
-    critChance: Math.min(0.75, baseDerived.critChance + weaponStats.critChance),
-    magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
+    ...equipmentDerived,
+    atk: equipmentDerived.atk + weaponStats.atk,
+    def: equipmentDerived.def + weaponStats.def,
+    attackSpeed: Math.max(0.1, equipmentDerived.attackSpeed + weaponStats.attackSpeed),
+    critChance: Math.min(0.75, equipmentDerived.critChance + weaponStats.critChance),
+    magicDamage: equipmentDerived.magicDamage + weaponStats.magicDamage,
   }, activeBuffs)
   const maxSpeed     = getBaseSpeed(derived)
+  const baseMaxSpeed = getBaseSpeed(baseDerived)
   const t            = useT()
 
   const isEn     = useSettingsStore(s => s.lang) === 'en'
   const attrKeys = Object.keys(t.attrNames) as (keyof Attributes)[]
+  const subPages: { id: SubAttrPage; label: string; stats: { key: StatKey; label: string }[] }[] = [
+    {
+      id: 'combat',
+      label: isEn ? 'Combat' : 'Combate',
+      stats: [
+        { key: 'atk', label: t.statNames.atk },
+        { key: 'def', label: t.statNames.def },
+        { key: 'maxHp', label: t.statNames.hpMax },
+        { key: 'attackSpeed', label: t.statNames.atkSpeed },
+        { key: 'dodgeChance', label: t.statNames.dodge },
+        { key: 'critChance', label: t.statNames.critChance },
+        { key: 'critDamage', label: t.statNames.critDamage },
+        { key: 'damageReduction', label: t.statNames.damageReduction },
+      ],
+    },
+    {
+      id: 'magic',
+      label: isEn ? 'Magic' : 'Magia',
+      stats: [
+        { key: 'magicDamage', label: t.statNames.magicDmg },
+        { key: 'healBonus', label: t.statNames.healBonus },
+        { key: 'maxMana', label: isEn ? 'Max Mana' : 'Mana Máx.' },
+        { key: 'manaRegen', label: isEn ? 'Mana Regen' : 'Regen. Mana' },
+        { key: 'manaEfficiency', label: t.statNames.manaEff },
+      ],
+    },
+    {
+      id: 'explore',
+      label: isEn ? 'Explore' : 'Exploração',
+      stats: [
+        { key: 'maxStamina', label: isEn ? 'Max Stamina' : 'Stamina Máx.' },
+        { key: 'staminaRegen', label: isEn ? 'Stamina Regen' : 'Regen. Stamina' },
+        { key: 'staminaEfficiency', label: t.statNames.staminaEff },
+        { key: 'moveSpeed', label: t.statNames.moveSpeed },
+        { key: 'maxSpeed', label: t.statNames.maxSpeed },
+        { key: 'vision', label: t.statNames.vision },
+      ],
+    },
+    {
+      id: 'economy',
+      label: isEn ? 'Economy' : 'Economia',
+      stats: [
+        { key: 'dropChance', label: t.statNames.dropChance },
+        { key: 'goldEfficiency', label: t.statNames.goldEfficiency },
+        { key: 'goldMultiplier', label: t.statNames.goldMult },
+        { key: 'xpBonus', label: t.statNames.xpBonus },
+      ],
+    },
+    {
+      id: 'resist',
+      label: isEn ? 'Resist' : 'Resist.',
+      stats: [
+        { key: 'resIgnea', label: t.statNames.resIgnea },
+        { key: 'resGlacial', label: t.statNames.resGlacial },
+        { key: 'resSombria', label: t.statNames.resSombria },
+        { key: 'resVital', label: t.statNames.resVital },
+      ],
+    },
+  ]
+  const activeSubPage = subPages.find(page => page.id === subPage) ?? subPages[0]
+
+  function subStatValue(source: DerivedStats, key: StatKey): number {
+    if (key === 'maxSpeed') return source === baseDerived ? baseMaxSpeed : maxSpeed
+    if (key === 'goldEfficiency') return source.goldEfficiency
+    return source[key]
+  }
 
   return (
     <div id="hero-panel" className="flex flex-col gap-3">
@@ -129,14 +242,16 @@ export default function HeroPanel() {
                 >+</button>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                     <span className={cn('text-xs font-bold', colors[key])}>{label}</span>
-                    <span className="text-xs tabular-nums text-slate-700 dark:text-slate-300 font-semibold">{val}</span>
+                    <div className="ml-auto flex flex-wrap justify-end gap-1 min-w-0">
+                      {smalls.map((s: string) => (
+                        <span key={s} className="text-[9px] px-1 py-px rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500">{s}</span>
+                      ))}
+                    </div>
+                    <span className="text-xs tabular-nums text-slate-700 dark:text-slate-300 font-semibold shrink-0">{val}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1 mt-0.5">
-                    {smalls.map((s: string) => (
-                      <span key={s} className="text-[9px] px-1 py-px rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500">{s}</span>
-                    ))}
+                  <div className="flex flex-wrap justify-end gap-1 mt-0.5">
                     {bigs.map((b: string) => (
                       <span key={b} className="text-[9px] px-1 py-px rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400/80">{b}</span>
                     ))}
@@ -163,34 +278,29 @@ export default function HeroPanel() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-x-3">
-          <StatRow label={t.statNames.atk}             value={String(Math.round(derived.atk))} />
-          <StatRow label={t.statNames.def}             value={derived.def.toFixed(1)} />
-          <StatRow label={t.statNames.hpMax}           value={String(Math.round(derived.maxHp))} />
-          <StatRow label={t.statNames.atkSpeed}        value={formatMultiplierBonus(derived.attackSpeed)} />
-          <StatRow label={t.statNames.dodge}           value={`${(derived.dodgeChance * 100).toFixed(1)}%`} />
-          <StatRow label={t.statNames.critChance}      value={`${(derived.critChance * 100).toFixed(1)}%`} />
-          <StatRow label={t.statNames.critDamage}      value={formatMultiplierBonus(derived.critDamage)} />
-          <StatRow label={t.statNames.damageReduction} value={`${(derived.damageReduction * 100).toFixed(1)}%`} />
-          <StatRow label={t.statNames.magicDmg}        value={String(Math.round(derived.magicDamage))} />
-          <StatRow label={t.statNames.healBonus}       value={formatMultiplierBonus(derived.healBonus)} />
-          <StatRow label={t.statNames.staminaEff}      value={formatMultiplierBonus(derived.staminaEfficiency)} />
-          <StatRow label={t.statNames.manaEff}         value={formatMultiplierBonus(derived.manaEfficiency)} />
-          <StatRow label={t.statNames.moveSpeed}       value={formatMultiplierBonus(derived.moveSpeed)} />
-          <StatRow label={t.statNames.maxSpeed}        value={`${maxSpeed}×`} />
-          <StatRow label={t.statNames.vision}          value={String(Math.round(derived.vision))} />
-          <StatRow label={t.statNames.dropChance}      value={formatPercent(derived.dropChance)} />
-          <StatRow label={t.statNames.goldEfficiency}  value={`${((derived.goldEfficiency - 1) * 100).toFixed(0)}% desc.`} />
-          <StatRow label={t.statNames.goldMult}        value={formatMultiplierBonus(derived.goldMultiplier)} />
-          <StatRow label={t.statNames.xpBonus}        value={formatMultiplierBonus(derived.xpBonus)} />
-          {(derived.resIgnea > 0 || derived.resGlacial > 0 || derived.resSombria > 0 || derived.resVital > 0) && (
-            <>
-              <StatRow label={t.statNames.resIgnea}   value={`${(derived.resIgnea   * 100).toFixed(1)}%`} />
-              <StatRow label={t.statNames.resGlacial} value={`${(derived.resGlacial * 100).toFixed(1)}%`} />
-              <StatRow label={t.statNames.resSombria} value={`${(derived.resSombria * 100).toFixed(1)}%`} />
-              <StatRow label={t.statNames.resVital}   value={`${(derived.resVital   * 100).toFixed(1)}%`} />
-            </>
-          )}
+        <div className="mb-2 flex flex-wrap gap-1">
+          {subPages.map(page => (
+            <button
+              key={page.id}
+              onClick={() => setSubPage(page.id)}
+              className={cn(
+                'px-2 py-1 rounded-md text-[9px] font-semibold border transition-colors',
+                subPage === page.id
+                  ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700',
+              )}
+            >
+              {page.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-x-3">
+          {activeSubPage.stats.map(({ key, label }) => {
+            const baseValue = formatStatValue(key, subStatValue(baseDerived, key))
+            const modValue = formatStatValue(key, subStatValue(derived, key))
+            return <StatRow key={key} label={label} base={baseValue} value={modValue} />
+          })}
         </div>
       </div>
     </div>

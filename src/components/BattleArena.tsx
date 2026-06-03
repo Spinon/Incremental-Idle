@@ -297,6 +297,7 @@ export default function BattleArena() {
   }, [setShowMini])
 
   const [showAutoConfig, setShowAutoConfig] = useState(false)
+  const [showBattleLog, setShowBattleLog] = useState(true)
   const [showDeathLog, setShowDeathLog] = useState(false)
   const [seenDeathId, setSeenDeathId] = useState(() => {
     if (typeof window === 'undefined') return ''
@@ -922,8 +923,59 @@ export default function BattleArena() {
         </div>
       </div>
 
+      <div className="mt-2 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBattleLog(v => !v)}
+            title={isEn ? 'Battle log' : 'Diário de batalha'}
+            className={cn(
+              'self-start h-8 px-2.5 rounded-lg text-sm flex items-center gap-1.5 transition-colors border',
+              showBattleLog
+                ? 'bg-slate-800 border-slate-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            <span>☰</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest">{isEn ? 'Log' : 'Log'}</span>
+            {store.log.length > 0 && (
+              <span className="min-w-[16px] h-4 px-1 rounded-full border border-slate-400/40 text-slate-500 dark:text-slate-400 bg-transparent text-[9px] font-bold flex items-center justify-center leading-none">
+                {store.log.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setShowDeathLog(v => !v)
+              markDeathsSeen()
+            }}
+            title={isEn ? 'Death history' : 'Histórico de mortes'}
+            className={cn(
+              'self-start h-8 px-2.5 rounded-lg text-sm flex items-center gap-1.5 transition-colors border',
+              showDeathLog
+                ? 'bg-slate-800 border-slate-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            <span>🪦</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest">
+              {isEn ? 'Deaths' : 'Mortes'}
+            </span>
+            {deathHistory.length > 0 && (
+              <span className={cn(
+                'min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center leading-none transition-colors',
+                hasUnseenDeath
+                  ? 'bg-red-600 text-white shadow-[0_0_8px_rgba(220,38,38,0.45)]'
+                  : 'border border-amber-500/40 text-amber-500/80 bg-transparent',
+              )}>
+                {deathHistory.length}
+              </span>
+            )}
+          </button>
+        </div>
+
       {/* Battle log */}
-      <div className="mt-3 h-28 overflow-y-auto bg-slate-50 dark:bg-slate-900/60 rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-800/80">
+      {showBattleLog && <div className="h-36 overflow-y-auto bg-slate-50 dark:bg-slate-900/60 rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-800/80">
         <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1.5 font-bold">{t.log}</p>
         {store.log.length === 0
           ? <p className="text-xs text-slate-400 dark:text-slate-600 italic">{t.awaiting}</p>
@@ -995,37 +1047,7 @@ export default function BattleArena() {
               )
           })
         }
-      </div>
-
-      <div className="mt-2 flex flex-col gap-2">
-        <button
-          onClick={() => {
-            setShowDeathLog(v => !v)
-            markDeathsSeen()
-          }}
-          title={isEn ? 'Death history' : 'Histórico de mortes'}
-          className={cn(
-            'self-start h-8 px-2.5 rounded-lg text-sm flex items-center gap-1.5 transition-colors border',
-            showDeathLog
-              ? 'bg-slate-800 border-slate-600 text-white'
-              : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200',
-          )}
-        >
-          <span>🪦</span>
-          <span className="text-[10px] font-bold uppercase tracking-widest">
-            {isEn ? 'Deaths' : 'Mortes'}
-          </span>
-          {deathHistory.length > 0 && (
-            <span className={cn(
-              'min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center leading-none transition-colors',
-              hasUnseenDeath
-                ? 'bg-red-600 text-white shadow-[0_0_8px_rgba(220,38,38,0.45)]'
-                : 'border border-amber-500/40 text-amber-500/80 bg-transparent',
-            )}>
-              {deathHistory.length}
-            </span>
-          )}
-        </button>
+      </div>}
         {showDeathLog && <DeathLogPanel deaths={deathHistory} isEn={isEn} />}
       </div>
     </div>
