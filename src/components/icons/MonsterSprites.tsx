@@ -1,875 +1,147 @@
-/**
- * MonsterSprites — pixel art de monstros.
- *
- * viewBox "0 0 30 30" (quadrado) para todos os monstros.
- * Cada monstro é dividido em Base + Accessory.
- *   Base      — sprite nuclear, recolorável no caso do Slime.
- *   Accessory — overlay que muda por raridade e estado enraged.
- *
- * Todos os sprites são renderizados com scaleX(-1) para encarar o herói.
- */
-
+import type { CSSProperties } from 'react'
 import type { MonsterRarity } from '../../types/monster'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+import bandit1 from '../../assets/monster-sprites/Bandit1.svg'
+import bandit2 from '../../assets/monster-sprites/Bandit2.svg'
+import bandit3 from '../../assets/monster-sprites/Bandit3.svg'
+import bandit4 from '../../assets/monster-sprites/Bandit4.svg'
+import goblin1 from '../../assets/monster-sprites/Goblin1.svg'
+import goblin2 from '../../assets/monster-sprites/Goblin2.svg'
+import goblin3 from '../../assets/monster-sprites/Goblin3.svg'
+import goblin4 from '../../assets/monster-sprites/Goblin4.svg'
+import slime1 from '../../assets/monster-sprites/Slime1.svg'
+import slime2 from '../../assets/monster-sprites/Slime2.svg'
+import slime3 from '../../assets/monster-sprites/Slime3.svg'
+import slime4 from '../../assets/monster-sprites/Slime4.svg'
+import spider1 from '../../assets/monster-sprites/Spider1.svg'
+import spider2 from '../../assets/monster-sprites/Spider2.svg'
+import spider3 from '../../assets/monster-sprites/Spider3.svg'
+import spider4 from '../../assets/monster-sprites/Spider4.svg'
+import wolf1 from '../../assets/monster-sprites/Wolf1.svg'
+import wolf2 from '../../assets/monster-sprites/Wolf2.svg'
+import wolf3 from '../../assets/monster-sprites/Wolf3.svg'
+import wolf4 from '../../assets/monster-sprites/Wolf4.svg'
+import wolf5 from '../../assets/monster-sprites/Wolf5.svg'
 
 export interface MonsterSpriteProps {
   monsterId: string
-  rarity?:  MonsterRarity
+  rarity?: MonsterRarity
   enraged?: boolean
-  /** Largura em px — altura igual (30×30 = quadrado). */
-  size?:    number
+  size?: number
 }
 
-interface AccessoryProps {
-  rarity?:  MonsterRarity
-  enraged?: boolean
+type SpriteSet = {
+  normal: string
+  uncommon: string
+  rare: string
+  epic: string
+  unique: string
+  flipToFaceLeft?: boolean
+  visualScale?: number
 }
 
-// ─── Rarity accent colours ────────────────────────────────────────────────────
-
-const RARITY_ACCENT: Partial<Record<MonsterRarity, string>> = {
-  uncommon: '#4acc44',
-  rare:     '#4488ee',
-  epic:     '#bb44ee',
-  unique:   '#ffcc22',
+const SPRITES: Record<string, SpriteSet> = {
+  goblin: {
+    normal: goblin1,
+    uncommon: goblin2,
+    rare: goblin3,
+    epic: goblin4,
+    unique: goblin4,
+    flipToFaceLeft: true,
+    visualScale: 1.18,
+  },
+  wolf: {
+    normal: wolf1,
+    uncommon: wolf2,
+    rare: wolf3,
+    epic: wolf4,
+    unique: wolf5,
+    flipToFaceLeft: true,
+    visualScale: 1.14,
+  },
+  slime: {
+    normal: slime1,
+    uncommon: slime2,
+    rare: slime3,
+    epic: slime4,
+    unique: slime4,
+    flipToFaceLeft: true,
+    visualScale: 1.18,
+  },
+  bandit: {
+    normal: bandit1,
+    uncommon: bandit2,
+    rare: bandit3,
+    epic: bandit4,
+    unique: bandit4,
+    flipToFaceLeft: true,
+    visualScale: 1.16,
+  },
+  giant_spider: {
+    normal: spider1,
+    uncommon: spider2,
+    rare: spider3,
+    epic: spider4,
+    unique: spider4,
+    flipToFaceLeft: true,
+    visualScale: 1.04,
+  },
 }
 
-// ─── Pixel-map engine ──────────────────────────────────────────────────────────
-// Cada sprite é uma grade de células (chars). O builder desenha formas com
-// rect/triângulo numa grade NxN; um passe de contorno adiciona borda preta
-// automática ao redor da silhueta. O renderizador agrupa runs horizontais
-// da mesma cor num único <rect> (mantém o DOM enxuto e pixels duros).
-
-type Grid = string[][]
-
-function mkGrid(n: number): Grid {
-  return Array.from({ length: n }, () => Array<string>(n).fill('.'))
+const RARITY_GLOW: Partial<Record<MonsterRarity, string>> = {
+  uncommon: 'drop-shadow(0 0 5px rgba(74, 204, 68, 0.35))',
+  rare: 'drop-shadow(0 0 6px rgba(68, 136, 238, 0.42))',
+  epic: 'drop-shadow(0 0 7px rgba(187, 68, 238, 0.48))',
+  unique: 'drop-shadow(0 0 8px rgba(255, 204, 34, 0.52))',
 }
 
-/** Preenche um retângulo (x,y,w,h) com o char. '.' apaga. */
-function rect(g: Grid, x: number, y: number, w: number, h: number, ch: string) {
-  for (let yy = y; yy < y + h; yy++) {
-    for (let xx = x; xx < x + w; xx++) {
-      if (g[yy] && xx >= 0 && xx < g.length) g[yy][xx] = ch
-    }
-  }
-}
-
-
-/** Adiciona contorno (ch) em toda célula vazia adjacente a uma célula preenchida. */
-function outline(g: Grid, ch: string) {
-  const n = g.length
-  const filled = (x: number, y: number) =>
-    y >= 0 && y < n && x >= 0 && x < n && g[y][x] !== '.' && g[y][x] !== ch
-  const todo: [number, number][] = []
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      if (g[y][x] !== '.') continue
-      if (filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1)) {
-        todo.push([x, y])
-      }
-    }
-  }
-  for (const [x, y] of todo) g[y][x] = ch
-}
-
-type Pt = [number, number]
-
-/** Preenche um polígono (lista de vértices) via scanline — bordas diagonais/curvas. */
-function fillPoly(g: Grid, pts: Pt[], ch: string) {
-  const ys = pts.map(p => p[1])
-  const minY = Math.max(0, Math.floor(Math.min(...ys)))
-  const maxY = Math.min(g.length - 1, Math.ceil(Math.max(...ys)))
-  for (let y = minY; y <= maxY; y++) {
-    const xs: number[] = []
-    for (let i = 0; i < pts.length; i++) {
-      const [x1, y1] = pts[i]
-      const [x2, y2] = pts[(i + 1) % pts.length]
-      if ((y1 <= y && y2 > y) || (y2 <= y && y1 > y)) {
-        xs.push(x1 + ((y - y1) / (y2 - y1)) * (x2 - x1))
-      }
-    }
-    xs.sort((a, b) => a - b)
-    for (let k = 0; k + 1 < xs.length; k += 2) {
-      const xa = Math.round(xs[k])
-      const xb = Math.round(xs[k + 1])
-      if (xb > xa) rect(g, xa, y, xb - xa, 1, ch)
-    }
-  }
-}
-
-function PixelMap({ grid, palette }: { grid: Grid; palette: Record<string, string> }) {
-  const cells: React.JSX.Element[] = []
-  for (let y = 0; y < grid.length; y++) {
-    const row = grid[y]
-    let x = 0
-    while (x < row.length) {
-      const ch = row[x]
-      if (ch === '.' || !palette[ch]) { x++; continue }
-      let w = 1
-      while (x + w < row.length && row[x + w] === ch) w++
-      cells.push(<rect key={`${x}-${y}`} x={x} y={y} width={w} height={1} fill={palette[ch]} />)
-      x += w
-    }
-  }
-  return <g shapeRendering="crispEdges">{cells}</g>
-}
-
-// ─── Shared: rage effect ──────────────────────────────────────────────────────
-
-function EnragedEffect({ g = 30 }: { g?: number } = {}) {
-  return (
-    <g>
-      <rect x="0"        y={g * 0.10} width={g * 0.10} height={g * 0.07} fill="#ff4422" opacity="0.80" />
-      <rect x={g * 0.90} y={g * 0.10} width={g * 0.10} height={g * 0.07} fill="#ff4422" opacity="0.80" />
-      <rect x="0"        y={g * 0.30} width={g * 0.07} height={g * 0.10} fill="#ff6622" opacity="0.55" />
-      <rect x={g * 0.93} y={g * 0.30} width={g * 0.07} height={g * 0.10} fill="#ff6622" opacity="0.55" />
-      <rect x={g * 0.13} y="0"        width={g * 0.13} height={g * 0.07} fill="#ff4422" opacity="0.45" />
-      <rect x={g * 0.73} y="0"        width={g * 0.13} height={g * 0.07} fill="#ff4422" opacity="0.45" />
-    </g>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GOBLIN
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const GOBLIN_PALETTE: Record<string, string> = {
-  B: '#52a83c',  // verde base
-  S: '#2e6e1e',  // verde sombra
-  L: '#74c258',  // verde brilho
-  H: '#8fd072',  // verde brilho forte
-  K: '#0e2b0b',  // contorno
-  E: '#e23030',  // olho
-  e: '#ff8a7a',  // brilho do olho
-  P: '#6a0a0a',  // pupila
-  M: '#170505',  // boca
-  F: '#f4ead0',  // presa
-  v: '#6a4818',  // couro
-  w: '#43290c',  // couro escuro
-  x: '#8a6224',  // couro brilho
-  Y: '#d8b13a',  // fivela
-  y: '#f2d878',  // fivela brilho
-  c: '#7a5420',  // madeira (clava)
-  k: '#4a3010',  // madeira escura
-}
-
-function buildGoblinGrid(): Grid {
-  const g = mkGrid(64)
-
-  // ════ Goblin de CORPO INTEIRO, de frente, postura agachada ════
-
-  // ── pernas (curtas, arqueadas) ──
-  rect(g, 19, 47, 10, 14, 'B')   // perna esquerda
-  rect(g, 35, 47, 10, 14, 'B')   // perna direita
-  rect(g, 19, 47, 3, 12, 'L')    // brilho
-  rect(g, 42, 49, 3, 10, 'S')    // sombra
-  rect(g, 19, 47, 10, 2, 'S'); rect(g, 35, 47, 10, 2, 'S')  // vinco da coxa
-  // pés com garras
-  rect(g, 15, 59, 15, 4, 'S'); rect(g, 34, 59, 15, 4, 'S')
-  rect(g, 15, 62, 2, 2, 'K'); rect(g, 20, 62, 2, 2, 'K'); rect(g, 25, 62, 2, 2, 'K')
-  rect(g, 35, 62, 2, 2, 'K'); rect(g, 40, 62, 2, 2, 'K'); rect(g, 45, 62, 2, 2, 'K')
-
-  // ── braço esquerdo (pendente) ──
-  rect(g, 9, 28, 9, 19, 'B')
-  rect(g, 9, 28, 2, 16, 'L')
-  rect(g, 8, 44, 10, 6, 'B')     // punho
-  rect(g, 8, 44, 10, 2, 'S')
-
-  // ── braço direito (segura a clava pra baixo) ──
-  rect(g, 46, 28, 9, 17, 'B')
-  rect(g, 52, 29, 2, 14, 'S')
-  rect(g, 46, 42, 11, 6, 'B')    // punho
-  rect(g, 46, 42, 11, 2, 'S')
-
-  // ── clava abaixada na mão direita (longe da cabeça) ──
-  rect(g, 49, 38, 5, 12, 'c')    // cabo
-  rect(g, 49, 38, 2, 12, 'k')
-  rect(g, 45, 48, 13, 11, 'c')   // cabeça da clava
-  rect(g, 46, 49, 11, 9, 'k')
-  rect(g, 48, 51, 2, 2, 'x'); rect(g, 53, 52, 2, 2, 'x'); rect(g, 50, 55, 2, 2, 'x')  // cravos
-
-  // ── tronco (barrigudo) + colete de couro ──
-  rect(g, 16, 27, 32, 21, 'B')
-  rect(g, 16, 27, 3, 3, '.'); rect(g, 45, 27, 3, 3, '.')   // ombros arredondados
-  rect(g, 16, 45, 3, 3, '.'); rect(g, 45, 45, 3, 3, '.')   // quadril arredondado
-  // colete sobre o peito
-  rect(g, 17, 27, 30, 10, 'v')
-  rect(g, 20, 29, 11, 5, 'x')    // brilho do peito
-  rect(g, 31, 28, 3, 9, 'w')     // costura central
-  rect(g, 41, 29, 5, 7, 'w')     // sombra direita
-  // barriga verde exposta
-  rect(g, 23, 38, 16, 6, 'L')
-  rect(g, 25, 40, 12, 3, 'H')
-  // cinto + tanga
-  rect(g, 16, 43, 32, 4, 'w')
-  rect(g, 28, 42, 9, 5, 'Y'); rect(g, 30, 43, 4, 3, 'y')   // fivela
-  rect(g, 27, 46, 11, 8, 'v'); rect(g, 29, 47, 7, 6, 'w')  // tanga
-
-  // ── pescoço ──
-  rect(g, 27, 24, 10, 5, 'B')
-  rect(g, 27, 24, 10, 2, 'S')
-
-  // ── cabeça (grande) ──
-  rect(g, 17, 3, 30, 23, 'B')
-  rect(g, 17, 3, 4, 4, '.'); rect(g, 43, 3, 4, 4, '.')   // topo arredondado
-  rect(g, 17, 22, 3, 4, '.'); rect(g, 44, 22, 3, 4, '.') // queixo arredondado
-  rect(g, 23, 6, 16, 3, 'L')     // testa brilho
-  rect(g, 27, 7, 8, 2, 'H')
-  rect(g, 20, 20, 24, 4, 'S')    // sombra do maxilar
-  rect(g, 40, 8, 5, 14, 'S')     // sombra lateral
-
-  // ── orelhas grandes pontudas (laterais, escalonadas) ──
-  rect(g, 11, 9, 8, 9, 'B'); rect(g, 6, 10, 7, 5, 'B'); rect(g, 3, 11, 5, 3, 'B')   // esq
-  rect(g, 9, 11, 6, 5, 'S')
-  rect(g, 45, 9, 8, 9, 'B'); rect(g, 51, 10, 7, 5, 'B'); rect(g, 56, 11, 5, 3, 'B') // dir
-  rect(g, 49, 11, 6, 5, 'S')
-
-  // ── sobrancelhas bravas + olhos vermelhos ──
-  rect(g, 20, 10, 11, 2, 'K'); rect(g, 33, 10, 11, 2, 'K')
-  rect(g, 28, 12, 8, 2, 'K')     // vinco entre as sobrancelhas
-  rect(g, 21, 12, 9, 6, 'E'); rect(g, 34, 12, 9, 6, 'E')
-  rect(g, 24, 14, 4, 4, 'P');  rect(g, 37, 14, 4, 4, 'P')
-  rect(g, 22, 13, 3, 2, 'e');  rect(g, 35, 13, 3, 2, 'e')
-
-  // ── nariz ──
-  rect(g, 29, 17, 6, 6, 'B')
-  rect(g, 29, 17, 6, 2, 'S')
-  rect(g, 30, 18, 2, 2, 'L')
-  rect(g, 30, 21, 1, 2, 'K'); rect(g, 33, 21, 1, 2, 'K')   // narinas
-
-  // ── boca larga + presas ──
-  rect(g, 22, 23, 20, 3, 'M')
-  rect(g, 24, 23, 2, 4, 'F'); rect(g, 38, 23, 2, 4, 'F')   // presas superiores
-  rect(g, 30, 25, 2, 2, 'F'); rect(g, 33, 25, 2, 2, 'F')   // inferiores
-
-  outline(g, 'K')
-  return g
-}
-
-const GOBLIN_GRID = buildGoblinGrid()
-
-function GoblinBase() {
-  return <PixelMap grid={GOBLIN_GRID} palette={GOBLIN_PALETTE} />
-}
-
-function GoblinAccessory({ rarity, enraged }: AccessoryProps) {
-  const a = rarity ? (RARITY_ACCENT[rarity] ?? '#fff') : '#fff'
-  if (enraged) return (
-    <g>
-      <EnragedEffect g={64} />
-      <rect x="20" y="6" width="11" height="2" fill="#ff2200" opacity="0.7" />
-      <rect x="33" y="6" width="11" height="2" fill="#ff2200" opacity="0.7" />
-    </g>
-  )
-  if (!rarity || rarity === 'normal') return null
-  if (rarity === 'uncommon') return (
-    <g>
-      {/* escudo de madeira no braço esquerdo */}
-      <rect x="1"  y="30" width="14" height="20" rx="3" fill="#8a5a2a" />
-      <rect x="3"  y="32" width="10" height="16" rx="2" fill="#6a3a10" />
-      <rect x="7"  y="34" width="2"  height="12"     fill={a} opacity="0.7" />
-      <rect x="4"  y="38" width="8"  height="2"      fill={a} opacity="0.5" />
-    </g>
-  )
-  if (rarity === 'rare') return (
-    <g>
-      {/* capacete de ferro */}
-      <rect x="16" y="0" width="32" height="10" rx="4" fill="#7a8a9a" />
-      <rect x="19" y="1" width="26" height="4"  rx="3" fill="#9aaaba" opacity="0.6" />
-      <rect x="17" y="8" width="30" height="2"       fill="#4a5a6a" />
-      <rect x="30" y="8" width="4"  height="6"       fill="#5a6a7a" />
-    </g>
-  )
-  if (rarity === 'epic') return (
-    <g>
-      {/* capacete com chifres + olhos brilhantes */}
-      <rect x="16" y="1" width="32" height="9" rx="4" fill="#5a4a7a" />
-      <rect x="19" y="1" width="26" height="3" rx="2" fill="#7a6a9a" opacity="0.5" />
-      <rect x="9"  y="0" width="8"  height="9" rx="2" fill={a} opacity="0.9" />
-      <rect x="47" y="0" width="8"  height="9" rx="2" fill={a} opacity="0.9" />
-      <rect x="21" y="12" width="9" height="6" rx="2" fill={a} opacity="0.35" />
-      <rect x="34" y="12" width="9" height="6" rx="2" fill={a} opacity="0.35" />
-    </g>
-  )
-  /* unique */
-  return (
-    <g>
-      <rect x="0"  y="0" width="64" height="64" fill={a} opacity="0.04" />
-      {/* coroa */}
-      <rect x="21" y="0" width="22" height="6" rx="1" fill={a} />
-      <rect x="23" y="0" width="3"  height="5"      fill={a} />
-      <rect x="30" y="0" width="4"  height="7" rx="1" fill={a} />
-      <rect x="39" y="0" width="3"  height="5"      fill={a} />
-      <rect x="22" y="0" width="20" height="2"      fill="#fff8c0" opacity="0.5" />
-      {/* runas na barriga */}
-      <rect x="25" y="39" width="5" height="3" rx="1" fill={a} opacity="0.7" />
-      <rect x="34" y="39" width="5" height="3" rx="1" fill={a} opacity="0.7" />
-    </g>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOBO — quadrúpede de perfil (projetado virado à direita; scaleX(-1) → vira à esquerda)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const WOLF_PALETTE: Record<string, string> = {
-  // rampa de cinza CLARA — espaço amplo p/ sombra e luz lerem
-  H: '#a6b1c0',  // brilho forte
-  L: '#8a96a6',  // brilho
-  M: '#737f8f',  // médio-claro
-  B: '#5c6776',  // base (pelo)
-  S: '#414a59',  // sombra (juba/peito)
-  D: '#2c333f',  // sombra profunda (separações)
-  G: '#242a34',  // garra / dedo
-  R: '#ff3b3b',  // olho vermelho
-  r: '#ff9a7a',  // brilho do olho
-  N: '#0e1118',  // nariz
-  F: '#f4f0e0',  // presa
-  i: '#6a3232',  // interior da orelha
-  t: '#b04a4a',  // língua
-  K: '#14181f',  // contorno
-}
-
-function buildWolfGrid(): Grid {
-  const g = mkGrid(64)
-
-  // ════ Lobo FRONTAL rosnando · 64px · simétrico, encara o jogador ════
-  // Método pixel-map (polígonos + rects). Vista de frente lê muito melhor que perfil.
-
-  // ── juba / peito (ESCURA, atrás — contrasta com a cabeça clara) ──
-  fillPoly(g, [[14,33],[50,33],[59,47],[56,62],[8,62],[5,47]], 'S')
-  fillPoly(g, [[27,37],[37,37],[34,58],[30,58]], 'M')   // pelo claro central
-  rect(g, 31, 40, 3, 16, 'L')
-  rect(g, 6, 49, 7, 12, 'D'); rect(g, 51, 49, 7, 12, 'D')   // sombras laterais
-
-  // ── patas dianteiras (CLARAS, saltam da juba escura) ──
-  fillPoly(g, [[15,54],[27,54],[27,63],[13,63]], 'B')
-  fillPoly(g, [[37,54],[49,54],[51,63],[37,63]], 'B')
-  rect(g, 13, 53, 14, 2, 'D'); rect(g, 37, 53, 14, 2, 'D')   // sombra no topo (separa do peito)
-  rect(g, 15, 55, 3, 7, 'M'); rect(g, 47, 56, 3, 6, 'S')
-  rect(g, 20, 59, 1, 4, 'G'); rect(g, 23, 59, 1, 4, 'G')     // dedos
-  rect(g, 41, 59, 1, 4, 'G'); rect(g, 44, 59, 1, 4, 'G')
-
-  // ── orelhas pontudas (anguladas pra fora) ──
-  fillPoly(g, [[12,3],[21,11],[15,21],[7,15]], 'B')
-  fillPoly(g, [[52,3],[57,15],[49,21],[43,11]], 'B')
-  fillPoly(g, [[13,8],[18,13],[14,18]], 'i')
-  fillPoly(g, [[51,8],[46,13],[50,18]], 'i')
-
-  // ── cabeça (CLARA, larga) ──
-  fillPoly(g, [[12,12],[24,7],[40,7],[52,12],[54,26],[46,35],[18,35],[10,26]], 'B')
-  fillPoly(g, [[10,24],[3,28],[10,33]], 'B'); fillPoly(g, [[54,24],[61,28],[54,33]], 'B')  // tufos bochecha
-  // sombra do FIM DO ROSTO — arco curvo (separa a cabeça do peito)
-  fillPoly(g, [
-    [10,31],[18,38],[26,42],[32,43],[38,42],[46,38],[54,31],
-    [54,34],[46,41],[38,45],[32,46],[26,45],[18,41],[10,34],
-  ], 'D')
-  // testa clara + listra escura
-  fillPoly(g, [[20,10],[44,10],[42,16],[22,16]], 'L'); rect(g, 24, 11, 16, 2, 'H')
-  rect(g, 30, 12, 4, 11, 'S')   // listra central
-  rect(g, 11, 26, 4, 7, 'S'); rect(g, 49, 26, 4, 7, 'S')   // laterais em sombra
-
-  // ── sobrancelhas bravas (V) ──
-  fillPoly(g, [[16,16],[29,20],[29,22],[16,18]], 'D')
-  fillPoly(g, [[48,16],[35,20],[35,22],[48,18]], 'D')
-
-  // ── olhos vermelhos brilhantes ──
-  fillPoly(g, [[18,18],[27,19],[26,24],[18,23]], 'R')
-  fillPoly(g, [[46,18],[37,19],[38,24],[46,23]], 'R')
-  rect(g, 19, 19, 3, 2, 'r'); rect(g, 42, 19, 3, 2, 'r')
-  rect(g, 23, 21, 3, 3, 'K'); rect(g, 38, 21, 3, 3, 'K')   // pupila
-
-  // ── focinho (claro no alto, sombra nas laterais) ──
-  fillPoly(g, [[26,22],[38,22],[37,37],[27,37]], 'L')
-  rect(g, 26, 27, 2, 10, 'S'); rect(g, 36, 27, 2, 10, 'S')
-  fillPoly(g, [[27,32],[37,32],[35,38],[29,38]], 'N')   // nariz
-  rect(g, 30, 33, 3, 1, 'L')
-
-  // ── boca rosnando + presas + língua ──
-  fillPoly(g, [[18,37],[46,37],[44,45],[20,45]], 'K')
-  rect(g, 30, 41, 4, 4, 't')                            // língua
-  rect(g, 21, 37, 3, 5, 'F'); rect(g, 40, 37, 3, 5, 'F')   // presas superiores
-  rect(g, 27, 42, 2, 3, 'F'); rect(g, 35, 42, 2, 3, 'F')   // presas inferiores
-
-  outline(g, 'K')
-  return g
-}
-
-const WOLF_GRID = buildWolfGrid()
-
-function WolfBase() {
-  return <PixelMap grid={WOLF_GRID} palette={WOLF_PALETTE} />
-}
-
-function WolfAccessory({ rarity, enraged }: AccessoryProps) {
-  const a = rarity ? (RARITY_ACCENT[rarity] ?? '#fff') : '#fff'
-  if (enraged) return (
-    <g>
-      <EnragedEffect g={64} />
-      {/* babas escorrendo do focinho */}
-      <rect x="62" y="37" width="2" height="8"  rx="1" fill="white" opacity="0.6" />
-      <rect x="58" y="38" width="1" height="6"  rx="1" fill="white" opacity="0.4" />
-    </g>
-  )
-  if (!rarity || rarity === 'normal') return null
-  if (rarity === 'uncommon') return (
-    <g>
-      {/* coleira com espinhos no pescoço */}
-      <rect x="44" y="27" width="6" height="13" rx="1" fill="#4a3a2a" />
-      <rect x="42" y="28" width="2" height="3"       fill="#7a5a2a" />
-      <rect x="42" y="33" width="2" height="3"       fill="#7a5a2a" />
-      <rect x="50" y="29" width="2" height="3"       fill="#7a5a2a" />
-    </g>
-  )
-  if (rarity === 'rare') return (
-    <g>
-      {/* colar de ossos no peito */}
-      <rect x="42" y="28" width="7" height="3" rx="1" fill="#3a2a10" />
-      <rect x="42" y="31" width="4" height="6" rx="2" fill="#c8aa80" />
-      <rect x="46" y="33" width="4" height="6" rx="2" fill="#c8aa80" />
-      <rect x="39" y="34" width="4" height="6" rx="2" fill="#c8aa80" />
-    </g>
-  )
-  if (rarity === 'epic') return (
-    <g>
-      {/* olho incandescente */}
-      <rect x="49" y="26" width="6" height="6" rx="1" fill={a} opacity="0.55" />
-      {/* patas brilhantes */}
-      <rect x="25" y="56" width="8" height="4" fill={a} opacity="0.8" />
-      <rect x="37" y="56" width="8" height="4" fill={a} opacity="0.8" />
-      {/* manchas no pelo do lombo */}
-      <rect x="12" y="24" width="8" height="3" rx="1" fill={a} opacity="0.3" />
-      <rect x="26" y="24" width="6" height="3" rx="1" fill={a} opacity="0.25" />
-    </g>
-  )
-  /* unique */
-  return (
-    <g>
-      {/* runas no lombo */}
-      <rect x="12" y="24" width="6" height="3" rx="1" fill={a} opacity="0.6" />
-      <rect x="26" y="24" width="6" height="3" rx="1" fill={a} opacity="0.6" />
-      <rect x="19" y="30" width="6" height="3" rx="1" fill={a} opacity="0.4" />
-      {/* rastro sombrio atrás da cauda */}
-      <rect x="0"  y="15" width="8" height="14" rx="3" fill={a} opacity="0.2" />
-      <rect x="0"  y="30" width="6" height="12" rx="3" fill={a} opacity="0.15" />
-      <rect x="0"  y="0"  width="64" height="64" fill={a} opacity="0.04" />
-    </g>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SLIME — recolor por raridade (sem accessory no base; mudança é no próprio corpo)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-interface SlimeColors { main: string; dark: string; lite: string }
-
-const SLIME_COLORS: Record<string, SlimeColors> = {
-  normal:   { main: '#2aba44', dark: '#1a8a2a', lite: '#5ade64' },
-  uncommon: { main: '#20aaaa', dark: '#108a8a', lite: '#44cccc' },
-  rare:     { main: '#2055cc', dark: '#1035aa', lite: '#4488ee' },
-  epic:     { main: '#9922cc', dark: '#6a1188', lite: '#cc55ee' },
-  unique:   { main: '#cc8822', dark: '#aa5500', lite: '#ffcc44' },
-  enraged:  { main: '#cc3322', dark: '#aa1100', lite: '#ff5544' },
-}
-
-function SlimeBase({ c }: { c: SlimeColors }) {
-  const { main: m, dark: d, lite: l } = c
-  // contorno = versão bem escura da cor principal
-  const out = d
-  return (
-    <g>
-      {/* contorno geral (sombra atrás do corpo) */}
-      <rect x="1"  y="6"  width="28" height="23" rx="7" fill={out} />
-      {/* forma do topo */}
-      <rect x="8"  y="4"  width="14" height="6" rx="5" fill={out} />
-      <rect x="9"  y="4"  width="12" height="5" rx="4" fill={m} />
-      {/* corpo principal */}
-      <rect x="2"  y="8"  width="26" height="19" rx="7" fill={m} />
-      {/* sombra inferior interna */}
-      <rect x="4"  y="22" width="22" height="5" rx="4" fill={d} opacity="0.45" />
-      {/* sombra lateral direita */}
-      <rect x="23" y="9"  width="4"  height="15"      fill={d} opacity="0.3" />
-      {/* gloss principal (brilho gelatinoso) */}
-      <rect x="6"  y="6"  width="9"  height="4" rx="2" fill={l} opacity="0.6" />
-      <rect x="6"  y="10" width="4"  height="6" rx="2" fill={l} opacity="0.35" />
-      <rect x="5"  y="6"  width="3"  height="3" rx="1" fill="#ffffff" opacity="0.5" />
-      {/* bolhas internas */}
-      <rect x="20" y="11" width="3"  height="3" rx="1" fill={l} opacity="0.3" />
-      <rect x="16" y="7"  width="2"  height="2" rx="1" fill={l} opacity="0.4" />
-      {/* olhos */}
-      <rect x="7"  y="13" width="7"  height="8" rx="3" fill="#f4f8f4" />
-      <rect x="16" y="13" width="7"  height="8" rx="3" fill="#f4f8f4" />
-      <rect x="8"  y="14" width="5"  height="6" rx="2" fill="#16241a" />
-      <rect x="17" y="14" width="5"  height="6" rx="2" fill="#16241a" />
-      <rect x="10" y="15" width="2"  height="3" fill="#ffffff" opacity="0.85" />
-      <rect x="19" y="15" width="2"  height="3" fill="#ffffff" opacity="0.85" />
-      {/* boca sorridente */}
-      <rect x="10" y="22" width="10" height="2" rx="1" fill="#0e1c0e" />
-      <rect x="9"  y="21" width="2"  height="1" fill="#0e1c0e" />
-      <rect x="19" y="21" width="2"  height="1" fill="#0e1c0e" />
-      {/* pingos laterais */}
-      <rect x="0"  y="16" width="4"  height="9" rx="2" fill={out} />
-      <rect x="0"  y="16" width="3"  height="8" rx="2" fill={m} />
-      <rect x="26" y="16" width="4"  height="9" rx="2" fill={out} />
-      <rect x="27" y="16" width="3"  height="8" rx="2" fill={m} />
-      {/* pingo escorrendo embaixo */}
-      <rect x="12" y="26" width="6"  height="4" rx="3" fill={out} />
-      <rect x="13" y="26" width="4"  height="3" rx="2" fill={m} />
-    </g>
-  )
-}
-
-function SlimeAccessory({ rarity, enraged }: AccessoryProps) {
-  if (enraged) return <EnragedEffect />
-  const a = rarity ? (RARITY_ACCENT[rarity] ?? '') : ''
-  if (!a || rarity === 'normal') return null
-  if (rarity === 'uncommon') return (
-    <g>
-      {/* bolha brilhante extra */}
-      <rect x="22" y="8" width="4" height="4" rx="2" fill={a} opacity="0.4" />
-      <rect x="23" y="8" width="2" height="2" rx="1" fill="white" opacity="0.4" />
-    </g>
-  )
-  if (rarity === 'rare') return (
-    <g>
-      {/* cristal no topo */}
-      <rect x="13" y="2" width="4" height="5" rx="1" fill={a} opacity="0.7" />
-      <rect x="14" y="2" width="2" height="3" fill="white" opacity="0.4" />
-    </g>
-  )
-  if (rarity === 'epic') return (
-    <g>
-      {/* aura brilhante nos olhos */}
-      <rect x="7"  y="13" width="7" height="8" rx="3" fill={a} opacity="0.3" />
-      <rect x="16" y="13" width="7" height="8" rx="3" fill={a} opacity="0.3" />
-      {/* cristais nas laterais */}
-      <rect x="0"  y="10" width="3" height="7" rx="1" fill={a} opacity="0.5" />
-      <rect x="27" y="10" width="3" height="7" rx="1" fill={a} opacity="0.5" />
-    </g>
-  )
-  /* unique */
-  return (
-    <g>
-      <rect x="0"  y="0" width="30" height="30" fill={a} opacity="0.06" />
-      {/* coroa de cristal */}
-      <rect x="8"  y="0" width="14" height="4" rx="1" fill={a} opacity="0.8" />
-      <rect x="10" y="0" width="2"  height="3" fill={a} />
-      <rect x="14" y="0" width="2"  height="5" rx="1" fill={a} />
-      <rect x="18" y="0" width="2"  height="3" fill={a} />
-      <rect x="9"  y="0" width="12" height="2" fill="white" opacity="0.4" />
-    </g>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BANDIDO
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function BanditBase() {
-  const hd  = '#262636'  // capa base
-  const dk  = '#15151f'  // capa sombra
-  const hh  = '#34344a'  // capa brilho
-  const out = '#0a0a12'  // contorno
-  const sk  = '#caa066'  // pele
-  const ey  = '#ffb648'  // olhos brilhando
-  const bl  = '#c8ccdc'  // lâmina
-  const bh  = '#e6eaf6'  // lâmina brilho
-  const bld = '#8890a4'  // lâmina sombra
-  const grip = '#46362a'
-  return (
-    <g>
-      {/* ponta do capuz */}
-      <rect x="11" y="0"  width="8"  height="5"  rx="2" fill={out} />
-      <rect x="12" y="0"  width="6"  height="4"  rx="2" fill={hd} />
-      {/* capuz — contorno + base */}
-      <rect x="5"  y="3"  width="20" height="15" rx="4" fill={out} />
-      <rect x="6"  y="4"  width="18" height="13" rx="3" fill={hd} />
-      <rect x="7"  y="4"  width="6"  height="4"        fill={hh} opacity="0.5" />
-      {/* interior sombrio do capuz */}
-      <rect x="8"  y="5"  width="14" height="10" rx="2" fill={dk} />
-      {/* olhos brilhando na sombra */}
-      <rect x="9"  y="7"  width="5"  height="3"  rx="1" fill={ey} />
-      <rect x="16" y="7"  width="5"  height="3"  rx="1" fill={ey} />
-      <rect x="9"  y="7"  width="2"  height="2"  fill="#fff0c0" opacity="0.7" />
-      <rect x="16" y="7"  width="2"  height="2"  fill="#fff0c0" opacity="0.7" />
-      {/* faixa do rosto (lenço) */}
-      <rect x="8"  y="11" width="14" height="4"  rx="1" fill="#1e1414" />
-      <rect x="8"  y="11" width="14" height="1"        fill={sk} opacity="0.3" />
-      {/* capa / corpo */}
-      <rect x="3"  y="18" width="24" height="12" rx="3" fill={out} />
-      <rect x="4"  y="18" width="22" height="11" rx="3" fill={hd} />
-      <rect x="5"  y="19" width="3"  height="10"       fill={hh} opacity="0.4" />
-      <rect x="14" y="18" width="2"  height="11"       fill={dk} opacity="0.5" />
-      <rect x="23" y="19" width="3"  height="10"       fill={dk} opacity="0.5" />
-      {/* braços */}
-      <rect x="1"  y="18" width="4"  height="11" rx="2" fill={out} />
-      <rect x="1"  y="18" width="3"  height="10" rx="2" fill={hd} />
-      <rect x="25" y="18" width="4"  height="11" rx="2" fill={out} />
-      <rect x="26" y="18" width="3"  height="10" rx="2" fill={hd} />
-      {/* adaga esquerda */}
-      <rect x="0"  y="7"  width="4"  height="14" rx="1" fill={out} />
-      <rect x="1"  y="7"  width="3"  height="13" rx="1" fill={bl} />
-      <rect x="1"  y="7"  width="1"  height="13"       fill={bh} opacity="0.6" />
-      <rect x="3"  y="8"  width="1"  height="12"       fill={bld} />
-      <rect x="0"  y="18" width="5"  height="2"  rx="1" fill="#9498ac" />
-      <rect x="1"  y="20" width="3"  height="4"  rx="1" fill={grip} />
-      {/* adaga direita */}
-      <rect x="26" y="7"  width="4"  height="14" rx="1" fill={out} />
-      <rect x="26" y="7"  width="3"  height="13" rx="1" fill={bl} />
-      <rect x="26" y="7"  width="1"  height="13"       fill={bh} opacity="0.6" />
-      <rect x="28" y="8"  width="1"  height="12"       fill={bld} />
-      <rect x="25" y="18" width="5"  height="2"  rx="1" fill="#9498ac" />
-      <rect x="26" y="20" width="3"  height="4"  rx="1" fill={grip} />
-      {/* pernas */}
-      <rect x="7"  y="26" width="6"  height="4"  rx="1" fill={out} />
-      <rect x="7"  y="26" width="6"  height="3"  rx="1" fill={dk} />
-      <rect x="17" y="26" width="6"  height="4"  rx="1" fill={out} />
-      <rect x="17" y="26" width="6"  height="3"  rx="1" fill={dk} />
-      {/* botas */}
-      <rect x="5"  y="28" width="9"  height="2"  rx="1" fill="#0a0a10" />
-      <rect x="16" y="28" width="9"  height="2"  rx="1" fill="#0a0a10" />
-    </g>
-  )
-}
-
-function BanditAccessory({ rarity, enraged }: AccessoryProps) {
-  const a = rarity ? (RARITY_ACCENT[rarity] ?? '') : ''
-  if (enraged) return (
-    <g>
-      <EnragedEffect />
-      {/* adagas levantadas / postura agressiva */}
-      <rect x="1"  y="5"  width="3" height="5" rx="1" fill="#dde0f0" opacity="0.7" />
-      <rect x="26" y="5"  width="3" height="5" rx="1" fill="#dde0f0" opacity="0.7" />
-    </g>
-  )
-  if (!a || rarity === 'normal') return null
-  if (rarity === 'uncommon') return (
-    <g>
-      {/* faca extra no cinto */}
-      <rect x="13" y="18" width="2" height="5" rx="1" fill="#c0c0d8" />
-      <rect x="12" y="22" width="4" height="1" rx="0" fill="#8888aa" />
-    </g>
-  )
-  if (rarity === 'rare') return (
-    <g>
-      {/* espada mais longa substituindo adaga direita */}
-      <rect x="26" y="3"  width="3" height="18" rx="1" fill="#c0c0d8" />
-      <rect x="26" y="3"  width="1" height="16" fill="#dde0ff" opacity="0.5" />
-      <rect x="24" y="19" width="6" height="2"  rx="1" fill="#7a8aaa" />
-      {/* gema na guarda */}
-      <rect x="26" y="19" width="2" height="2" rx="0" fill={a} opacity="0.8" />
-    </g>
-  )
-  if (rarity === 'epic') return (
-    <g>
-      {/* lâminas com bordas brilhantes */}
-      <rect x="1"  y="8" width="3" height="13" rx="1" fill={a} opacity="0.35" />
-      <rect x="26" y="8" width="3" height="13" rx="1" fill={a} opacity="0.35" />
-      {/* brilho nos olhos */}
-      <rect x="9"  y="6" width="5" height="3" rx="1" fill={a} opacity="0.4" />
-      <rect x="16" y="6" width="5" height="3" rx="1" fill={a} opacity="0.4" />
-    </g>
-  )
-  /* unique */
-  return (
-    <g>
-      <rect x="0"  y="0" width="30" height="30" fill={a} opacity="0.05" />
-      {/* crânio mágico flutuante */}
-      <rect x="12" y="0" width="6"  height="5" rx="2" fill={a} opacity="0.7" />
-      <rect x="13" y="1" width="2"  height="2" fill="white" opacity="0.5" />
-      <rect x="16" y="1" width="2"  height="2" fill="white" opacity="0.5" />
-      <rect x="13" y="3" width="4"  height="1" fill="white" opacity="0.35" />
-      {/* aura da capa */}
-      <rect x="4"  y="19" width="3" height="11" rx="1" fill={a} opacity="0.3" />
-      <rect x="23" y="19" width="3" height="11" rx="1" fill={a} opacity="0.3" />
-    </g>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ARANHA GIGANTE
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function SpiderBase() {
-  const b   = '#322038'  // cefalotórax
-  const ab  = '#412e44'  // abdômen
-  const lg  = '#241628'  // pernas
-  const lgh = '#4e3c52'  // perna brilho
-  const lh  = '#5a465e'  // articulação
-  const out = '#140a16'  // contorno
-  const rd  = '#e23030'  // olhos
-  const fang = '#d8ccd8'
-  // helper: perna com contorno (segmento horizontal + descida)
-  const leg = (hx: number, hy: number, hw: number, vx: number, vy: number, vh: number) => (
-    <>
-      <rect x={hx} y={hy} width={hw} height="2" rx="1" fill={out} />
-      <rect x={hx} y={hy} width={hw} height="1" rx="1" fill={lgh} opacity="0.5" />
-      <rect x={vx} y={vy} width="3" height={vh} rx="1" fill={out} />
-      <rect x={vx} y={vy} width="2" height={vh} rx="1" fill={lg} />
-    </>
-  )
-  return (
-    <g>
-      {/* fio de teia */}
-      <rect x="14" y="0"  width="2"  height="5"  fill={lh} opacity="0.4" />
-      {/* ── 4 pernas lado esquerdo ── */}
-      {leg(0, 5,  9, 0, 3,  4)}
-      {leg(0, 11, 8, 0, 12, 4)}
-      {leg(0, 15, 8, 0, 16, 5)}
-      {leg(1, 18, 8, 1, 19, 6)}
-      {/* ── 4 pernas lado direito ── */}
-      {leg(21, 5,  9, 27, 3,  4)}
-      {leg(22, 11, 8, 27, 12, 4)}
-      {leg(22, 15, 8, 27, 16, 5)}
-      {leg(21, 18, 8, 26, 19, 6)}
-      {/* articulações */}
-      <rect x="6"  y="8"  width="3"  height="3"  rx="1" fill={lh} />
-      <rect x="21" y="8"  width="3"  height="3"  rx="1" fill={lh} />
-      {/* abdômen — contorno + base */}
-      <rect x="5"  y="15" width="20" height="15" rx="6" fill={out} />
-      <rect x="6"  y="15" width="18" height="14" rx="5" fill={ab} />
-      {/* padrão dorsal claro */}
-      <rect x="10" y="18" width="10" height="2"  rx="1" fill={lh} opacity="0.55" />
-      <rect x="11" y="21" width="8"  height="2"  rx="1" fill={lh} opacity="0.4" />
-      <rect x="13" y="24" width="4"  height="2"  rx="1" fill={lh} opacity="0.3" />
-      {/* marca de ampulheta vermelha */}
-      <rect x="13" y="19" width="4"  height="2"        fill={rd} opacity="0.5" />
-      <rect x="14" y="21" width="2"  height="3"        fill={rd} opacity="0.4" />
-      {/* sombra lateral */}
-      <rect x="22" y="16" width="2"  height="12"       fill={out} opacity="0.4" />
-      {/* cefalotórax — contorno + base */}
-      <rect x="7"  y="5"  width="16" height="13" rx="4" fill={out} />
-      <rect x="8"  y="6"  width="14" height="11" rx="3" fill={b} />
-      <rect x="9"  y="6"  width="12" height="2"  rx="1" fill={lgh} opacity="0.4" />
-      {/* 6 olhos vermelhos */}
-      <rect x="9"  y="8"  width="3"  height="3"  rx="1" fill={rd} />
-      <rect x="13" y="7"  width="4"  height="3"  rx="1" fill={rd} />
-      <rect x="18" y="8"  width="3"  height="3"  rx="1" fill={rd} />
-      <rect x="10" y="11" width="3"  height="2"  rx="1" fill={rd} opacity="0.7" />
-      <rect x="17" y="11" width="3"  height="2"  rx="1" fill={rd} opacity="0.7" />
-      <rect x="9"  y="8"  width="1"  height="1"  fill="#ff9090" opacity="0.8" />
-      <rect x="14" y="7"  width="1"  height="1"  fill="#ff9090" opacity="0.8" />
-      <rect x="18" y="8"  width="1"  height="1"  fill="#ff9090" opacity="0.8" />
-      {/* quelíceros / presas */}
-      <rect x="9"  y="16" width="3"  height="5"  rx="1" fill={lh} />
-      <rect x="18" y="16" width="3"  height="5"  rx="1" fill={lh} />
-      <rect x="10" y="19" width="1"  height="3"  fill={fang} opacity="0.6" />
-      <rect x="19" y="19" width="1"  height="3"  fill={fang} opacity="0.6" />
-    </g>
-  )
-}
-
-function SpiderAccessory({ rarity, enraged }: AccessoryProps) {
-  const a = rarity ? (RARITY_ACCENT[rarity] ?? '') : ''
-  if (enraged) return (
-    <g>
-      <EnragedEffect />
-      {/* pernas dianteiras levantadas */}
-      <rect x="6"  y="3"  width="3" height="5" rx="1" fill="#1a1020" opacity="0.9" />
-      <rect x="21" y="3"  width="3" height="5" rx="1" fill="#1a1020" opacity="0.9" />
-      {/* veneno pingando */}
-      <rect x="10" y="20" width="1" height="4" rx="1" fill="#44cc22" opacity="0.7" />
-      <rect x="19" y="20" width="1" height="4" rx="1" fill="#44cc22" opacity="0.7" />
-    </g>
-  )
-  if (!a || rarity === 'normal') return null
-  if (rarity === 'uncommon') return (
-    <g>
-      {/* gotas de veneno nas presas */}
-      <rect x="10" y="21" width="1" height="3" rx="1" fill="#44cc22" opacity="0.8" />
-      <rect x="19" y="21" width="1" height="3" rx="1" fill="#44cc22" opacity="0.8" />
-    </g>
-  )
-  if (rarity === 'rare') return (
-    <g>
-      {/* saco de teia no abdômen */}
-      <rect x="10" y="26" width="10" height="3" rx="2" fill="#ccc8a0" opacity="0.5" />
-      <rect x="11" y="27" width="8"  height="1" fill="white" opacity="0.3" />
-    </g>
-  )
-  if (rarity === 'epic') return (
-    <g>
-      {/* padrão brilhante no abdômen */}
-      <rect x="10" y="18" width="10" height="2" rx="1" fill={a} opacity="0.5" />
-      <rect x="11" y="21" width="8"  height="2" rx="1" fill={a} opacity="0.4" />
-      <rect x="13" y="24" width="4"  height="2" rx="1" fill={a} opacity="0.3" />
-      {/* brilho nos olhos */}
-      <rect x="9"  y="7"  width="3" height="3" fill={a} opacity="0.45" />
-      <rect x="13" y="6"  width="4" height="3" fill={a} opacity="0.45" />
-      <rect x="18" y="7"  width="3" height="3" fill={a} opacity="0.45" />
-    </g>
-  )
-  /* unique */
-  return (
-    <g>
-      <rect x="0"  y="0" width="30" height="30" fill={a} opacity="0.05" />
-      {/* rastros etéreos de teia */}
-      <rect x="0"  y="5"  width="5" height="1" fill={a} opacity="0.4" />
-      <rect x="0"  y="12" width="4" height="1" fill={a} opacity="0.35" />
-      <rect x="0"  y="19" width="5" height="1" fill={a} opacity="0.3" />
-      <rect x="25" y="5"  width="5" height="1" fill={a} opacity="0.4" />
-      <rect x="26" y="12" width="4" height="1" fill={a} opacity="0.35" />
-      <rect x="25" y="19" width="5" height="1" fill={a} opacity="0.3" />
-      {/* corpo todo brilhante */}
-      <rect x="8"  y="6"  width="14" height="11" rx="3" fill={a} opacity="0.2" />
-      <rect x="6"  y="16" width="18" height="13" rx="5" fill={a} opacity="0.2" />
-    </g>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Componente principal
-// ═══════════════════════════════════════════════════════════════════════════════
-
-type BaseComp  = (props: { c?: SlimeColors }) => React.JSX.Element | null
-type AccComp   = (props: AccessoryProps) => React.JSX.Element | null
-
-interface MonsterDef {
-  Base: BaseComp
-  Accessory: AccComp
-  /** Se true, usa recolor por raridade no Base (apenas Slime). */
-  recolor?: boolean
-  /** Resolução nativa do grid (viewBox quadrado). Default 30. */
-  grid?: number
-}
-
-const MONSTERS: Record<string, MonsterDef> = {
-  goblin:       { Base: GoblinBase as BaseComp,  Accessory: GoblinAccessory, grid: 64 },
-  wolf:         { Base: WolfBase as BaseComp,    Accessory: WolfAccessory,   grid: 64 },
-  slime:        { Base: SlimeBase as BaseComp,   Accessory: SlimeAccessory, recolor: true },
-  bandit:       { Base: BanditBase as BaseComp,  Accessory: BanditAccessory },
-  giant_spider: { Base: SpiderBase as BaseComp,  Accessory: SpiderAccessory },
-}
-
-export const MONSTER_PIXEL_SPRITES = MONSTERS
+export const MONSTER_PIXEL_SPRITES = SPRITES
 
 export function MonsterSprite({
   monsterId,
-  rarity  = 'normal',
+  rarity = 'normal',
   enraged = false,
-  size    = 80,
+  size = 80,
 }: MonsterSpriteProps) {
-  const def = MONSTERS[monsterId]
-  if (!def) return null
+  const spriteSet = SPRITES[monsterId]
+  if (!spriteSet) return null
 
-  // Slime usa recolor; enraged sobrepõe a cor da raridade
-  const slimeKey = enraged ? 'enraged' : (rarity ?? 'normal')
-  const slimeColors = def.recolor ? (SLIME_COLORS[slimeKey] ?? SLIME_COLORS.normal) : undefined
-  const grid = def.grid ?? 30
+  const src = spriteSet[rarity] ?? spriteSet.normal
+  const transform = [
+    spriteSet.flipToFaceLeft ? 'scaleX(-1)' : null,
+    spriteSet.visualScale ? `scale(${spriteSet.visualScale})` : null,
+  ].filter(Boolean).join(' ') || undefined
+  const glow = enraged
+    ? 'drop-shadow(0 0 8px rgba(248, 80, 36, 0.75))'
+    : RARITY_GLOW[rarity]
+
+  const style: CSSProperties = {
+    width: size,
+    height: size,
+    imageRendering: 'pixelated',
+    transform,
+    transformOrigin: 'center bottom',
+    filter: glow,
+  }
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${grid} ${grid}`}
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ transform: 'scaleX(-1)' }}
+    <span
+      className="relative inline-flex items-end justify-center overflow-visible"
+      style={{ width: size, height: size }}
       aria-label={monsterId}
     >
-      <def.Base c={slimeColors} />
-      <def.Accessory rarity={rarity} enraged={enraged} />
-    </svg>
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        style={style}
+      />
+      {enraged && (
+        <span
+          className="pointer-events-none absolute inset-0 rounded-full border border-red-400/45 bg-red-500/10"
+          style={{ boxShadow: '0 0 14px rgba(248, 80, 36, 0.35) inset' }}
+        />
+      )}
+    </span>
   )
 }

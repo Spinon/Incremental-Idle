@@ -20,15 +20,15 @@ function Run-Step {
     [Parameter(Mandatory = $true)]
     [string]$Command,
     [Parameter(Mandatory = $true)]
-    [string[]]$Args
+    [string[]]$StepArgs
   )
 
-  Write-Host "> $Command $($Args -join ' ')" -ForegroundColor Cyan
+  Write-Host "> $Command $($StepArgs -join ' ')" -ForegroundColor Cyan
   if ($DryRun) { return }
 
-  & $Command @Args
+  & $Command @StepArgs
   if ($LASTEXITCODE -ne 0) {
-    throw "Command failed: $Command $($Args -join ' ')"
+    throw "Command failed: $Command $($StepArgs -join ' ')"
   }
 }
 
@@ -37,6 +37,21 @@ function Assert-Command {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
     throw "Required command not found: $Name"
   }
+}
+
+function Resolve-Executable {
+  param([Parameter(Mandatory = $true)][string]$Name)
+
+  if ($Name -eq 'npm') {
+    $npmCmd = Get-Command 'npm.cmd' -ErrorAction SilentlyContinue
+    if ($npmCmd) { return $npmCmd.Source }
+  }
+
+  $command = Get-Command $Name -ErrorAction SilentlyContinue
+  if (-not $command) {
+    throw "Required command not found: $Name"
+  }
+  return $command.Source
 }
 
 $repoRoot = (git rev-parse --show-toplevel).Trim()
@@ -48,6 +63,9 @@ Set-Location $repoRoot
 
 Assert-Command git
 Assert-Command npm
+
+$git = Resolve-Executable 'git'
+$npm = Resolve-Executable 'npm'
 
 $branch = (git branch --show-current).Trim()
 if (-not $branch) {
@@ -79,23 +97,23 @@ if ($DryRun) {
   }
 }
 
-Run-Step npm @('version', $VersionType, '--no-git-tag-version')
+Run-Step $npm @('version', $VersionType, '--no-git-tag-version')
 
 $packageJson = Get-Content -Raw (Join-Path $repoRoot 'package.json') | ConvertFrom-Json
 $version = [string]$packageJson.version
 $releaseMessage = if ($Message) { $Message } else { "Release v$version" }
 $deployMessage = "Deploy v$version to GitHub Pages"
 
-Run-Step npm @('run', 'build:pages')
+Run-Step $npm @('run', 'build:pages')
 
 $tsBuildInfo = Join-Path $repoRoot 'tsconfig.tsbuildinfo'
 if ((Test-Path -LiteralPath $tsBuildInfo) -and -not $DryRun) {
   Remove-Item -LiteralPath $tsBuildInfo
 }
 
-Run-Step git @('add', '-A')
-Run-Step git @('commit', '-m', $releaseMessage)
-Run-Step git @('push', $Remote, $branch)
+Run-Step $git @('add', '-A')
+Run-Step $git @('commit', '-m', $releaseMessage)
+Run-Step $git @('push', $Remote, $branch)
 
 $distPath = Join-Path $repoRoot 'dist'
 if (-not (Test-Path -LiteralPath (Join-Path $distPath 'index.html'))) {
@@ -112,11 +130,15 @@ if (-not $DryRun) {
   New-Item -ItemType File -Path (Join-Path $deployPath '.nojekyll') -Force | Out-Null
 }
 
-Run-Step git @('init', $deployPath)
-Run-Step git @('-C', $deployPath, 'checkout', '-b', $PagesBranch)
-Run-Step git @('-C', $deployPath, 'add', '-A')
-Run-Step git @('-C', $deployPath, 'commit', '-m', $deployMessage)
-Run-Step git @('-C', $deployPath, 'remote', 'add', $Remote, $remoteUrl)
-Run-Step git @('-C', $deployPath, 'push', '-f', $Remote, $PagesBranch)
+Run-Step $git @('init', $deployPath)
+Run-Step $git @('-C', $deployPath, 'checkout', '-b', $PagesBranch)
+Run-Step $git @('-C', $deployPath, 'add', '-A')
+Run-Step $git @('-C', $deployPath, 'commit', '-m', $deployMessage)
+Run-Step $git @('-C', $deployPath, 'remote', 'add', $Remote, $remoteUrl)
+Run-Step $git @('-C', $deployPath, 'push', '-f', $Remote, $PagesBranch)
 
-Write-Host "Deployed v$version to GitHub Pages." -ForegroundColor Green
+if ($DryRun) {
+  Write-Host "Dry run completed for v$version. No deploy was published." -ForegroundColor Yellow
+} else {
+  Write-Host "Deployed v$version to GitHub Pages." -ForegroundColor Green
+}

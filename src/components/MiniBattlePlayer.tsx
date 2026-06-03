@@ -234,9 +234,17 @@ export default function MiniBattlePlayer() {
       }
     } else if (entry.isCrit) {
       text  = `⚡-${entry.dmg}`
+      if (entry.weaponEffect) text = `${entry.weaponEffect.icon} ${text}`
       color = 'text-amber-300 text-[13px]'
       if (hitsPlayer) setPlayerHitKey(k => k + 1)
       else            setEnemyHitKey(k => k + 1)
+    } else if (entry.weaponEffect) {
+      text  = entry.dmg > 0 ? `${entry.weaponEffect.icon} -${entry.dmg}` : entry.weaponEffect.icon
+      color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'
+      if (entry.dmg > 0) {
+        if (hitsPlayer) setPlayerHitKey(k => k + 1)
+        else            setEnemyHitKey(k => k + 1)
+      }
     } else {
       text  = `-${entry.dmg}`
       color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'
@@ -365,7 +373,7 @@ export default function MiniBattlePlayer() {
         monsterId={enemyTemplate.id}
         rarity={enemy.rarity}
         enraged={enemy.enraged}
-        size={38}
+        size={44}
       />
     )
     : (

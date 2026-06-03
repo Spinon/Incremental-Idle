@@ -1,6 +1,6 @@
 {
   "name": "incremental-idle",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Incremental idle game with procedural events and growing difficulty",
   "scripts": {
     "dev": "vite",

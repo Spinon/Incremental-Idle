@@ -350,8 +350,9 @@ export default function BattleArena() {
         if (entry.spell.effectType === 'damage')   floatValue = -(entry.spell.value)
         else if (entry.spell.effectType === 'heal') floatValue = entry.spell.value
         else floatIcon = entry.spell.icon
-      } else if (entry.weaponEffect && entry.dmg === 0) {
+      } else if (entry.weaponEffect) {
         floatIcon = entry.weaponEffect.icon
+        if (entry.dmg > 0) floatValue = -entry.dmg
       } else {
         floatValue = -entry.dmg
       }
@@ -652,7 +653,7 @@ export default function BattleArena() {
           )}
           <div
             key={`enemy-${store.turn}`}
-            className={cn('absolute right-0 top-[136px] z-10', isEnemyAttacking && 'anim-attack-left')}
+            className={cn('absolute right-0 top-[142px] z-10', isEnemyAttacking && 'anim-attack-left')}
             style={isEnemyAttacking ? { animationDuration: attackDur } : undefined}
           >
             <UnitSprite
@@ -689,7 +690,7 @@ export default function BattleArena() {
             {f.missed
               ? 'MISS'
               : f.icon
-                ? f.icon
+                ? (f.value !== 0 ? `${f.icon} ${f.value}` : f.icon)
                 : f.isCrit
                   ? `⚡${f.value}`
                   : f.value > 0
@@ -967,6 +968,7 @@ export default function BattleArena() {
                               : '',
                         )}>
                           {entry.isCrit && <span className="text-[9px]">⚡</span>}
+                          {entry.weaponEffect && entry.dmg > 0 && <span className="text-[9px] uppercase">{entry.weaponEffect.icon}</span>}
                           {entry.blocked && entry.dmg === 0 ? 'BLOCK' : entry.weaponEffect && entry.dmg === 0 ? entry.weaponEffect.icon : `-${entry.dmg}`}
                         </span>
                       </>

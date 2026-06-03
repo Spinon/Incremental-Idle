@@ -25,9 +25,9 @@ function HeroSvg() {
 
 function EnemyEmoji({ emoji }: { emoji: string }) {
   return (
-    <div style={{ width: 80, height: 80 }} className="flex items-center justify-center">
+    <div style={{ width: 94, height: 94 }} className="flex items-center justify-center">
       <span
-        style={{ fontSize: 56, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))' }}
+        style={{ fontSize: 64, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))' }}
         role="img"
       >
         {emoji}
@@ -41,7 +41,7 @@ export default function UnitSprite({ side, isHit, hitDuration, monsterType, mons
     if (side === 'player') return <HeroSvg />
 
     const template = monsterType ? FOREST_MONSTER_MAP.get(monsterType) : null
-    if (!template) return <MonsterSprite monsterId="goblin" size={80} />
+    if (!template) return <MonsterSprite monsterId="goblin" size={94} />
 
     if (MONSTER_PIXEL_SPRITES[template.id]) {
       return (
@@ -49,7 +49,7 @@ export default function UnitSprite({ side, isHit, hitDuration, monsterType, mons
           monsterId={template.id}
           rarity={monsterRarity}
           enraged={enraged}
-          size={80}
+          size={94}
         />
       )
     }

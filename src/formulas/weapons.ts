@@ -207,7 +207,7 @@ export function getWeaponCombatProfile(
     const scale = weaponScale(progress[type])
     switch (type) {
       case 'sword':
-        profile.swordExtraHitChance += Math.min(0.28, 0.045 + scale * 0.0028)
+        profile.swordExtraHitChance += Math.min(0.32, 0.08 + scale * 0.003)
         break
       case 'dagger':
         profile.daggerPoisonChance += Math.min(0.34, 0.055 + scale * 0.0025)

@@ -181,7 +181,8 @@ export default function HouseInterior() {
                                     entry.isCrit && 'text-amber-300',
                                   )}>
                                     {entry.isCrit && <span className="text-[8px]">⚡</span>}
-                                    {entry.dmg}
+                                    {entry.weaponEffect && entry.dmg > 0 && <span className="text-[8px] uppercase">{entry.weaponEffect.icon}</span>}
+                                    {entry.dmg > 0 ? `-${entry.dmg}` : entry.weaponEffect?.icon ?? entry.dmg}
                                   </span>
                                 </>
                             }
