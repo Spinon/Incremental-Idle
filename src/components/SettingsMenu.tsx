@@ -140,8 +140,8 @@ export default function SettingsMenu() {
                     <div className="rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-2">
                       <p className="text-[11px] leading-4 text-indigo-700 dark:text-indigo-300">
                         {lang === 'en'
-                          ? 'A newer cloud save is available.'
-                          : 'Existe um save mais novo na nuvem.'}
+                          ? 'A cloud save is available. Keeping local will replace it.'
+                          : 'Existe um save na nuvem. Manter local vai substituir esse save.'}
                       </p>
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
@@ -149,14 +149,14 @@ export default function SettingsMenu() {
                           onClick={() => cloud.chooseLocal()}
                           className="rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-900"
                         >
-                          {lang === 'en' ? 'Use local' : 'Usar local'}
+                          {lang === 'en' ? 'Keep local' : 'Manter local'}
                         </button>
                         <button
                           type="button"
                           onClick={() => cloud.chooseRemote()}
                           className="rounded-md bg-indigo-600 px-2 py-1 text-[10px] font-black text-white hover:bg-indigo-500"
                         >
-                          {lang === 'en' ? 'Use cloud' : 'Usar nuvem'}
+                          {lang === 'en' ? 'Restore cloud' : 'Restaurar nuvem'}
                         </button>
                       </div>
                     </div>
