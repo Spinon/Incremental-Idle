@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useMapStore } from '../store/mapStore'
@@ -6,6 +6,7 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
+import { SAVE_KEYS } from '../store/save'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
 import { applySpellBuffs } from '../formulas/spells'
@@ -38,8 +39,79 @@ const RARITY_LABEL_EN: Record<string, string> = {
 }
 
 const STEP_MS = 200
-const MAX_CATCHUP_MS = 10 * 60 * 1000
-const MAX_STEPS_PER_WAKE = 60
+const SYNC_PROMPT_MS = 30 * 1000
+const SYNC_CHUNK_STEPS = 80
+const LAST_ACTIVE_KEY = 'incremental-idle-last-active-at'
+const MID_FIGHT_KEY = 'ii-mid-fight'
+const OFFLINE_SYNC_SNAPSHOT_KEY = 'incremental-idle-offline-sync-snapshot'
+const OFFLINE_SYNC_PENDING_KEY = 'incremental-idle-offline-sync-pending'
+
+const PERSISTED_STATE_KEYS = [
+  ...Object.values(SAVE_KEYS),
+  MID_FIGHT_KEY,
+] as const
+
+type OfflineSyncStatus = 'idle' | 'running' | 'ready'
+
+export interface OfflineSyncState {
+  status: OfflineSyncStatus
+  elapsedMs: number
+  processedMs: number
+}
+
+function readLastActiveAt(): number | null {
+  const raw = localStorage.getItem(LAST_ACTIVE_KEY)
+  if (!raw) return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function writeLastActiveAt(now = Date.now()) {
+  localStorage.setItem(LAST_ACTIVE_KEY, String(now))
+}
+
+function snapshotPersistedState(): Record<string, string | null> {
+  const snapshot: Record<string, string | null> = {}
+  for (const key of PERSISTED_STATE_KEYS) {
+    snapshot[key] = localStorage.getItem(key)
+  }
+  return snapshot
+}
+
+function restorePersistedState(snapshot: Record<string, string | null>) {
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === null) localStorage.removeItem(key)
+    else localStorage.setItem(key, value)
+  }
+}
+
+function beginOfflineTransaction(snapshot: Record<string, string | null>) {
+  localStorage.setItem(OFFLINE_SYNC_SNAPSHOT_KEY, JSON.stringify(snapshot))
+  localStorage.setItem(OFFLINE_SYNC_PENDING_KEY, '1')
+}
+
+function clearOfflineTransaction() {
+  localStorage.removeItem(OFFLINE_SYNC_SNAPSHOT_KEY)
+  localStorage.removeItem(OFFLINE_SYNC_PENDING_KEY)
+}
+
+function restoreInterruptedOfflineTransaction(): boolean {
+  if (localStorage.getItem(OFFLINE_SYNC_PENDING_KEY) !== '1') return false
+
+  const raw = localStorage.getItem(OFFLINE_SYNC_SNAPSHOT_KEY)
+  clearOfflineTransaction()
+
+  if (!raw) return false
+  try {
+    const snapshot = JSON.parse(raw) as Record<string, string | null>
+    restorePersistedState(snapshot)
+    writeLastActiveAt()
+    return true
+  } catch {
+    writeLastActiveAt()
+    return false
+  }
+}
 
 export function useGameLoop() {
   const setSpeed      = useBattleStore((s) => s.setSpeed)
@@ -49,6 +121,14 @@ export function useGameLoop() {
   const prevPhase     = useRef<Phase>('idle')
   const prevTurn      = useRef<number>(-1)
   const prevScene     = useRef<string>('map')
+  const syncSnapshot  = useRef<Record<string, string | null> | null>(null)
+  const syncActive    = useRef(false)
+  const syncActions   = useRef({ accept: () => {}, discard: () => {} })
+  const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
+    status: 'idle',
+    elapsedMs: 0,
+    processedMs: 0,
+  })
 
   useEffect(() => {
     function collectWeaponMaterials() {
@@ -287,21 +367,105 @@ export function useGameLoop() {
       prevPhase.current = phase
     }
 
+    let cancelled = false
     let lastTickAt = performance.now()
+    let lastActiveWriteAt = performance.now()
     let lagMs = 0
 
+    function startOfflineSync(elapsedMs: number) {
+      if (syncActive.current || elapsedMs < STEP_MS) return
+
+      const totalSteps = Math.floor(elapsedMs / STEP_MS)
+      if (totalSteps <= 0) return
+
+      syncActive.current = true
+      syncSnapshot.current = snapshotPersistedState()
+      beginOfflineTransaction(syncSnapshot.current)
+      lagMs = 0
+
+      let processedSteps = 0
+      setOfflineSync({
+        status: 'running',
+        elapsedMs: totalSteps * STEP_MS,
+        processedMs: 0,
+      })
+
+      function processChunk() {
+        if (cancelled || !syncActive.current) return
+
+        const remaining = totalSteps - processedSteps
+        const steps = Math.min(SYNC_CHUNK_STEPS, remaining)
+        for (let i = 0; i < steps; i += 1) {
+          runStep(STEP_MS)
+        }
+
+        processedSteps += steps
+        const processedMs = processedSteps * STEP_MS
+
+        if (processedSteps >= totalSteps) {
+          setOfflineSync({
+            status: 'ready',
+            elapsedMs: totalSteps * STEP_MS,
+            processedMs,
+          })
+          writeLastActiveAt()
+          lastTickAt = performance.now()
+          return
+        }
+
+        setOfflineSync({
+          status: 'running',
+          elapsedMs: totalSteps * STEP_MS,
+          processedMs,
+        })
+        window.setTimeout(processChunk, 0)
+      }
+
+      window.setTimeout(processChunk, 0)
+    }
+
+    syncActions.current = {
+      accept: () => {
+        syncActive.current = false
+        syncSnapshot.current = null
+        clearOfflineTransaction()
+        lagMs = 0
+        lastTickAt = performance.now()
+        writeLastActiveAt()
+        setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })
+      },
+      discard: () => {
+        if (syncSnapshot.current) {
+          restorePersistedState(syncSnapshot.current)
+        }
+        clearOfflineTransaction()
+        writeLastActiveAt()
+        window.location.reload()
+      },
+    }
+
     function pump() {
+      if (syncActive.current) return
+
       const now = performance.now()
       const elapsedMs = now - lastTickAt
       lastTickAt = now
 
-      lagMs += Math.min(Math.max(0, elapsedMs), MAX_CATCHUP_MS)
+      if (elapsedMs >= SYNC_PROMPT_MS) {
+        startOfflineSync(elapsedMs)
+        return
+      }
 
-      let steps = 0
-      while (lagMs >= STEP_MS && steps < MAX_STEPS_PER_WAKE) {
+      lagMs += Math.max(0, elapsedMs)
+
+      while (lagMs >= STEP_MS) {
         runStep(STEP_MS)
         lagMs -= STEP_MS
-        steps += 1
+      }
+
+      if (now - lastActiveWriteAt >= 5000) {
+        writeLastActiveAt()
+        lastActiveWriteAt = now
       }
     }
 
@@ -310,13 +474,50 @@ export function useGameLoop() {
     }
 
     const id = setInterval(pump, STEP_MS)
+    if (restoreInterruptedOfflineTransaction()) {
+      window.location.reload()
+      return () => {
+        cancelled = true
+        clearInterval(id)
+      }
+    }
+
+    const savedAt = readLastActiveAt()
+    const startupElapsedMs = savedAt ? Date.now() - savedAt : 0
+    if (startupElapsedMs >= SYNC_PROMPT_MS) {
+      startOfflineSync(startupElapsedMs)
+    } else {
+      writeLastActiveAt()
+    }
+
+    function persistLastActive() {
+      writeLastActiveAt()
+    }
+
     window.addEventListener('focus', pumpOnResume)
+    window.addEventListener('pagehide', persistLastActive)
+    window.addEventListener('beforeunload', persistLastActive)
     document.addEventListener('visibilitychange', pumpOnResume)
+    document.addEventListener('visibilitychange', persistLastActive)
 
     return () => {
+      cancelled = true
       clearInterval(id)
       window.removeEventListener('focus', pumpOnResume)
+      window.removeEventListener('pagehide', persistLastActive)
+      window.removeEventListener('beforeunload', persistLastActive)
       document.removeEventListener('visibilitychange', pumpOnResume)
+      document.removeEventListener('visibilitychange', persistLastActive)
     }
   }, [tickResources, setSpeed, gainXp, earnGold])
+
+  const acceptOfflineProgress = useCallback(() => {
+    syncActions.current.accept()
+  }, [])
+
+  const discardOfflineProgress = useCallback(() => {
+    syncActions.current.discard()
+  }, [])
+
+  return { offlineSync, acceptOfflineProgress, discardOfflineProgress }
 }

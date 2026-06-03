@@ -26,11 +26,103 @@ import { getEquipmentBonuses } from './formulas/items'
 import { getWeaponStatBonuses } from './formulas/weapons'
 import { applySpellBuffs } from './formulas/spells'
 import { useT } from './i18n/useT'
+import type { OfflineSyncState } from './hooks/useGameLoop'
+
+function formatSyncDuration(ms: number, isEn: boolean): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const parts: string[] = []
+
+  if (hours > 0) parts.push(`${hours}${isEn ? 'h' : 'h'}`)
+  if (minutes > 0) parts.push(`${minutes}${isEn ? 'm' : 'min'}`)
+  if (hours === 0 && seconds > 0) parts.push(`${seconds}s`)
+
+  return parts.length > 0 ? parts.join(' ') : `0s`
+}
+
+function OfflineSyncOverlay({
+  sync,
+  isEn,
+  onAccept,
+  onDiscard,
+}: {
+  sync: OfflineSyncState
+  isEn: boolean
+  onAccept: () => void
+  onDiscard: () => void
+}) {
+  if (sync.status === 'idle') return null
+
+  const progress = sync.elapsedMs > 0
+    ? Math.min(100, Math.round((sync.processedMs / sync.elapsedMs) * 100))
+    : 100
+  const isReady = sync.status === 'ready'
+  const elapsed = formatSyncDuration(sync.elapsedMs, isEn)
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
+      <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className="border-b border-slate-800 px-5 py-4">
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">
+            {isEn ? 'Offline progress' : 'Progresso offline'}
+          </div>
+          <h2 className="mt-1 text-xl font-black">
+            {isReady
+              ? (isEn ? 'Synchronization complete' : 'Sincronização concluída')
+              : (isEn ? 'Synchronizing...' : 'Sincronizando...')}
+          </h2>
+        </div>
+
+        <div className="px-5 py-4">
+          <p className="text-sm leading-6 text-slate-300">
+            {isReady
+              ? (isEn
+                ? `The game simulated ${elapsed} using the normal battle, map and loot rules.`
+                : `O jogo simulou ${elapsed} usando as regras normais de batalha, mapa e loot.`)
+              : (isEn
+                ? `Processing ${elapsed} of elapsed time. The game is locked until everything is consistent.`
+                : `Processando ${elapsed} de tempo decorrido. O jogo fica bloqueado até tudo estar consistente.`)}
+          </p>
+
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-indigo-400 transition-[width] duration-200"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="mt-2 text-right text-xs font-bold text-slate-400">{progress}%</div>
+
+          {isReady && (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={onDiscard}
+                className="rounded-md border border-slate-700 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-800"
+              >
+                {isEn ? 'Discard' : 'Descartar'}
+              </button>
+              <button
+                type="button"
+                onClick={onAccept}
+                className="rounded-md bg-indigo-500 px-4 py-2 text-sm font-black text-white hover:bg-indigo-400"
+              >
+                {isEn ? 'Use progress' : 'Usar progresso'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function GameRoot() {
-  useGameLoop()
+  const { offlineSync, acceptOfflineProgress, discardOfflineProgress } = useGameLoop()
 
   const theme        = useSettingsStore((s) => s.theme)
+  const lang         = useSettingsStore((s) => s.lang)
   const attributes   = useHeroStore((s) => s.attributes)
   const heroLevel    = useHeroStore((s) => s.level)
   const syncFromHero = useBattleStore((s) => s.syncFromHero)
@@ -180,6 +272,12 @@ function GameRoot() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <MiniBattlePlayer />
       <NotifToast />
+      <OfflineSyncOverlay
+        sync={offlineSync}
+        isEn={lang === 'en'}
+        onAccept={acceptOfflineProgress}
+        onDiscard={discardOfflineProgress}
+      />
       {/* Header */}
       <header className="border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center gap-3">
         <span className="text-indigo-600 dark:text-indigo-400 font-black text-lg tracking-tight">

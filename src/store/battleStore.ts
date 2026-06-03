@@ -294,9 +294,13 @@ export const useBattleStore = create<BattleStore>()(
 
     syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, damageReduction,
                      resIgnea, resGlacial, resSombria, resVital }) => set((st) => {
+      const prevMaxHp = Math.max(1, st.player.maxHp)
+      const hpRatio = st.player.hp > 0 ? st.player.hp / prevMaxHp : 0
+      const nextMaxHp = Math.round(maxHp)
+
       st.player.atk             = Math.round(atk)
       st.player.def             = def
-      st.player.maxHp           = Math.round(maxHp)
+      st.player.maxHp           = nextMaxHp
       st.player.atkSpeed        = atkSpeed
       st.player.dodgeChance     = dodgeChance
       st.player.critChance      = critChance
@@ -306,7 +310,13 @@ export const useBattleStore = create<BattleStore>()(
       st.player.resGlacial      = resGlacial
       st.player.resSombria      = resSombria
       st.player.resVital        = resVital
-      if (st.player.hp > st.player.maxHp) st.player.hp = st.player.maxHp
+      if (st.player.hp <= 0) {
+        st.player.hp = 0
+      } else if (prevMaxHp !== nextMaxHp) {
+        st.player.hp = Math.max(1, Math.min(nextMaxHp, Math.round(nextMaxHp * hpRatio)))
+      } else if (st.player.hp > st.player.maxHp) {
+        st.player.hp = st.player.maxHp
+      }
     }),
 
     applyHit: () => set((st) => {
