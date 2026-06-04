@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import MiniBattlePlayer from './components/MiniBattlePlayer'
 import BattleArena from './components/BattleArena'
+import AuthGate from './components/AuthGate'
+import CloudSaveConflictModal from './components/CloudSaveConflictModal'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
 import HeroPanel from './components/HeroPanel'
@@ -12,6 +14,7 @@ import QuestPanel from './components/QuestPanel'
 import StickyBar from './components/StickyBar'
 import NotifToast from './components/NotifToast'
 import { SpriteGallery } from './components/icons/__SpriteGallery'
+import { useCloudSaveSync } from './hooks/useCloudSaveSync'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
@@ -119,6 +122,7 @@ function OfflineSyncOverlay({
 }
 
 function GameRoot() {
+  useCloudSaveSync()
   const { offlineSync, acceptOfflineProgress, discardOfflineProgress } = useGameLoop()
 
   const theme        = useSettingsStore((s) => s.theme)
@@ -272,6 +276,7 @@ function GameRoot() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <MiniBattlePlayer />
       <NotifToast />
+      <CloudSaveConflictModal />
       <OfflineSyncOverlay
         sync={offlineSync}
         isEn={lang === 'en'}
@@ -321,5 +326,9 @@ function GameRoot() {
 }
 
 export default function App() {
-  return <GameRoot />
+  return (
+    <AuthGate>
+      <GameRoot />
+    </AuthGate>
+  )
 }
