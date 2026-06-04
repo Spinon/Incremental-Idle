@@ -2,7 +2,7 @@ import type { PlacedTile } from '../types/map'
 import type {
   Quest, QuestType, QuestDifficulty, QuestRewards,
 } from '../types/quest'
-import { FOREST_MONSTERS } from '../data/monsters'
+import { FOREST_MONSTERS, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import type { MonsterRarity } from '../types/monster'
 
 // ── Name tables ───────────────────────────────────────────────────────────────
@@ -273,7 +273,7 @@ function makeBountyMonster(tileLevel: number, difficulty: QuestDifficulty, grid:
   if (!target) return null
   const template = target.tile
     ? (FOREST_MONSTERS.find(m => m.id === target.tile!.content.monsterType) ?? FOREST_MONSTERS[0])
-    : pickRandom(FOREST_MONSTERS)
+    : pickRandom(FOREST_RANDOM_MONSTERS)
   const epithetPt = pickRandom(MONSTER_EPITHETS_PT)
   const epithetEn = pickRandom(MONSTER_EPITHETS_EN)
   const namePt = `${template.namePt} ${epithetPt}`

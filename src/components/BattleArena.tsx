@@ -989,6 +989,7 @@ export default function BattleArena() {
               if (entry.spell) {
                 const { spell } = entry
                 const spellName = isEn ? (spell.nameEn ?? spell.name) : spell.name
+                const targetName = displayLogName(entry.defender)
                 const bgClass =
                   spell.effectType === 'damage'  ? (isNew ? 'bg-orange-50/70 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-600')
                   : spell.effectType === 'heal'   ? (isNew ? 'bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-600')
@@ -999,6 +1000,8 @@ export default function BattleArena() {
                   <div key={i} className={cn('text-[11px] leading-tight py-0.5 px-1.5 rounded mb-0.5 flex items-center gap-1', bgClass)}>
                     <span className="shrink-0">{spell.icon}</span>
                     <span className={cn('truncate', isNew && 'font-semibold')}>{spellName}</span>
+                    <span className="opacity-40 shrink-0">-&gt;</span>
+                    <span className={cn('truncate', isNew && 'font-semibold')}>{targetName}</span>
                     {spell.value > 0 && (
                       <span className={cn('ml-auto font-bold tabular-nums shrink-0', isNew && (
                         spell.effectType === 'damage' ? 'text-orange-600 dark:text-orange-300'

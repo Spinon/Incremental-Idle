@@ -96,19 +96,24 @@ function MiniManaBar({ current, max, label }: { current: number; max: number; la
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-function MiniAutoBar({ kind }: { kind: 'home' | 'market' }) {
+function MiniAutoBar({ kind }: { kind: 'home' | 'market' | 'tower' }) {
   const sceneAuto = useUIStore(s => s.sceneAuto)
   const lang = useSettingsStore(s => s.lang)
+  const blueTowerAutoTarget = useMapStore(s => s.blueTowerAutoTarget)
   const isEn = lang === 'en'
 
   if (!sceneAuto.active || sceneAuto.kind !== kind || sceneAuto.durationMs <= 0) return null
 
   const pct = Math.max(0, Math.min(100, (sceneAuto.elapsedMs / sceneAuto.durationMs) * 100))
   const sec = Math.ceil(Math.max(0, (sceneAuto.durationMs - sceneAuto.elapsedMs) / 1000))
-  const fill = kind === 'market' ? 'bg-indigo-500/80' : 'bg-red-500/80'
+  const fill = kind === 'tower' ? 'bg-sky-500/80' : kind === 'market' ? 'bg-indigo-500/80' : 'bg-red-500/80'
   const text = sceneAuto.paused
     ? (isEn ? 'Auto paused' : 'Auto pausado')
-    : kind === 'market'
+    : kind === 'tower'
+      ? blueTowerAutoTarget
+        ? (isEn ? `Teleporting in ${sec}s` : `Teleportando em ${sec}s`)
+        : (isEn ? `Leaving in ${sec}s` : `Saindo em ${sec}s`)
+      : kind === 'market'
       ? (isEn ? `Leaving in ${sec}s` : `Saindo em ${sec}s`)
       : (isEn ? `New journey in ${sec}s` : `Nova jornada em ${sec}s`)
 
@@ -359,6 +364,34 @@ export default function MiniBattlePlayer() {
       )
     }
 
+    if (scene === 'tower') {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={openBattleTabAndPause}
+            className="w-full text-left px-3 pt-3 pb-2 bg-[linear-gradient(160deg,#06192d_0%,#082f55_55%,#040b16_100%)] hover:brightness-110 transition"
+            title={isEn ? 'Open blue tower' : 'Abrir torre azul'}
+          >
+            <div className="h-16 rounded-lg border border-sky-600/40 bg-sky-950/40 px-3 py-2 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg border border-sky-400/30 bg-sky-900/50 flex items-center justify-center text-xl">
+                T
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black text-sky-100 leading-none">
+                  {isEn ? 'Blue Tower' : 'Torre Azul'}
+                </p>
+                <p className="text-[9px] text-sky-400/70 mt-1 leading-none">
+                  {isEn ? 'Open tower interior' : 'Abrir interior da torre'}
+                </p>
+              </div>
+            </div>
+          </button>
+          <MiniAutoBar kind="tower" />
+        </>
+      )
+    }
+
     return null
   }
 
@@ -403,7 +436,9 @@ export default function MiniBattlePlayer() {
               ? (isEn ? 'Home' : 'Casa')
               : scene === 'market'
                 ? (isEn ? 'Market' : 'Mercado')
-                : `⚔ ${isEn ? 'Battle' : 'Batalha'}`}
+                : scene === 'tower'
+                  ? (isEn ? 'Blue Tower' : 'Torre Azul')
+                  : `⚔ ${isEn ? 'Battle' : 'Batalha'}`}
           </span>
           <button
             className="text-slate-500 hover:text-slate-200 text-xs leading-none px-0.5 transition-colors"

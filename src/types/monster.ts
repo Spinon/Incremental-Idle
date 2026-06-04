@@ -10,6 +10,7 @@ export interface MonsterPreferences {
 }
 
 import type { ElementType } from './element'
+import type { Biome } from './map'
 
 export interface MonsterTemplate {
   id:             string
@@ -22,6 +23,8 @@ export interface MonsterTemplate {
   basePoints:     number
   /** Attribute points gained per level */
   pointsPerLevel: number
+  /** Biomes where this monster can appear through normal tile generation. */
+  biomes:         Biome[]
   preferences:    MonsterPreferences
   /** Physical attack element — applies elemental status on hits */
   element?:       ElementType

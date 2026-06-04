@@ -81,15 +81,11 @@ function TileCard({
 
   return (
     <div
-      draggable
-      onDragStart={e => {
-        e.dataTransfer.setData('tileId', tile.id)
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart(tile.id)
-      }}
-      onDragEnd={onDragEnd}
+      onPointerDown={() => onDragStart(tile.id)}
+      onPointerUp={onDragEnd}
+      onPointerCancel={onDragEnd}
       className="relative w-[52px] h-[52px] rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors"
-      style={{ backgroundColor: baseBg, border: `1px solid ${border}` }}
+      style={{ backgroundColor: baseBg, border: `1px solid ${border}`, touchAction: 'none' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = hoverBg }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = baseBg  }}
       title={`Tile Nível ${tile.level} — ${

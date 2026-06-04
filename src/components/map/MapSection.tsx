@@ -8,7 +8,7 @@ import { getDerivedStats } from '../../formulas/derived'
 import { getEquipmentBonuses } from '../../formulas/items'
 import { applySpellBuffs } from '../../formulas/spells'
 import { buildMonster, estimateMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
-import { FOREST_MONSTER_MAP, FOREST_MONSTERS, monsterName } from '../../data/monsters'
+import { FOREST_MONSTER_MAP, FOREST_MONSTERS, FOREST_RANDOM_MONSTERS, monsterName, monstersForBiome } from '../../data/monsters'
 import { useT } from '../../i18n/useT'
 import { useSettingsStore } from '../../store/settingsStore'
 import MapViewport from './MapViewport'
@@ -37,7 +37,9 @@ function levelColor(tileLv: number, heroLv: number): string {
 
 function stableMonsterForTile(tile: PlacedTile) {
   const hash = Math.abs((tile.x * 73856093) ^ (tile.y * 19349663) ^ (tile.level * 83492791))
-  return FOREST_MONSTERS[hash % FOREST_MONSTERS.length]
+  const candidates = monstersForBiome(tile.biome)
+  const pool = candidates.length > 0 ? candidates : FOREST_RANDOM_MONSTERS
+  return pool[hash % pool.length]
 }
 
 function previewEnragedLevel(baseLevel: number, tilesPlaced: number): number {
@@ -50,6 +52,7 @@ export default function MapSection() {
   const [zoom,        setZoom]        = useState(1.0)
   const [cameraPos,   setCameraPos]   = useState({ x: 0, y: 0 })
   const [selectedPos, setSelectedPos] = useState<{ x: number; y: number } | null>(null)
+  const [teleportSelecting, setTeleportSelecting] = useState(false)
 
   const grid           = useMapStore(s => s.grid)
 
@@ -72,9 +75,21 @@ export default function MapSection() {
   const tilesPlaced    = useMapStore(s => s.tilesPlaced)
   const placeTile      = useMapStore(s => s.placeTile)
   const setDestination = useMapStore(s => s.setDestination)
+  const teleportToBlueTower = useMapStore(s => s.teleportToBlueTower)
   const setAutoExplore = useMapStore(s => s.setAutoExplore)
   const toggleRiskMode = useMapStore(s => s.toggleRiskMode)
   const goHome         = useMapStore(s => s.goHome)
+
+  useEffect(() => {
+    if (!draggingId) return
+    const clearDrag = () => setTimeout(() => setDraggingId(null), 0)
+    window.addEventListener('pointerup', clearDrag)
+    window.addEventListener('pointercancel', clearDrag)
+    return () => {
+      window.removeEventListener('pointerup', clearDrag)
+      window.removeEventListener('pointercancel', clearDrag)
+    }
+  }, [draggingId])
 
   const attrs     = useHeroStore(s => s.attributes)
   const heroLevel = useHeroStore(s => s.level)
@@ -129,6 +144,20 @@ export default function MapSection() {
   const visRadius = Math.max(2, Math.round(derived.vision / 38))
 
   function handleTileClick(x: number, y: number) {
+    if (teleportSelecting) {
+      const tile = grid[gridKey(x, y)]
+      if (tile?.content.type === 'blueTower' && tile.explored && !(playerPos.x === x && playerPos.y === y)) {
+        if (teleportToBlueTower(x, y)) {
+          setSelectedPos({ x, y })
+          setCameraPos({ x, y })
+          setTeleportSelecting(false)
+        }
+        return
+      }
+      setSelectedPos({ x, y })
+      return
+    }
+
     if (selectedPos?.x === x && selectedPos?.y === y) {
       if (grid[gridKey(x, y)]) setDestination(x, y)
     } else {
@@ -281,8 +310,12 @@ export default function MapSection() {
             zoom={zoom}
             cameraPos={cameraPos}
             draggingId={draggingId}
+            draggedTile={deck.find(tile => tile.id === draggingId) ?? null}
             questMarkers={questMarkers}
-            onDrop={(tileId, x, y) => { placeTile(tileId, x, y); setDraggingId(null) }}
+            onDrop={(tileId, x, y) => {
+              placeTile(tileId, x, y)
+              setDraggingId(null)
+            }}
             onTileClick={handleTileClick}
             onCameraChange={(x, y) => setCameraPos({ x, y })}
             onZoom={dir => setZoom(z => clampZoom(z + dir * ZOOM_STEP))}
@@ -299,6 +332,9 @@ export default function MapSection() {
                 tilesPlaced={tilesPlaced}
                 isDestination={!!(destination?.x === selectedPos.x && destination?.y === selectedPos.y)}
                 onGo={handleGoToSelected}
+                teleportSelecting={teleportSelecting}
+                onTeleport={() => setTeleportSelecting(true)}
+                onCancelTeleport={() => setTeleportSelecting(false)}
               />
             </div>
           )}
@@ -368,7 +404,7 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
     // Collect from placed grid tiles. Every non-service tile can lead to a
     // battle; monster lairs that are still unexplored are the enraged variant.
     for (const [, tile] of Object.entries(grid)) {
-      if (tile.content.type === 'market' || tile.content.type === 'quest') continue
+      if (tile.content.type === 'market' || tile.content.type === 'quest' || tile.content.type === 'blueTower') continue
       const dist = Math.max(Math.abs(tile.x - playerPos.x), Math.abs(tile.y - playerPos.y))
       if (dist > revealRange) continue
       const isEnraged = tile.content.type === 'monster' && !tile.explored
@@ -500,6 +536,9 @@ function ActiveTileInfoPanel({
   tilesPlaced = 0,
   isDestination,
   onGo,
+  teleportSelecting,
+  onTeleport,
+  onCancelTeleport,
 }: {
   pos: { x: number; y: number }
   tile: PlacedTile | null
@@ -508,6 +547,9 @@ function ActiveTileInfoPanel({
   tilesPlaced?: number
   isDestination: boolean
   onGo(): void
+  teleportSelecting: boolean
+  onTeleport(): void
+  onCancelTeleport(): void
 }) {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
@@ -517,6 +559,7 @@ function ActiveTileInfoPanel({
   const explored = tile?.explored ?? false
   const isBlocked = !tile
   const isUnexplored = !!tile && !explored
+  const isBlueTower = content?.type === 'blueTower'
 
   const stateLabel = isBlocked
     ? (isEn ? 'Obstructed' : 'Obstruido')
@@ -529,6 +572,7 @@ function ActiveTileInfoPanel({
     content.type === 'market'  ? (isEn ? 'Market' : 'Mercado') :
     content.type === 'monster' ? (isEn ? 'Monster Lair' : 'Covil') :
     content.type === 'treasure'? (isEn ? 'Treasure' : 'Tesouro') :
+    content.type === 'blueTower'? (isEn ? 'Blue Tower' : 'Torre Azul') :
     content.type === 'quest'   ? 'Quest' :
                                   (isEn ? 'Wild Path' : 'Caminho selvagem')
 
@@ -537,9 +581,10 @@ function ActiveTileInfoPanel({
     content?.type === 'market' ? 'text-indigo-400' :
     content?.type === 'monster'? 'text-red-400' :
     content?.type === 'treasure'? 'text-yellow-400' :
+    content?.type === 'blueTower'? 'text-sky-400' :
     content?.type === 'quest'  ? 'text-emerald-400' : 'text-slate-400'
 
-  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'quest'
+  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'quest' && content.type !== 'blueTower'
     ? (() => {
         const baseLevel = content.monsterLevel ?? tile.level
         const enraged = !tile.explored && content.type === 'monster'
@@ -561,6 +606,14 @@ function ActiveTileInfoPanel({
 
   const levelDelta = level == null ? null : level - heroLevel
   const canGo = !!tile && !isDestination
+  const canTeleport = !!tile && isBlueTower && explored
+  const blueTowerDescription = teleportSelecting
+    ? (isEn ? 'Select another Blue Tower.' : 'Selecione outra torre Azul.')
+    : isBlocked
+      ? (isEn ? 'This tower connects to the other blue towers.' : 'Esta torre se conecta com as outras torres azuis.')
+      : isUnexplored
+        ? (isEn ? 'This tower connects to the others, but this one is still dormant.' : 'Esta torre se conecta com as outras, esta ainda está adormecida.')
+        : (isEn ? 'This tower connects to the others. Its windows glow.' : 'Esta torre se conecta com as outras, Suas janelas brilham.')
 
   return (
     <div>
@@ -576,16 +629,32 @@ function ActiveTileInfoPanel({
         </span>
         <button
           onClick={onGo}
-          disabled={!canGo}
+          disabled={!canGo || teleportSelecting}
           className={cn(
             'ml-auto rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border transition-colors',
-            canGo
+            canGo && !teleportSelecting
               ? 'border-sky-400/50 text-sky-500 hover:bg-sky-500/10'
               : 'border-slate-300/50 dark:border-slate-700 text-slate-400 cursor-default',
           )}
         >
           {isDestination ? (isEn ? 'Target' : 'Alvo') : (isEn ? 'Go' : 'Ir')}
         </button>
+        {canTeleport && !teleportSelecting && (
+          <button
+            onClick={onTeleport}
+            className="rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border border-sky-400/50 text-sky-500 hover:bg-sky-500/10 transition-colors"
+          >
+            Teleport
+          </button>
+        )}
+        {teleportSelecting && (
+          <button
+            onClick={onCancelTeleport}
+            className="rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border border-slate-300/60 dark:border-slate-600 text-slate-500 hover:bg-slate-500/10 transition-colors"
+          >
+            {isEn ? 'Cancel' : 'Cancelar'}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-2 text-[10px] text-slate-500 dark:text-slate-500">
@@ -608,7 +677,15 @@ function ActiveTileInfoPanel({
 
       {isBlocked && (
         <div className="text-[11px] text-slate-500">
-          {isEn ? 'No valid tile has been placed here yet.' : 'Ainda nao existe tile valido nesta celula.'}
+          {isBlueTower
+            ? blueTowerDescription
+            : (isEn ? 'No valid tile has been placed here yet.' : 'Ainda nao existe tile valido nesta celula.')}
+        </div>
+      )}
+
+      {isBlueTower && !isBlocked && (
+        <div className="text-[11px] text-sky-400/80">
+          {blueTowerDescription}
         </div>
       )}
 
@@ -647,12 +724,14 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
   const { content, level, explored, x, y } = tile
 
   // Stable random monster for empty tiles — recomputed only when the tile changes.
-  const emptyMonster = useRef<{ template: typeof FOREST_MONSTERS[0]; stats: ReturnType<typeof buildMonster> } | null>(null)
+  const emptyMonster = useRef<{ template: typeof FOREST_RANDOM_MONSTERS[0]; stats: ReturnType<typeof buildMonster> } | null>(null)
   const emptyTileKey = `${x},${y}`
   const prevKey = useRef('')
   if (content.type === 'empty' && prevKey.current !== emptyTileKey) {
     prevKey.current = emptyTileKey
-    const tpl = FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)]
+    const candidates = monstersForBiome(tile.biome)
+    const pool = candidates.length > 0 ? candidates : FOREST_RANDOM_MONSTERS
+    const tpl = pool[Math.floor(Math.random() * pool.length)]
     emptyMonster.current = { template: tpl, stats: buildMonster(tpl, level, 'normal', tilesPlaced) }
   }
 
@@ -660,12 +739,14 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
     content.type === 'market'   ? (isEn ? 'Market' : 'Mercado') :
     content.type === 'monster'  ? (isEn ? 'Monster Lair' : 'Covil') :
     content.type === 'treasure' ? (isEn ? 'Treasure' : 'Tesouro') :
+    content.type === 'blueTower'? (isEn ? 'Blue Tower' : 'Torre Azul') :
                                    (isEn ? 'Explored' : 'Explorado')
 
   const headerColor =
     content.type === 'market'   ? 'text-indigo-400' :
     content.type === 'monster'  ? 'text-red-400' :
-    content.type === 'treasure' ? 'text-yellow-400' : 'text-slate-400'
+    content.type === 'treasure' ? 'text-yellow-400' :
+    content.type === 'blueTower'? 'text-sky-400' : 'text-slate-400'
 
   return (
     <div>

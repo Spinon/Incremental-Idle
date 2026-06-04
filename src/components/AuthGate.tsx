@@ -5,6 +5,7 @@ import { useSettingsStore } from '../store/settingsStore'
 import { cn } from '../lib/utils'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const LOCAL_PLAY_KEY = 'incremental-idle-local-play'
 
 function validateEmail(email: string, isEn: boolean): string | null {
   if (!emailPattern.test(email)) return isEn ? 'Enter a valid email.' : 'Informe um e-mail válido.'
@@ -41,6 +42,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [recoveryCode, setRecoveryCode] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [localPlay, setLocalPlay] = useState(() => localStorage.getItem(LOCAL_PLAY_KEY) === '1')
 
   useEffect(() => {
     initCloudSave()
@@ -58,7 +60,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const isRecoveryVerify = mode === 'password-recovery-verify'
   const isPasswordReset = mode === 'password-reset'
 
-  if (cloudUser && !isPasswordReset) return <>{children}</>
+  if ((cloudUser && !isPasswordReset) || localPlay) return <>{children}</>
 
   function clearSecrets() {
     setPassword('')
@@ -128,6 +130,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     }
   }
 
+  function handleLocalPlay() {
+    localStorage.setItem(LOCAL_PLAY_KEY, '1')
+    clearSecrets()
+    setLocalError(null)
+    clearCloudMessage()
+    setLocalPlay(true)
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <header className="border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center gap-3">
@@ -145,7 +155,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
       <main className="min-h-[calc(100vh-57px)] flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-black/10 dark:shadow-black/40">
-          <div className="border-b border-slate-200 dark:border-slate-800 px-6 py-5">
+          <div className="relative border-b border-slate-200 dark:border-slate-800 px-6 py-5 pr-32">
+            <button
+              type="button"
+              onClick={handleLocalPlay}
+              className="absolute right-4 top-4 rounded-md border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              {isEn ? 'Play local' : 'Jogar local'}
+            </button>
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-500 dark:text-indigo-300">
               Incremental Idle
             </p>

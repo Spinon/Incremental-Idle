@@ -5,6 +5,7 @@ import AuthGate from './components/AuthGate'
 import CloudSaveConflictModal from './components/CloudSaveConflictModal'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
+import TowerInterior from './components/TowerInterior'
 import HeroPanel from './components/HeroPanel'
 import SettingsMenu from './components/SettingsMenu'
 import MapSection from './components/map/MapSection'
@@ -209,7 +210,7 @@ function GameRoot() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
-  // Force base speed when entering home or market
+  // Force base speed when entering non-battle scenes
   useEffect(() => {
     if (scene !== 'map') {
       const equip = getEquipmentBonuses(equipment)
@@ -218,10 +219,10 @@ function GameRoot() {
     }
   }, [activeBuffs, attributes, equipment, heroLevel, scene, setSpeed])
 
-  // Home and market scenes live inside the battle tab; expose them through
+  // Interior scenes live inside the battle tab; expose them through
   // the mini player when the user is currently looking at another tab.
   useEffect(() => {
-    if (scene === 'home' || scene === 'market') {
+    if (scene === 'home' || scene === 'market' || scene === 'tower') {
       setShowMini(activeTab !== 'battle')
     }
   }, [activeTab, scene, setShowMini])
@@ -307,6 +308,7 @@ function GameRoot() {
             <div className="flex flex-col">
               {scene === 'home'   ? <HouseInterior /> :
                scene === 'market' ? <MarketInterior /> :
+               scene === 'tower'  ? <TowerInterior /> :
                                     <BattleArena />}
             </div>
             <aside>

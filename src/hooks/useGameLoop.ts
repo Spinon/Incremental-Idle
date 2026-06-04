@@ -238,7 +238,10 @@ export function useGameLoop() {
             useQuestStore.getState().onMonsterKill(monsterType, playerPos.x, playerPos.y)
           }
 
-          useMapStore.getState().moveOneStep(useHeroStore.getState().level)
+          const activatedBlueTower = useMapStore.getState().activatePendingBlueTower()
+          if (!activatedBlueTower) {
+            useMapStore.getState().moveOneStep(useHeroStore.getState().level)
+          }
 
           // ── Auto-place tiles (Full Auto mode only) ──────────────────────
           if (useMapStore.getState().autoExplore === 'full') {

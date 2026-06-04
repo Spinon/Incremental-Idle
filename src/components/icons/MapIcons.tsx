@@ -92,3 +92,17 @@ export function QuestIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+export function BlueTowerIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <path d="M7 21V8l2-3h6l2 3v13H7Z" fill="#1d4ed8" stroke="#60a5fa" strokeWidth="1" />
+      <path d="M9 8h6M10 5V3h4v2" stroke="#93c5fd" strokeWidth="1.2" strokeLinecap="round" />
+      <rect x="10" y="10" width="1.8" height="3" rx="0.5" fill="#bfdbfe" />
+      <rect x="12.2" y="10" width="1.8" height="3" rx="0.5" fill="#bfdbfe" />
+      <rect x="10" y="15" width="1.8" height="3" rx="0.5" fill="#60a5fa" />
+      <rect x="12.2" y="15" width="1.8" height="3" rx="0.5" fill="#60a5fa" />
+      <path d="M5 21h14" stroke="#93c5fd" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}

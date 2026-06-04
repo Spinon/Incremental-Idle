@@ -3,13 +3,13 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { useBattleStore } from './battleStore'
 import { useQuestStore } from './questStore'
-import { pickForestMonster } from '../data/monsters'
+import { pickMonsterForBiome } from '../data/monsters'
 import { pickMonsterRarity } from '../formulas/monsters'
 import { generateQuest } from '../formulas/quests'
 import { rollWeaponMaterialDrop } from '../formulas/weapons'
 import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
-import type { Direction, MapTile, PlacedTile, TileContent } from '../types/map'
+import type { Biome, Direction, MapTile, PlacedTile, TileContent } from '../types/map'
 import type { MarketOffer } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
@@ -25,6 +25,43 @@ export const DIR_DELTA: Record<Direction, { dx: number; dy: number }> = {
 export const DIRS: Direction[] = ['N', 'S', 'E', 'W']
 
 export function gridKey(x: number, y: number): string { return `${x},${y}` }
+
+type Point = { x: number; y: number }
+
+function samePoint(a: Point | null | undefined, b: Point | null | undefined): boolean {
+  return !!a && !!b && a.x === b.x && a.y === b.y
+}
+
+function chebyshevDistance(a: Point, b: Point): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
+}
+
+function connectedExits(grid: Record<string, PlacedTile>, current: Point): Point[] {
+  const tile = grid[gridKey(current.x, current.y)]
+  if (!tile) return []
+
+  const exits: Point[] = []
+  for (const dir of tile.connections) {
+    const delta = DIR_DELTA[dir]
+    const next = { x: current.x + delta.dx, y: current.y + delta.dy }
+    const neighbor = grid[gridKey(next.x, next.y)]
+    if (neighbor?.connections.includes(DIR_OPPOSITE[dir])) exits.push(next)
+  }
+  return exits
+}
+
+function chooseTowerExit(grid: Record<string, PlacedTile>, current: Point, entryFrom: Point | null, target: Point | null): Point | null {
+  const exits = connectedExits(grid, current)
+  if (exits.length === 0) return null
+
+  const withoutEntry = exits.filter(exit => !samePoint(exit, entryFrom))
+  const candidates = withoutEntry.length > 0 ? withoutEntry : exits
+  if (!target) return candidates[0]
+
+  return candidates.reduce((best, exit) => (
+    chebyshevDistance(exit, target) < chebyshevDistance(best, target) ? exit : best
+  ), candidates[0])
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -67,7 +104,7 @@ interface TileEntryResult {
   questTileLevel: number | null
 }
 
-type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'tilesPlaced' | 'bountyTiles'>
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
 
 function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult {
   const tileKey = `${tile.x},${tile.y}`
@@ -82,6 +119,36 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
       tile.content  = { type: 'empty' }
     }
     return { enemy: null, questTileLevel: tile.level }
+  }
+
+  if (!bounty && tile.content.type === 'blueTower') {
+    if (tile.explored) {
+      st.scene = 'tower'
+      return { enemy: null, questTileLevel: null }
+    }
+
+    const baseLevel  = Math.max(1, tile.level)
+    const enemyLevel = baseLevel + 5
+    const tileMult   = 1 + Math.floor(st.tilesPlaced / 10) * 0.05
+
+    st.blueTowerBossPending[tileKey] = true
+    st.pendingGold += Math.round((25 + enemyLevel * 10) * tileMult * (0.8 + Math.random() * 0.4))
+    st.pendingMonsterXp = {
+      xp:           Math.round((18 + enemyLevel * 5) * tileMult * (0.8 + Math.random() * 0.4)),
+      monsterLevel: enemyLevel,
+    }
+
+    return {
+      enemy: {
+        level:       enemyLevel,
+        baseLevel,
+        type:        'demon',
+        rarity:      'unique',
+        tilesPlaced: st.tilesPlaced,
+        enraged:     true,
+      },
+      questTileLevel: null,
+    }
   }
 
   const baseLevel        = Math.max(1, tile.level)
@@ -141,11 +208,12 @@ function queueTileEnemy(enemy: TileEnemyQueue | null): void {
   )
 }
 
-export function generateContent(level: number, tilesPlaced = 0): TileContent {
+export function generateContent(level: number, tilesPlaced = 0, biome: Biome = 'forest'): TileContent {
   const r = Math.random()
   if (r < 0.008) return { type: 'quest' }
   if (r < 0.016) return { type: 'market' }
-  if (r < 0.041) {
+  if (r < 0.022) return { type: 'blueTower' }
+  if (r < 0.047) {
     return {
       type: 'treasure',
       xpAmount: Math.round((8 + level * 4) * (0.8 + Math.random() * 0.4)),
@@ -155,7 +223,7 @@ export function generateContent(level: number, tilesPlaced = 0): TileContent {
     return {
       type: 'monster',
       monsterLevel: level,
-      monsterType:   pickForestMonster().id,
+      monsterType:   pickMonsterForBiome(biome).id,
       monsterRarity: pickMonsterRarity(tilesPlaced),
     }
   }
@@ -313,13 +381,16 @@ interface MapStore {
   /** Monster-specific XP kept separate so a hero-level range check can be applied. */
   pendingMonsterXp: { xp: number; monsterLevel: number } | null
   sightedCells: Record<string, TileContent>
+  blueTowerBossPending: Record<string, boolean>
+  blueTowerAutoTarget: { x: number; y: number } | null
+  blueTowerEntryFrom: { x: number; y: number } | null
   /**
    * 'manual'   — player controls everything (no automation)
    * 'move'     — auto-pathfinding to unexplored tiles (original Auto behaviour)
    * 'full'     — auto-pathfinding + auto-tile-placement + auto-restart when stuck
    */
   autoExplore: 'manual' | 'move' | 'full'
-  scene: 'map' | 'home' | 'market'
+  scene: 'map' | 'home' | 'market' | 'tower'
   tilesPlaced: number
   defeatPending: boolean
   /**
@@ -350,7 +421,7 @@ interface MapStore {
   /** Tiles reserved for bounty quests: key = "x,y", value = bounty data */
   bountyTiles: Record<string, BountyTileEntry>
 
-  placeTile(tileId: string, x: number, y: number): void
+  placeTile(tileId: string, x: number, y: number): boolean
   saveMarketOffer(key: string, offer: MarketOffer): void
   setDestination(x: number, y: number): void
   setAutoExplore(v: 'manual' | 'move' | 'full'): void
@@ -362,6 +433,8 @@ interface MapStore {
   goHome(): void
   leaveScene(): void
   exitMarket(): void
+  exitBlueTower(): void
+  autoExitBlueTower(): void
   /**
    * Called when the scene transitions market→map.
    * Marks the exit tile as explored, queues first-encounter rewards and the
@@ -370,6 +443,8 @@ interface MapStore {
   processMarketExitTile(): void
   handleDefeat(): void
   registerBountyTile(questId: string, objective: import('../types/quest').QuestObjectiveBounty): void
+  activatePendingBlueTower(): boolean
+  teleportToBlueTower(x: number, y: number): boolean
   /**
    * Try to place a random valid deck tile on the grid.
    * When `maxTileLevel` is provided only tiles at or below that level are
@@ -411,8 +486,11 @@ export const useMapStore = create<MapStore>()(
       pendingWeaponMaterials: [],
       pendingMonsterXp: null,
       sightedCells: {},
+      blueTowerBossPending: {},
+      blueTowerAutoTarget: null,
+      blueTowerEntryFrom: null,
       autoExplore: 'move' as 'manual' | 'move' | 'full',
-      scene: 'map' as 'map' | 'home' | 'market',
+      scene: 'map' as 'map' | 'home' | 'market' | 'tower',
       tilesPlaced: 0,
       defeatPending: false,
       stuckPending: false,
@@ -427,7 +505,12 @@ export const useMapStore = create<MapStore>()(
       saveMarketOffer: (key, offer) => set((st) => { st.marketOffers[key] = offer }),
 
       goHome:     () => set((st) => { st.scene = 'home'; st.destination = null }),
-      leaveScene: () => set((st) => { st.scene = 'map'; st.stuckPending = false }),
+      leaveScene: () => set((st) => {
+        st.scene = 'map'
+        st.stuckPending = false
+        st.blueTowerAutoTarget = null
+        st.blueTowerEntryFrom = null
+      }),
 
       tryAutoPlace: (maxTileLevel?: number): boolean => {
         const { grid, deck } = get()
@@ -559,6 +642,59 @@ export const useMapStore = create<MapStore>()(
         // intentionally no queueEnemy call — battle starts on next moveOneStep
       },
 
+      exitBlueTower: () => set((st) => {
+        st.scene = 'map'
+        st.blueTowerAutoTarget = null
+        st.blueTowerEntryFrom = null
+      }),
+
+      autoExitBlueTower: () => {
+        let movedToX: number | null = null
+        let movedToY: number | null = null
+        set((st) => {
+          const current = st.playerPos
+          const target = st.blueTowerAutoTarget ?? st.destination
+          let bestTower: PlacedTile | null = null
+          let bestTowerDist = Infinity
+
+          if (target) {
+            const currentDist = chebyshevDistance(current, target)
+            for (const tile of Object.values(st.grid)) {
+              if (tile.content.type !== 'blueTower' || !tile.explored) continue
+              if (tile.x === current.x && tile.y === current.y) continue
+              const dist = chebyshevDistance(tile, target)
+              if (dist < bestTowerDist) {
+                bestTower = tile
+                bestTowerDist = dist
+              }
+            }
+
+            if (bestTower && bestTowerDist < currentDist) {
+              st.playerPos = { x: bestTower.x, y: bestTower.y }
+              st.destination = target
+              movedToX = bestTower.x
+              movedToY = bestTower.y
+              st.scene = 'map'
+              st.blueTowerAutoTarget = null
+              st.blueTowerEntryFrom = null
+              return
+            }
+          }
+
+          const exit = chooseTowerExit(st.grid, current, st.blueTowerEntryFrom, target ?? null)
+          if (exit) {
+            st.playerPos = exit
+            st.destination = target ?? null
+            movedToX = exit.x
+            movedToY = exit.y
+          }
+          st.scene = 'map'
+          st.blueTowerAutoTarget = null
+          st.blueTowerEntryFrom = null
+        })
+        if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
+      },
+
       handleDefeat: () => {
         set((st) => {
           st.scene         = 'home'
@@ -581,13 +717,50 @@ export const useMapStore = create<MapStore>()(
         }
       }),
 
+      activatePendingBlueTower: (): boolean => {
+        let activated = false
+        set((st) => {
+          const key = gridKey(st.playerPos.x, st.playerPos.y)
+          if (!st.blueTowerBossPending[key]) return
+          const tile = st.grid[key]
+          if (tile?.content.type === 'blueTower') {
+            tile.explored = true
+            st.scene = 'tower'
+            st.destination = null
+            st.blueTowerAutoTarget = null
+            activated = true
+          }
+          delete st.blueTowerBossPending[key]
+        })
+        return activated
+      },
+
+      teleportToBlueTower: (x, y): boolean => {
+        let moved = false
+        set((st) => {
+          const tile = st.grid[gridKey(x, y)]
+          if (!tile || !tile.explored || tile.content.type !== 'blueTower') return
+          if (st.playerPos.x === x && st.playerPos.y === y) return
+          st.playerPos = { x, y }
+          st.destination = null
+          st.scene = 'tower'
+          st.blueTowerAutoTarget = null
+          st.blueTowerEntryFrom = null
+          moved = true
+        })
+        if (moved) useQuestStore.getState().onPlayerMove(x, y)
+        return moved
+      },
+
       setDestination: (x, y) => set((st) => {
         if (st.playerPos.x === x && st.playerPos.y === y) return
         if (!st.grid[gridKey(x, y)]) return
         st.destination = { x, y }
       }),
 
-      placeTile: (tileId, x, y) => set((st) => {
+      placeTile: (tileId, x, y): boolean => {
+        let placed = false
+        set((st) => {
         const key = gridKey(x, y)
         if (st.grid[key]) return
         const idx = st.deck.findIndex(t => t.id === tileId)
@@ -622,23 +795,26 @@ export const useMapStore = create<MapStore>()(
             content = {
               type: 'monster',
               monsterLevel:  tileLevel,
-              monsterType:   sighted.monsterType   ?? pickForestMonster().id,
+              monsterType:   sighted.monsterType   ?? pickMonsterForBiome(tile.biome).id,
               monsterRarity: sighted.monsterRarity ?? pickMonsterRarity(st.tilesPlaced),
             }
           } else if (sighted.type === 'treasure') {
             content = { type: 'treasure', xpAmount: Math.round((20 + tileLevel * 10) * (0.8 + Math.random() * 0.4)) }
           } else {
-            content = { type: sighted.type } as TileContent   // market or empty — level-independent
+            content = { type: sighted.type } as TileContent   // market, blue tower or empty — level-independent
           }
         } else {
-          content = generateContent(tileLevel, st.tilesPlaced)
+          content = generateContent(tileLevel, st.tilesPlaced, tile.biome)
         }
         delete st.sightedCells[key]
 
         st.deck.splice(idx, 1)
         st.grid[key] = { ...tile, x, y, explored: false, content }
         st.tilesPlaced += 1
-      }),
+        placed = true
+        })
+        return placed
+      },
 
       drainXp: () => {
         const xp = get().pendingXp
@@ -677,6 +853,8 @@ export const useMapStore = create<MapStore>()(
 
           if (!st.destination) return
 
+          const previous = { ...st.playerPos }
+          const destinationBeforeStep = { ...st.destination }
           const next = findNextStep(st.grid, st.playerPos, st.destination)
           if (next) {
             st.playerPos = next
@@ -689,6 +867,10 @@ export const useMapStore = create<MapStore>()(
               if (tile.content.type === 'market') {
                 st.scene = 'market'
                 if (!tile.explored) tile.explored = true
+              } else if (tile.content.type === 'blueTower') {
+                st.blueTowerEntryFrom = previous
+                st.blueTowerAutoTarget = samePoint(destinationBeforeStep, next) ? null : destinationBeforeStep
+                tileResult = processTileEntry(st, tile)
               } else {
                 tileResult = processTileEntry(st, tile)
               }
@@ -728,6 +910,9 @@ export const useMapStore = create<MapStore>()(
         st.pendingWeaponMaterials = []
         st.pendingMonsterXp   = null
         st.sightedCells       = {}
+        st.blueTowerBossPending = {}
+        st.blueTowerAutoTarget = null
+        st.blueTowerEntryFrom = null
         st.scene              = 'map'
         st.tilesPlaced        = 0
         st.defeatPending      = false
@@ -776,7 +961,7 @@ export const useMapStore = create<MapStore>()(
             if (st.grid[key] || st.sightedCells[key]) continue
             // Fog content also hero-relative so previewed areas feel appropriate
             const lvl = heroRelativeLevel(heroLevel)
-            st.sightedCells[key] = generateContent(lvl, st.tilesPlaced)
+            st.sightedCells[key] = generateContent(lvl, st.tilesPlaced, 'forest')
           }
         }
       }),

@@ -1,8 +1,8 @@
 import { useRef, useEffect } from 'react'
-import type { PlacedTile, Direction, TileContent } from '../../types/map'
+import type { MapTile, PlacedTile, TileContent } from '../../types/map'
 import { gridKey, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
-import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 import type { QuestMapMarker, QuestDifficulty } from '../../types/quest'
 
@@ -20,6 +20,7 @@ interface Props {
   zoom: number
   cameraPos: { x: number; y: number }  // grid units (float); camera centre
   draggingId: string | null
+  draggedTile: MapTile | null
   questMarkers: QuestMapMarker[]
   onDrop(tileId: string, x: number, y: number): void
   onTileClick(x: number, y: number): void
@@ -53,11 +54,12 @@ function ghostBg(content: TileContent): string {
   if (content.type === 'monster')  return 'bg-red-950/30'
   if (content.type === 'treasure') return 'bg-yellow-950/25'
   if (content.type === 'market')   return 'bg-indigo-950/25'
+  if (content.type === 'blueTower') return 'bg-sky-950/25'
   return ''
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, questMarkers, onDrop, onTileClick, onCameraChange, onZoom,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, questMarkers, onDrop, onTileClick, onCameraChange, onZoom,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
@@ -115,6 +117,27 @@ export default function MapViewport({
     panRef.current = null
   }
 
+  function placementState(gx: number, gy: number): 'valid' | 'invalid' | 'none' {
+    if (!draggedTile || grid[gridKey(gx, gy)]) return 'none'
+
+    let hasNeighbor = false
+    let matchCount = 0
+    for (const dir of DIRS) {
+      const { dx, dy } = DIR_DELTA[dir]
+      const neighbor = grid[gridKey(gx + dx, gy + dy)]
+      if (!neighbor) continue
+
+      hasNeighbor = true
+      const neighborFacesUs = neighbor.connections.includes(DIR_OPPOSITE[dir])
+      const draggedFacesNeighbor = draggedTile.connections.includes(dir)
+      if (neighborFacesUs !== draggedFacesNeighbor) return 'invalid'
+      if (neighborFacesUs && draggedFacesNeighbor) matchCount++
+    }
+
+    if (!hasNeighbor) return 'none'
+    return matchCount > 0 ? 'valid' : 'invalid'
+  }
+
   // Build visible cells
   type Cell = {
     gx: number; gy: number
@@ -123,6 +146,7 @@ export default function MapViewport({
     sight: TileContent | null
     vis: Visibility
     isValidTarget: boolean
+    placement: 'valid' | 'invalid' | 'none'
   }
   const cells: Cell[] = []
 
@@ -137,17 +161,18 @@ export default function MapViewport({
                                 'fog'
 
       const sight = (!tile && vis !== 'fog') ? (sightedCells[gridKey(gx, gy)] ?? null) : null
+      const placement = placementState(gx, gy)
 
       // Valid drop target: empty cell, dragging a tile, AND at least one placed
       // neighbor has an opening facing this cell (so any tile with that connection
       // could connect). The real bidirectional exit-conflict check happens in
       // placeTile — this is just the highlight heuristic.
-      const isAdj = !tile && draggingId !== null && (DIRS as Direction[]).some(d => {
+      const isAdj = !tile && draggingId !== null && (DIRS).some(d => {
         const neighbor = grid[gridKey(gx + DIR_DELTA[d].dx, gy + DIR_DELTA[d].dy)]
         return neighbor?.connections.includes(DIR_OPPOSITE[d])
       })
 
-      cells.push({ gx, gy, left: tileLeft(gx), top: tileTop(gy), tile, sight, vis, isValidTarget: isAdj })
+      cells.push({ gx, gy, left: tileLeft(gx), top: tileTop(gy), tile, sight, vis, isValidTarget: isAdj, placement })
     }
   }
 
@@ -193,7 +218,7 @@ export default function MapViewport({
         )
       })}
 
-      {cells.map(({ gx, gy, left, top, tile, sight, vis, isValidTarget }) => (
+      {cells.map(({ gx, gy, left, top, tile, sight, vis, isValidTarget, placement }) => (
         <div
           key={`${gx},${gy}`}
           className="absolute"
@@ -218,28 +243,46 @@ export default function MapViewport({
               className={cn(
                 'w-full h-full rounded relative overflow-hidden transition-colors cursor-pointer hover:bg-slate-800/30',
                 sight ? ghostBg(sight) : '',
-                isValidTarget && 'border-2 border-dashed border-indigo-500/50 hover:border-indigo-400 hover:bg-indigo-900/25 cursor-copy',
+                draggingId && placement === 'valid' && 'border-2 border-dashed border-emerald-400/70 bg-emerald-900/20 hover:bg-emerald-900/35 cursor-copy',
+                draggingId && placement === 'invalid' && 'border-2 border-dashed border-red-500/60 bg-red-950/25 hover:bg-red-950/35 cursor-not-allowed',
+                draggingId && placement === 'none' && isValidTarget && 'border-2 border-dashed border-slate-500/35 bg-slate-900/15 cursor-help',
               )}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
                 onTileClick(gx, gy)
               }}
-              onDragOver={isValidTarget ? e => e.preventDefault() : undefined}
-              onDrop={isValidTarget ? e => {
+              onPointerUp={e => {
+                if (!draggingId) return
                 e.preventDefault()
-                const id = e.dataTransfer.getData('tileId')
+                e.stopPropagation()
+                suppressNextClick.current = true
+                onDrop(draggingId, gx, gy)
+              }}
+              onDragOver={e => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = draggingId !== null ? 'move' : 'none'
+              }}
+              onDragEnter={e => {
+                e.preventDefault()
+              }}
+              onDrop={e => {
+                e.preventDefault()
+                const id = e.dataTransfer.getData('tileId') || e.dataTransfer.getData('text/plain') || draggingId
                 if (id) onDrop(id, gx, gy)
-              } : undefined}
+              }}
             >
               {sight && sight.type !== 'empty' && (
                 <div className={cn(
-                  'absolute inset-0 flex items-center justify-center pointer-events-none z-10',
+                  sight.type === 'blueTower'
+                    ? 'absolute top-0.5 right-0.5 pointer-events-none z-30 rounded overflow-hidden'
+                    : 'absolute inset-0 flex items-center justify-center pointer-events-none z-10',
                   vis === 'clear' ? 'opacity-60' : 'opacity-30',
                 )}>
                   {sight.type === 'monster'  && <MonsterIcon  size={previewIconSize} />}
                   {sight.type === 'treasure' && <TreasureIcon size={previewIconSize} />}
                   {sight.type === 'market'   && <MarketIcon   size={previewIconSize} />}
                   {sight.type === 'quest'    && <QuestIcon    size={previewIconSize} />}
+                  {sight.type === 'blueTower' && <BlueTowerIcon size={previewIconSize} />}
                 </div>
               )}
               {vis === 'penumbra' && (

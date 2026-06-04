@@ -147,6 +147,7 @@ export default function HouseInterior() {
                         if (entry.spell) {
                           const { spell } = entry
                           const spellName = isEn ? (spell.nameEn ?? spell.name) : spell.name
+                          const targetName = displayLogName(entry.defender)
                           const color =
                             spell.effectType === 'damage'  ? 'text-orange-400/80 bg-orange-950/20'
                             : spell.effectType === 'heal'  ? 'text-emerald-400/80 bg-emerald-950/20'
@@ -157,6 +158,8 @@ export default function HouseInterior() {
                             <div key={i} className={cn('text-[10px] px-2 py-0.5 rounded flex items-center gap-1', color)}>
                               <span>{spell.icon}</span>
                               <span className="font-semibold">{spellName}</span>
+                              <span className="opacity-40">-&gt;</span>
+                              <span className="truncate">{targetName}</span>
                               {spell.value > 0 && (
                                 <span className="ml-auto font-bold">
                                   {spell.effectType === 'heal' ? `+${spell.value}` : `-${spell.value}`}

@@ -5,6 +5,10 @@ import bandit1 from '../../assets/monster-sprites/Bandit1.svg'
 import bandit2 from '../../assets/monster-sprites/Bandit2.svg'
 import bandit3 from '../../assets/monster-sprites/Bandit3.svg'
 import bandit4 from '../../assets/monster-sprites/Bandit4.svg'
+import demon1 from '../../assets/monster-sprites/Demon1.png'
+import demon2 from '../../assets/monster-sprites/Demon2.png'
+import demon3 from '../../assets/monster-sprites/Demon3.png'
+import demon4 from '../../assets/monster-sprites/Demon4.png'
 import goblin1 from '../../assets/monster-sprites/Goblin1.svg'
 import goblin2 from '../../assets/monster-sprites/Goblin2.svg'
 import goblin3 from '../../assets/monster-sprites/Goblin3.svg'
@@ -85,6 +89,15 @@ const SPRITES: Record<string, SpriteSet> = {
     unique: spider4,
     flipToFaceLeft: true,
     visualScale: 1.04,
+  },
+  demon: {
+    normal: demon1,
+    uncommon: demon2,
+    rare: demon3,
+    epic: demon4,
+    unique: demon4,
+    flipToFaceLeft: true,
+    visualScale: 1.18,
   },
 }
 

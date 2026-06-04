@@ -5,6 +5,8 @@ import { useNotifStore } from '../store/notifStore'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
+const LOCAL_PLAY_KEY = 'incremental-idle-local-play'
+
 export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean }) {
   const [open, setOpen]           = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -31,6 +33,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
   const updatePassword = useCloudSaveStore(s => s.updatePassword)
   const t = useT()
   const ref = useRef<HTMLDivElement>(null)
+  const localPlay = typeof window !== 'undefined' && localStorage.getItem(LOCAL_PLAY_KEY) === '1'
 
   const canConfirmReset = resetInput === 'RESTART'
 
@@ -46,6 +49,11 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
     Object.keys(localStorage)
       .filter(k => k.startsWith('incremental-idle'))
       .forEach(k => localStorage.removeItem(k))
+    window.location.reload()
+  }
+
+  function returnToCloudLogin() {
+    localStorage.removeItem(LOCAL_PLAY_KEY)
     window.location.reload()
   }
 
@@ -145,7 +153,27 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
                 {lang === 'en' ? 'Account' : 'Conta'}
               </p>
 
-              {!cloudConfigured ? (
+              {localPlay && !cloudUser ? (
+                <div className="flex flex-col gap-2">
+                  <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/20 px-2.5 py-2">
+                    <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
+                      {lang === 'en' ? 'Playing locally' : 'Jogando localmente'}
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-sky-600/80 dark:text-sky-300/75">
+                      {lang === 'en'
+                        ? 'Cloud save is paused until you sign in.'
+                        : 'O save na nuvem fica pausado até você entrar.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={returnToCloudLogin}
+                    className="py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    {lang === 'en' ? 'Go to login' : 'Ir para login'}
+                  </button>
+                </div>
+              ) : !cloudConfigured ? (
                 <p className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
                   {lang === 'en'
                     ? 'Supabase is not configured in this build.'

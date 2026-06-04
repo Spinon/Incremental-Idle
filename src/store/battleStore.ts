@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
-import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../data/monsters'
+import { FOREST_MONSTER_MAP, FOREST_MONSTERS, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import { useInventoryStore } from './inventoryStore'
 import { getWeaponCombatProfile, WEAPON_EFFECT_LABELS } from '../formulas/weapons'
 import type { MonsterRarity } from '../types/monster'
@@ -263,7 +263,7 @@ export const useBattleStore = create<BattleStore>()(
     queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId) => set((st) => {
       st.nextEnemyLevel     = level
       st.nextEnemyBaseLevel = baseLevel ?? level
-      st.nextEnemyType      = monsterType   ?? FOREST_MONSTERS[Math.floor(Math.random() * FOREST_MONSTERS.length)].id
+      st.nextEnemyType      = monsterType   ?? FOREST_RANDOM_MONSTERS[Math.floor(Math.random() * FOREST_RANDOM_MONSTERS.length)].id
       st.nextTilesPlaced    = tilesPlaced   ?? st.nextTilesPlaced
       st.nextEnemyRarity    = monsterRarity ?? pickMonsterRarity(st.nextTilesPlaced)
       st.nextEnemyEnraged   = enraged       ?? false
