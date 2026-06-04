@@ -32,6 +32,7 @@ interface CloudSaveStore {
   user: User | null
   remoteUpdatedAt: string | null
   localSnapshotAt: string | null
+  remoteChecked: boolean
   message: string | null
   error: string | null
   pendingRemote: CloudSaveRow | null
@@ -96,6 +97,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   user: null,
   remoteUpdatedAt: null,
   localSnapshotAt: null,
+  remoteChecked: false,
   message: isSupabaseConfigured ? null : 'Cloud save is missing Supabase environment variables.',
   error: null,
   pendingRemote: null,
@@ -115,6 +117,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       status: session ? 'signed-in' : 'signed-out',
       session,
       user: session?.user ?? null,
+      remoteChecked: false,
     })
 
     supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -123,6 +126,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         user: nextSession?.user ?? null,
         status: nextSession ? 'signed-in' : 'signed-out',
         pendingRemote: null,
+        remoteChecked: false,
       })
       if (nextSession?.user) {
         window.setTimeout(() => {
@@ -167,6 +171,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       session: null,
       user: null,
       pendingRemote: null,
+      remoteChecked: false,
       message: 'Signed out. Local progress remains on this device.',
     })
   },
@@ -184,6 +189,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         status: 'signed-in',
         remoteUpdatedAt: row.updated_at,
         localSnapshotAt: snapshot.capturedAt,
+        remoteChecked: true,
         pendingRemote: null,
         message: 'Cloud save updated.',
       })
@@ -214,6 +220,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
           pendingRemote: remote,
           remoteUpdatedAt: remote.updated_at,
           localSnapshotAt: local.capturedAt,
+          remoteChecked: true,
           message: 'Cloud save found. Choose which progress to keep.',
         })
         return
@@ -229,6 +236,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
           pendingRemote: remote,
           remoteUpdatedAt: remote.updated_at,
           localSnapshotAt: local.capturedAt,
+          remoteChecked: true,
           message: 'A newer cloud save is available.',
         })
         return
@@ -243,6 +251,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         status: 'signed-in',
         remoteUpdatedAt: remote.updated_at,
         localSnapshotAt: local.capturedAt,
+        remoteChecked: true,
         pendingRemote: null,
         message: 'Cloud save is up to date.',
       })
@@ -267,6 +276,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       pendingRemote: null,
       remoteUpdatedAt: remote.updated_at,
       localSnapshotAt: remote.local_updated_at,
+      remoteChecked: true,
       message: 'Cloud save restored. Reloading...',
     })
     window.setTimeout(() => window.location.reload(), 250)

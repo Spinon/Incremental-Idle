@@ -21,6 +21,7 @@ export function useCloudSaveSync() {
     function schedule() {
       const cloud = useCloudSaveStore.getState()
       if (!cloud.user || cloud.pendingRemote || cloud.status === 'syncing') return
+      if (!cloud.remoteChecked) return
 
       markLocalSaveChanged()
       if (timer.current !== null) window.clearTimeout(timer.current)
