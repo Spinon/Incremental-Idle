@@ -29,7 +29,6 @@ interface CloudSaveRow {
 
 interface CloudSaveStore {
   configured: boolean
-  initialized: boolean
   authMode: AuthMode
   recoveryEmail: string | null
   status: CloudStatus
@@ -58,6 +57,10 @@ interface CloudSaveStore {
 }
 
 let initPromise: Promise<void> | null = null
+
+function authStatusFromSession(session: Session | null): CloudStatus {
+  return session ? 'signed-in' : 'signed-out'
+}
 
 function compareIso(a: string | null | undefined, b: string | null | undefined): number {
   const av = a ? Date.parse(a) : 0
@@ -163,7 +166,6 @@ async function upsertSnapshot(userId: string, snapshot: LocalSaveSnapshot): Prom
 
 export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   configured: isSupabaseConfigured,
-  initialized: false,
   authMode: 'sign-in',
   recoveryEmail: null,
   status: isSupabaseConfigured ? 'idle' : 'error',
@@ -181,43 +183,41 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     if (initPromise) return initPromise
 
     initPromise = (async () => {
-    set({ status: 'loading', error: null })
+      set({ status: 'loading', error: null })
 
-    const { data, error } = await supabase.auth.getSession()
-    if (error) {
-      set({ status: 'error', error: error.message, initialized: true })
-      return
-    }
-
-    const session = data.session
-    set({
-      status: session ? 'signed-in' : 'signed-out',
-      session,
-      user: session?.user ?? null,
-      remoteChecked: false,
-      initialized: true,
-    })
-
-    supabase.auth.onAuthStateChange((event, nextSession) => {
-      set({
-        session: nextSession,
-        user: nextSession?.user ?? null,
-        status: nextSession ? 'signed-in' : 'signed-out',
-        authMode: event === 'PASSWORD_RECOVERY' ? 'password-reset' : get().authMode,
-        pendingRemote: null,
-        remoteChecked: false,
-        initialized: true,
-      })
-      if (nextSession?.user) {
-        window.setTimeout(() => {
-          get().pullRemoteSave().catch((err: unknown) => {
-            set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
-          })
-        }, 0)
+      const { data, error } = await supabase.auth.getSession()
+      if (error) {
+        set({ status: 'error', error: error.message })
+        return
       }
-    })
 
-    if (session?.user) await get().pullRemoteSave()
+      const session = data.session
+      set({
+        status: authStatusFromSession(session),
+        session,
+        user: session?.user ?? null,
+        remoteChecked: false,
+      })
+
+      supabase.auth.onAuthStateChange((event, nextSession) => {
+        set({
+          session: nextSession,
+          user: nextSession?.user ?? null,
+          status: authStatusFromSession(nextSession),
+          authMode: event === 'PASSWORD_RECOVERY' ? 'password-reset' : get().authMode,
+          pendingRemote: null,
+          remoteChecked: false,
+        })
+        if (nextSession?.user) {
+          window.setTimeout(() => {
+            get().pullRemoteSave().catch((err: unknown) => {
+              set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
+            })
+          }, 0)
+        }
+      })
+
+      if (session?.user) await get().pullRemoteSave()
     })()
 
     return initPromise
@@ -228,7 +228,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   signInWithPassword: async (email, password) => {
     if (!supabase) return
     set({ status: 'loading', error: null, message: null })
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -236,7 +236,13 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       set({ status: 'error', error: error.message })
       return
     }
-    set({ status: 'signed-in', authMode: 'sign-in', message: 'Login successful.' })
+    set({
+      status: authStatusFromSession(data.session),
+      session: data.session,
+      user: data.session?.user ?? null,
+      authMode: 'sign-in',
+      message: 'Login successful.',
+    })
   },
 
   signUpWithPassword: async (email, password) => {
@@ -251,7 +257,9 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       return
     }
     set({
-      status: data.session ? 'signed-in' : 'signed-out',
+      status: authStatusFromSession(data.session),
+      session: data.session,
+      user: data.session?.user ?? null,
       authMode: 'sign-in',
       message: data.session
         ? 'Account created.'
@@ -281,7 +289,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   verifyRecoveryOtp: async (email, token) => {
     if (!supabase) return
     set({ status: 'loading', error: null, message: null })
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
       type: 'email',
@@ -291,7 +299,9 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       return
     }
     set({
-      status: 'signed-in',
+      status: authStatusFromSession(data.session),
+      session: data.session,
+      user: data.session?.user ?? null,
       authMode: 'password-reset',
       recoveryEmail: null,
       message: 'Code confirmed. Choose a new password.',
@@ -306,10 +316,13 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       set({ status: 'error', error: error.message })
       return
     }
+    await supabase.auth.signOut()
     set({
-      status: 'signed-in',
+      status: 'signed-out',
+      session: null,
+      user: null,
       authMode: 'sign-in',
-      message: 'Password updated.',
+      message: 'Password updated. Sign in again.',
     })
   },
 
@@ -326,6 +339,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       user: null,
       pendingRemote: null,
       remoteChecked: false,
+      authMode: 'sign-in',
       message: 'Signed out. Local progress remains on this device.',
     })
   },

@@ -16,7 +16,19 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
   const { theme, lang, setTheme, setLang } = useSettingsStore()
   const notifsEnabled = useNotifStore(s => s.enabled)
   const setNotifsEnabled = useNotifStore(s => s.setEnabled)
-  const cloud = useCloudSaveStore()
+  const cloudConfigured = useCloudSaveStore(s => s.configured)
+  const cloudStatus = useCloudSaveStore(s => s.status)
+  const cloudUser = useCloudSaveStore(s => s.user)
+  const cloudPendingRemote = useCloudSaveStore(s => s.pendingRemote)
+  const cloudMessage = useCloudSaveStore(s => s.message)
+  const cloudError = useCloudSaveStore(s => s.error)
+  const clearCloudMessage = useCloudSaveStore(s => s.clearMessage)
+  const chooseLocalSave = useCloudSaveStore(s => s.chooseLocal)
+  const chooseRemoteSave = useCloudSaveStore(s => s.chooseRemote)
+  const pullRemoteSave = useCloudSaveStore(s => s.pullRemoteSave)
+  const pushLocalSave = useCloudSaveStore(s => s.pushLocalSave)
+  const signOut = useCloudSaveStore(s => s.signOut)
+  const updatePassword = useCloudSaveStore(s => s.updatePassword)
   const t = useT()
   const ref = useRef<HTMLDivElement>(null)
 
@@ -47,7 +59,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
       setPasswordError(lang === 'en' ? 'Passwords do not match.' : 'As senhas nao conferem.')
       return
     }
-    await cloud.updatePassword(newPassword)
+    await updatePassword(newPassword)
     setNewPassword('')
     setConfirmPassword('')
     setPasswordOpen(false)
@@ -111,48 +123,48 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
 
             {/* Notifications */}
             {!authOnly && (
-            <div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
-                {lang === 'en' ? 'Notifications' : 'Notificações'}
-              </p>
-              <div className="flex gap-2">
-                <button onClick={() => setNotifsEnabled(true)} className={cn(optionBase, notifsEnabled ? optionActive : optionIdle)}>
-                  {lang === 'en' ? 'On' : 'Ativado'}
-                </button>
-                <button onClick={() => setNotifsEnabled(false)} className={cn(optionBase, !notifsEnabled ? optionActive : optionIdle)}>
-                  {lang === 'en' ? 'Off' : 'Desativado'}
-                </button>
+              <div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
+                  {lang === 'en' ? 'Notifications' : 'Notificacoes'}
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setNotifsEnabled(true)} className={cn(optionBase, notifsEnabled ? optionActive : optionIdle)}>
+                    {lang === 'en' ? 'On' : 'Ativado'}
+                  </button>
+                  <button onClick={() => setNotifsEnabled(false)} className={cn(optionBase, !notifsEnabled ? optionActive : optionIdle)}>
+                    {lang === 'en' ? 'Off' : 'Desativado'}
+                  </button>
+                </div>
               </div>
-            </div>
             )}
 
             {/* Account */}
             {!authOnly && (
-            <div>
+              <div>
               <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
                 {lang === 'en' ? 'Account' : 'Conta'}
               </p>
 
-              {!cloud.configured ? (
+              {!cloudConfigured ? (
                 <p className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
                   {lang === 'en'
                     ? 'Supabase is not configured in this build.'
-                    : 'Supabase ainda nÃ£o estÃ¡ configurado neste build.'}
+                    : 'Supabase ainda nao esta configurado neste build.'}
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/30 px-2.5 py-2">
                     <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      {cloud.user?.email}
+                      {cloudUser?.email}
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                      {cloud.status === 'syncing'
+                      {cloudStatus === 'syncing'
                         ? (lang === 'en' ? 'Syncing...' : 'Sincronizando...')
                         : (lang === 'en' ? 'Connected' : 'Conectado')}
                     </p>
                   </div>
 
-                  {cloud.pendingRemote && (
+                  {cloudPendingRemote && (
                     <div className="rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-2">
                       <p className="text-[11px] leading-4 text-indigo-700 dark:text-indigo-300">
                         {lang === 'en'
@@ -162,14 +174,14 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => cloud.chooseLocal()}
+                          onClick={() => chooseLocalSave()}
                           className="rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-900"
                         >
                           {lang === 'en' ? 'Keep local' : 'Manter local'}
                         </button>
                         <button
                           type="button"
-                          onClick={() => cloud.chooseRemote()}
+                          onClick={() => chooseRemoteSave()}
                           className="rounded-md bg-indigo-600 px-2 py-1 text-[10px] font-black text-white hover:bg-indigo-500"
                         >
                           {lang === 'en' ? 'Restore cloud' : 'Restaurar nuvem'}
@@ -181,16 +193,16 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => cloud.pushLocalSave()}
-                      disabled={cloud.status === 'syncing'}
+                      onClick={() => pushLocalSave()}
+                      disabled={cloudStatus === 'syncing'}
                       className={cn(optionBase, optionIdle, 'text-xs disabled:opacity-50')}
                     >
                       {lang === 'en' ? 'Save now' : 'Salvar agora'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => cloud.pullRemoteSave()}
-                      disabled={cloud.status === 'syncing'}
+                      onClick={() => pullRemoteSave()}
+                      disabled={cloudStatus === 'syncing'}
                       className={cn(optionBase, optionIdle, 'text-xs disabled:opacity-50')}
                       title={lang === 'en' ? 'Refresh cloud status' : 'Atualizar status da nuvem'}
                     >
@@ -250,7 +262,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
 
                   <button
                     type="button"
-                    onClick={() => cloud.signOut()}
+                    onClick={() => signOut()}
                     className="py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     {lang === 'en' ? 'Sign out' : 'Sair'}
@@ -258,36 +270,36 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
                 </div>
               )}
 
-              {(cloud.message || cloud.error) && (
+              {(cloudMessage || cloudError) && (
                 <button
                   type="button"
-                  onClick={() => cloud.clearMessage()}
+                  onClick={() => clearCloudMessage()}
                   className={cn(
                     'mt-2 w-full rounded-lg border px-2.5 py-2 text-left text-[11px] leading-4',
-                    cloud.error
+                    cloudError
                       ? 'border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-300'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/30 text-slate-500 dark:text-slate-400',
                   )}
                 >
-                  {cloud.error ?? cloud.message}
+                  {cloudError ?? cloudMessage}
                 </button>
               )}
-            </div>
+              </div>
             )}
 
             {/* Danger zone */}
             {!authOnly && (
-            <div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
-                {lang === 'en' ? 'Danger zone' : 'Zona de risco'}
-              </p>
-              <button
-                onClick={() => { setOpen(false); setResetOpen(true); setResetInput('') }}
-                className="w-full py-1.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-              >
-                🗑 {lang === 'en' ? 'Reset Progress' : 'Resetar Progresso'}
-              </button>
-            </div>
+              <div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
+                  {lang === 'en' ? 'Danger zone' : 'Zona de risco'}
+                </p>
+                <button
+                  onClick={() => { setOpen(false); setResetOpen(true); setResetInput('') }}
+                  className="w-full py-1.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                >
+                  {lang === 'en' ? 'Reset Progress' : 'Resetar Progresso'}
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -309,7 +321,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
                 {lang === 'en'
                   ? 'This will permanently erase your hero, inventory, and map. It cannot be undone.'
-                  : 'Isso irá apagar permanentemente seu herói, inventário e mapa. Não pode ser desfeito.'}
+                  : 'Isso ira apagar permanentemente seu heroi, inventario e mapa. Nao pode ser desfeito.'}
               </p>
             </div>
 
@@ -356,7 +368,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
                     : 'opacity-35 cursor-not-allowed bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-400',
                 )}
               >
-                🗑 {lang === 'en' ? 'Reset Everything' : 'Resetar Tudo'}
+                {lang === 'en' ? 'Reset Everything' : 'Resetar Tudo'}
               </button>
             </div>
           </div>

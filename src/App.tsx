@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import MiniBattlePlayer from './components/MiniBattlePlayer'
 import BattleArena from './components/BattleArena'
 import AuthGate from './components/AuthGate'
+import CloudSaveConflictModal from './components/CloudSaveConflictModal'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
 import HeroPanel from './components/HeroPanel'
@@ -275,6 +276,7 @@ function GameRoot() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <MiniBattlePlayer />
       <NotifToast />
+      <CloudSaveConflictModal />
       <OfflineSyncOverlay
         sync={offlineSync}
         isEn={lang === 'en'}

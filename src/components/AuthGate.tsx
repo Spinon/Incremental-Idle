@@ -19,7 +19,21 @@ function validatePassword(password: string, isEn: boolean): string | null {
 }
 
 export default function AuthGate({ children }: { children: ReactNode }) {
-  const cloud = useCloudSaveStore()
+  const cloudConfigured = useCloudSaveStore(s => s.configured)
+  const cloudStatus = useCloudSaveStore(s => s.status)
+  const authMode = useCloudSaveStore(s => s.authMode)
+  const cloudUser = useCloudSaveStore(s => s.user)
+  const recoveryEmailValue = useCloudSaveStore(s => s.recoveryEmail)
+  const cloudMessage = useCloudSaveStore(s => s.message)
+  const cloudError = useCloudSaveStore(s => s.error)
+  const clearCloudMessage = useCloudSaveStore(s => s.clearMessage)
+  const initCloudSave = useCloudSaveStore(s => s.init)
+  const setAuthMode = useCloudSaveStore(s => s.setAuthMode)
+  const requestPasswordRecovery = useCloudSaveStore(s => s.requestPasswordRecovery)
+  const signInWithPassword = useCloudSaveStore(s => s.signInWithPassword)
+  const signUpWithPassword = useCloudSaveStore(s => s.signUpWithPassword)
+  const updatePassword = useCloudSaveStore(s => s.updatePassword)
+  const verifyRecoveryOtp = useCloudSaveStore(s => s.verifyRecoveryOtp)
   const theme = useSettingsStore(s => s.theme)
   const lang = useSettingsStore(s => s.lang)
   const [email, setEmail] = useState('')
@@ -29,23 +43,22 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [localError, setLocalError] = useState<string | null>(null)
 
   useEffect(() => {
-    cloud.init()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    initCloudSave()
+  }, [initCloudSave])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
-  const busy = cloud.status === 'loading' || cloud.status === 'syncing'
-  const mode = cloud.authMode
+  const busy = cloudStatus === 'loading' || cloudStatus === 'syncing'
+  const mode = authMode
   const isEn = lang === 'en'
   const isSignUp = mode === 'sign-up'
   const isRecoveryRequest = mode === 'password-recovery-request'
   const isRecoveryVerify = mode === 'password-recovery-verify'
   const isPasswordReset = mode === 'password-reset'
 
-  if (cloud.user && !isPasswordReset) return <>{children}</>
+  if (cloudUser && !isPasswordReset) return <>{children}</>
 
   function clearSecrets() {
     setPassword('')
@@ -56,7 +69,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   function switchMode(nextMode: typeof mode) {
     setLocalError(null)
     clearSecrets()
-    cloud.setAuthMode(nextMode)
+    setAuthMode(nextMode)
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -64,13 +77,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     setLocalError(null)
 
     const cleanEmail = email.trim().toLowerCase()
+    const recoveryEmail = (cleanEmail || recoveryEmailValue || '').trim().toLowerCase()
     const emailError = !isPasswordReset ? validateEmail(cleanEmail, isEn) : null
-    if (emailError) return setLocalError(emailError)
+    if (emailError && mode !== 'password-recovery-verify') return setLocalError(emailError)
 
     if (mode === 'sign-in') {
       const passwordError = validatePassword(password, isEn)
       if (passwordError) return setLocalError(passwordError)
-      await cloud.signInWithPassword(cleanEmail, password)
+      await signInWithPassword(cleanEmail, password)
       setPassword('')
       return
     }
@@ -81,22 +95,24 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       if (password !== confirmPassword) {
         return setLocalError(isEn ? 'Passwords do not match.' : 'As senhas nao conferem.')
       }
-      await cloud.signUpWithPassword(cleanEmail, password)
+      await signUpWithPassword(cleanEmail, password)
       clearSecrets()
       return
     }
 
     if (mode === 'password-recovery-request') {
-      await cloud.requestPasswordRecovery(cleanEmail)
+      await requestPasswordRecovery(cleanEmail)
       return
     }
 
     if (mode === 'password-recovery-verify') {
       const code = recoveryCode.replace(/\D/g, '')
+      const recoveryEmailError = validateEmail(recoveryEmail, isEn)
+      if (recoveryEmailError) return setLocalError(recoveryEmailError)
       if (!/^\d{6,8}$/.test(code)) {
         return setLocalError(isEn ? 'Enter the code received by email.' : 'Informe o codigo recebido por e-mail.')
       }
-      await cloud.verifyRecoveryOtp(cleanEmail || cloud.recoveryEmail || '', code)
+      await verifyRecoveryOtp(recoveryEmail, code)
       setRecoveryCode('')
       return
     }
@@ -107,7 +123,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       if (password !== confirmPassword) {
         return setLocalError(isEn ? 'Passwords do not match.' : 'As senhas nao conferem.')
       }
-      await cloud.updatePassword(password)
+      await updatePassword(password)
       clearSecrets()
     }
   }
@@ -156,7 +172,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
           </div>
 
           <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-4">
-            {!cloud.configured && (
+            {!cloudConfigured && (
               <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
                 {isEn ? 'Supabase is not configured in this build.' : 'Supabase nao configurado neste build.'}
               </div>
@@ -233,24 +249,24 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               </label>
             )}
 
-            {(localError || cloud.error || cloud.message) && (
+            {(localError || cloudError || cloudMessage) && (
               <button
                 type="button"
-                onClick={() => { setLocalError(null); cloud.clearMessage() }}
+                onClick={() => { setLocalError(null); clearCloudMessage() }}
                 className={cn(
                   'rounded-md border px-3 py-2 text-left text-xs leading-5',
-                  localError || cloud.error
+                  localError || cloudError
                     ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-200'
                     : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/40 text-slate-500 dark:text-slate-300',
                 )}
               >
-                {localError ?? cloud.error ?? cloud.message}
+                {localError ?? cloudError ?? cloudMessage}
               </button>
             )}
 
             <button
               type="submit"
-              disabled={busy || !cloud.configured}
+              disabled={busy || !cloudConfigured}
               className="rounded-md bg-indigo-500 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-indigo-400 disabled:opacity-40"
             >
               {busy
@@ -294,4 +310,3 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     </div>
   )
 }
-
