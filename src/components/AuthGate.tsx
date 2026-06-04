@@ -7,7 +7,7 @@ import { cn } from '../lib/utils'
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function validateEmail(email: string, isEn: boolean): string | null {
-  if (!emailPattern.test(email)) return isEn ? 'Enter a valid email.' : 'Informe um e-mail valido.'
+  if (!emailPattern.test(email)) return isEn ? 'Enter a valid email.' : 'Informe um e-mail válido.'
   return null
 }
 
@@ -93,7 +93,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       const passwordError = validatePassword(password, isEn)
       if (passwordError) return setLocalError(passwordError)
       if (password !== confirmPassword) {
-        return setLocalError(isEn ? 'Passwords do not match.' : 'As senhas nao conferem.')
+        return setLocalError(isEn ? 'Passwords do not match.' : 'As senhas não conferem.')
       }
       await signUpWithPassword(cleanEmail, password)
       clearSecrets()
@@ -110,7 +110,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       const recoveryEmailError = validateEmail(recoveryEmail, isEn)
       if (recoveryEmailError) return setLocalError(recoveryEmailError)
       if (!/^\d{6,8}$/.test(code)) {
-        return setLocalError(isEn ? 'Enter the code received by email.' : 'Informe o codigo recebido por e-mail.')
+        return setLocalError(isEn ? 'Enter the code received by email.' : 'Informe o código recebido por e-mail.')
       }
       await verifyRecoveryOtp(recoveryEmail, code)
       setRecoveryCode('')
@@ -121,7 +121,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       const passwordError = validatePassword(password, isEn)
       if (passwordError) return setLocalError(passwordError)
       if (password !== confirmPassword) {
-        return setLocalError(isEn ? 'Passwords do not match.' : 'As senhas nao conferem.')
+        return setLocalError(isEn ? 'Passwords do not match.' : 'As senhas não conferem.')
       }
       await updatePassword(password)
       clearSecrets()
@@ -136,7 +136,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         </span>
         <span className="text-slate-300 dark:text-slate-700">|</span>
         <span className="text-slate-400 dark:text-slate-500 text-sm">
-          {isEn ? 'Version' : 'Versao'} v{__APP_VERSION__}
+          {isEn ? 'Version' : 'Versão'} v{__APP_VERSION__}
         </span>
         <div className="ml-auto">
           <SettingsMenu authOnly />
@@ -162,19 +162,19 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               {isSignUp
                 ? (isEn ? 'Create an account to save your progress in the cloud.' : 'Crie uma conta para salvar seu progresso na nuvem.')
                 : isRecoveryRequest
-                  ? (isEn ? 'Enter your account email to receive a code.' : 'Informe o e-mail da sua conta para receber um codigo.')
+                  ? (isEn ? 'Enter your account email to receive a code.' : 'Informe o e-mail da sua conta para receber um código.')
                   : isRecoveryVerify
-                    ? (isEn ? 'Enter the code sent to your email.' : 'Digite o codigo enviado para o seu e-mail.')
+                    ? (isEn ? 'Enter the code sent to your email.' : 'Digite o código enviado para o seu e-mail.')
                     : isPasswordReset
                       ? (isEn ? 'Choose a new password to continue.' : 'Escolha uma nova senha para continuar.')
-                      : (isEn ? 'Sign in to load your save and sync cloud progress.' : 'Faca login para carregar seu save local e sincronizar a nuvem.')}
+                      : (isEn ? 'Sign in to load your save and sync cloud progress.' : 'Faça login para carregar seu save local e sincronizar a nuvem.')}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-4">
             {!cloudConfigured && (
               <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
-                {isEn ? 'Supabase is not configured in this build.' : 'Supabase nao configurado neste build.'}
+                {isEn ? 'Supabase is not configured in this build.' : 'Supabase não configurado neste build.'}
               </div>
             )}
 
@@ -237,7 +237,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
             {isRecoveryVerify && (
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{isEn ? 'Code' : 'Codigo'}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{isEn ? 'Code' : 'Código'}</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -274,9 +274,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
                 : isSignUp
                   ? (isEn ? 'Create account' : 'Criar conta')
                   : isRecoveryRequest
-                    ? (isEn ? 'Send code' : 'Enviar codigo')
+                    ? (isEn ? 'Send code' : 'Enviar código')
                     : isRecoveryVerify
-                      ? (isEn ? 'Confirm code' : 'Confirmar codigo')
+                      ? (isEn ? 'Confirm code' : 'Confirmar código')
                       : isPasswordReset
                         ? (isEn ? 'Update password' : 'Atualizar senha')
                         : (isEn ? 'Sign in' : 'Entrar')}
@@ -290,7 +290,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
                   className="rounded-md border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   {mode === 'sign-up'
-                    ? (isEn ? 'I have an account' : 'Ja tenho conta')
+                    ? (isEn ? 'I have an account' : 'Já tenho conta')
                     : (isEn ? 'Create account' : 'Criar conta')}
                 </button>
                 <button

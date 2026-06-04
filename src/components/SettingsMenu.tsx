@@ -56,7 +56,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
       return
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError(lang === 'en' ? 'Passwords do not match.' : 'As senhas nao conferem.')
+      setPasswordError(lang === 'en' ? 'Passwords do not match.' : 'As senhas não conferem.')
       return
     }
     await updatePassword(newPassword)
@@ -125,7 +125,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
             {!authOnly && (
               <div>
                 <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
-                  {lang === 'en' ? 'Notifications' : 'Notificacoes'}
+                  {lang === 'en' ? 'Notifications' : 'Notificações'}
                 </p>
                 <div className="flex gap-2">
                   <button onClick={() => setNotifsEnabled(true)} className={cn(optionBase, notifsEnabled ? optionActive : optionIdle)}>
@@ -149,7 +149,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
                 <p className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
                   {lang === 'en'
                     ? 'Supabase is not configured in this build.'
-                    : 'Supabase ainda nao esta configurado neste build.'}
+                    : 'Supabase ainda não está configurado neste build.'}
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -321,7 +321,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
                 {lang === 'en'
                   ? 'This will permanently erase your hero, inventory, and map. It cannot be undone.'
-                  : 'Isso ira apagar permanentemente seu heroi, inventario e mapa. Nao pode ser desfeito.'}
+                  : 'Isso irá apagar permanentemente seu herói, inventário e mapa. Não pode ser desfeito.'}
               </p>
             </div>
 

@@ -27,7 +27,7 @@ export default function CloudSaveConflictModal() {
           <p className="text-sm leading-6 text-slate-300">
             {isEn
               ? 'The cloud save and this device are different enough that the game will not overwrite either one automatically.'
-              : 'O save da nuvem e o deste dispositivo estao diferentes. O jogo nao vai sobrescrever nenhum deles automaticamente.'}
+              : 'O save da nuvem e o deste dispositivo estão diferentes. O jogo não vai sobrescrever nenhum deles automaticamente.'}
           </p>
           <p className="mt-3 rounded-md border border-amber-800/70 bg-amber-950/30 px-3 py-2 text-xs leading-5 text-amber-200">
             {isEn
@@ -56,4 +56,3 @@ export default function CloudSaveConflictModal() {
     </div>
   )
 }
-
