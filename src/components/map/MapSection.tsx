@@ -4,6 +4,7 @@ import { useHeroStore } from '../../store/heroStore'
 import { useInventoryStore } from '../../store/inventoryStore'
 import { useSpellStore } from '../../store/spellStore'
 import { useQuestStore } from '../../store/questStore'
+import { useUIStore } from '../../store/uiStore'
 import { getDerivedStats } from '../../formulas/derived'
 import { getEquipmentBonuses } from '../../formulas/items'
 import { applySpellBuffs } from '../../formulas/spells'
@@ -52,7 +53,6 @@ export default function MapSection() {
   const [zoom,        setZoom]        = useState(1.0)
   const [cameraPos,   setCameraPos]   = useState({ x: 0, y: 0 })
   const [selectedPos, setSelectedPos] = useState<{ x: number; y: number } | null>(null)
-  const [teleportSelecting, setTeleportSelecting] = useState(false)
 
   const grid           = useMapStore(s => s.grid)
 
@@ -79,6 +79,10 @@ export default function MapSection() {
   const setAutoExplore = useMapStore(s => s.setAutoExplore)
   const toggleRiskMode = useMapStore(s => s.toggleRiskMode)
   const goHome         = useMapStore(s => s.goHome)
+  const teleportSelecting = useUIStore(s => s.blueTowerTeleportSelecting)
+  const teleportOrigin = useUIStore(s => s.blueTowerTeleportOrigin)
+  const setTeleportSelecting = useUIStore(s => s.setBlueTowerTeleportSelecting)
+  const setTeleportOrigin = useUIStore(s => s.setBlueTowerTeleportOrigin)
 
   useEffect(() => {
     if (!draggingId) return
@@ -100,6 +104,7 @@ export default function MapSection() {
     activeBuffs,
   )
   const t       = useT()
+  const lang    = useSettingsStore(s => s.lang)
 
   const maxDeck = Math.min(8, 3 + Math.floor(derived.vision / 50))
 
@@ -139,6 +144,14 @@ export default function MapSection() {
   const selectedSight = selectedPos && !selectedTile
     ? (sightedCells[gridKey(selectedPos.x, selectedPos.y)] ?? null)
     : null
+  const playerTile = grid[gridKey(playerPos.x, playerPos.y)] ?? null
+  const playerIsOnBlueTower = playerTile?.content.type === 'blueTower' && playerTile.explored
+
+  useEffect(() => {
+    if (!teleportSelecting || !teleportOrigin) return
+    setSelectedPos(teleportOrigin)
+    setCameraPos(teleportOrigin)
+  }, [teleportOrigin, teleportSelecting])
 
   // Vision radius (same formula as MapViewport)
   const visRadius = Math.max(2, Math.round(derived.vision / 38))
@@ -146,11 +159,13 @@ export default function MapSection() {
   function handleTileClick(x: number, y: number) {
     if (teleportSelecting) {
       const tile = grid[gridKey(x, y)]
-      if (tile?.content.type === 'blueTower' && tile.explored && !(playerPos.x === x && playerPos.y === y)) {
+      const isOrigin = teleportOrigin?.x === x && teleportOrigin.y === y
+      if (tile?.content.type === 'blueTower' && tile.explored && !isOrigin && !(playerPos.x === x && playerPos.y === y)) {
         if (teleportToBlueTower(x, y)) {
           setSelectedPos({ x, y })
           setCameraPos({ x, y })
           setTeleportSelecting(false)
+          setTeleportOrigin(null)
         }
         return
       }
@@ -331,11 +346,36 @@ export default function MapSection() {
                 heroLevel={heroLevel}
                 tilesPlaced={tilesPlaced}
                 isDestination={!!(destination?.x === selectedPos.x && destination?.y === selectedPos.y)}
+                canUseBlueTowerTeleport={playerIsOnBlueTower && selectedPos.x === playerPos.x && selectedPos.y === playerPos.y}
                 onGo={handleGoToSelected}
                 teleportSelecting={teleportSelecting}
-                onTeleport={() => setTeleportSelecting(true)}
-                onCancelTeleport={() => setTeleportSelecting(false)}
+                onTeleport={() => {
+                  if (!playerIsOnBlueTower || selectedPos.x !== playerPos.x || selectedPos.y !== playerPos.y) return
+                  setTeleportOrigin(selectedPos)
+                  setTeleportSelecting(true)
+                }}
+                onCancelTeleport={() => {
+                  setTeleportSelecting(false)
+                  setTeleportOrigin(null)
+                }}
               />
+            </div>
+          )}
+
+          {teleportSelecting && !selectedPos && (
+            <div className="rounded-xl border border-sky-400/30 bg-sky-950/10 dark:bg-sky-950/25 p-3 flex items-center gap-3">
+              <p className="text-xs font-semibold text-sky-600 dark:text-sky-300">
+                {lang === 'en' ? 'Select another Blue Tower.' : 'Selecione outra torre Azul.'}
+              </p>
+              <button
+                onClick={() => {
+                  setTeleportSelecting(false)
+                  setTeleportOrigin(null)
+                }}
+                className="ml-auto rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border border-slate-300/60 dark:border-slate-600 text-slate-500 hover:bg-slate-500/10 transition-colors"
+              >
+                {lang === 'en' ? 'Cancel' : 'Cancelar'}
+              </button>
             </div>
           )}
 
@@ -535,6 +575,7 @@ function ActiveTileInfoPanel({
   heroLevel,
   tilesPlaced = 0,
   isDestination,
+  canUseBlueTowerTeleport,
   onGo,
   teleportSelecting,
   onTeleport,
@@ -546,6 +587,7 @@ function ActiveTileInfoPanel({
   heroLevel: number
   tilesPlaced?: number
   isDestination: boolean
+  canUseBlueTowerTeleport: boolean
   onGo(): void
   teleportSelecting: boolean
   onTeleport(): void
@@ -606,7 +648,7 @@ function ActiveTileInfoPanel({
 
   const levelDelta = level == null ? null : level - heroLevel
   const canGo = !!tile && !isDestination
-  const canTeleport = !!tile && isBlueTower && explored
+  const canTeleport = !!tile && isBlueTower && explored && canUseBlueTowerTeleport
   const blueTowerDescription = teleportSelecting
     ? (isEn ? 'Select another Blue Tower.' : 'Selecione outra torre Azul.')
     : isBlocked

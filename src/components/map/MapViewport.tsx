@@ -155,10 +155,14 @@ export default function MapViewport({
       const tile = grid[gridKey(gx, gy)] ?? null
       const dist = Math.max(Math.abs(gx - playerPos.x), Math.abs(gy - playerPos.y))
 
-      const vis: Visibility =
+      const rawVis: Visibility =
         dist <= visRadius     ? 'clear'    :
         dist <= visRadius + 2 ? 'penumbra' :
                                 'fog'
+      const vis: Visibility =
+        tile?.content.type === 'blueTower' && tile.explored
+          ? 'clear'
+          : rawVis
 
       const sight = (!tile && vis !== 'fog') ? (sightedCells[gridKey(gx, gy)] ?? null) : null
       const placement = placementState(gx, gy)

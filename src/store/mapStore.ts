@@ -642,11 +642,23 @@ export const useMapStore = create<MapStore>()(
         // intentionally no queueEnemy call — battle starts on next moveOneStep
       },
 
-      exitBlueTower: () => set((st) => {
-        st.scene = 'map'
-        st.blueTowerAutoTarget = null
-        st.blueTowerEntryFrom = null
-      }),
+      exitBlueTower: () => {
+        let movedToX: number | null = null
+        let movedToY: number | null = null
+        set((st) => {
+          const exit = chooseTowerExit(st.grid, st.playerPos, st.blueTowerEntryFrom, null)
+          if (exit) {
+            st.playerPos = exit
+            st.destination = null
+            movedToX = exit.x
+            movedToY = exit.y
+          }
+          st.scene = 'map'
+          st.blueTowerAutoTarget = null
+          st.blueTowerEntryFrom = null
+        })
+        if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
+      },
 
       autoExitBlueTower: () => {
         let movedToX: number | null = null

@@ -17,6 +17,10 @@ interface UIStore {
   setShowMiniPlayer(v: boolean): void
   activeTab: AppTab
   setActiveTab(tab: AppTab): void
+  blueTowerTeleportSelecting: boolean
+  blueTowerTeleportOrigin: { x: number; y: number } | null
+  setBlueTowerTeleportSelecting(v: boolean): void
+  setBlueTowerTeleportOrigin(pos: { x: number; y: number } | null): void
   sceneAuto: SceneAutoState
   configureSceneAuto(kind: SceneAutoKind, durationMs: number, active: boolean): void
   setSceneAutoElapsed(elapsedMs: number): void
@@ -30,6 +34,10 @@ export const useUIStore = create<UIStore>()((set) => ({
   setShowMiniPlayer: (v) => set({ showMiniPlayer: v }),
   activeTab:   'battle',
   setActiveTab: (tab) => set({ activeTab: tab }),
+  blueTowerTeleportSelecting: false,
+  blueTowerTeleportOrigin: null,
+  setBlueTowerTeleportSelecting: (v) => set({ blueTowerTeleportSelecting: v }),
+  setBlueTowerTeleportOrigin: (pos) => set({ blueTowerTeleportOrigin: pos }),
   sceneAuto: {
     kind: null,
     active: false,

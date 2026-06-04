@@ -1,7 +1,5 @@
 import { useEffect } from 'react'
 import { useMapStore, gridKey } from '../store/mapStore'
-import { useBattleStore } from '../store/battleStore'
-import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useUIStore } from '../store/uiStore'
 
@@ -19,9 +17,9 @@ export default function TowerInterior() {
   const setSceneAutoElapsed = useUIStore(s => s.setSceneAutoElapsed)
   const pauseSceneAuto = useUIStore(s => s.pauseSceneAuto)
   const clearSceneAuto = useUIStore(s => s.clearSceneAuto)
-  const queueEnemy = useBattleStore(s => s.queueEnemy)
-  const resetBattle = useBattleStore(s => s.reset)
-  const heroLevel = useHeroStore(s => s.level)
+  const setActiveTab = useUIStore(s => s.setActiveTab)
+  const setBlueTowerTeleportSelecting = useUIStore(s => s.setBlueTowerTeleportSelecting)
+  const setBlueTowerTeleportOrigin = useUIStore(s => s.setBlueTowerTeleportOrigin)
 
   const isEn = lang === 'en'
   const currentTile = grid[gridKey(playerPos.x, playerPos.y)]
@@ -32,19 +30,19 @@ export default function TowerInterior() {
   const pct = Math.min(100, (elapsed / AUTO_TELEPORT_MS) * 100)
   const sec = Math.ceil(Math.max(0, (AUTO_TELEPORT_MS - elapsed) / 1000))
 
-  function prepareNextBattle() {
-    queueEnemy(Math.max(1, heroLevel), undefined, 'normal', useMapStore.getState().tilesPlaced)
-    resetBattle()
-  }
-
   function returnToMap() {
-    prepareNextBattle()
     exitBlueTower()
   }
 
-  function teleportNow() {
-    prepareNextBattle()
+  function autoLeaveTower() {
     autoExitBlueTower()
+  }
+
+  function startTeleportSelection() {
+    setBlueTowerTeleportOrigin({ x: playerPos.x, y: playerPos.y })
+    exitBlueTower()
+    setBlueTowerTeleportSelecting(true)
+    setActiveTab('map')
   }
 
   useEffect(() => {
@@ -59,7 +57,7 @@ export default function TowerInterior() {
       const current = Date.now() - startedAt
       if (current >= AUTO_TELEPORT_MS) {
         clearInterval(id)
-        teleportNow()
+        autoLeaveTower()
       } else {
         setSceneAutoElapsed(current)
       }
@@ -119,14 +117,14 @@ export default function TowerInterior() {
             onClick={returnToMap}
             className="py-2 rounded-lg text-sm font-semibold border border-sky-700/50 bg-sky-950/25 text-sky-300 hover:bg-sky-900/35 transition-colors"
           >
-            {isEn ? 'Return to map' : 'Voltar ao mapa'}
+            {isEn ? 'Leave' : 'Sair'}
           </button>
           <button
             type="button"
-            onClick={teleportNow}
+            onClick={startTeleportSelection}
             className="py-2 rounded-lg text-sm font-black border border-sky-400/60 bg-sky-500/20 text-sky-100 hover:bg-sky-500/30 transition-colors"
           >
-            {hasTeleportTarget ? 'Teleport' : (isEn ? 'Leave' : 'Sair')}
+            Teleport
           </button>
         </div>
       </div>
