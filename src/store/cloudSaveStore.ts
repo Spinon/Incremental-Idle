@@ -336,14 +336,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     const remote = get().pendingRemote
     if (!remote) return
     applyLocalSaveSnapshot(remote.save_data)
-    set({
-      pendingRemote: null,
-      remoteUpdatedAt: remote.updated_at,
-      localSnapshotAt: remote.local_updated_at,
-      remoteChecked: true,
-      message: 'Cloud save restored. Reloading...',
-    })
-    window.setTimeout(() => window.location.reload(), 250)
+    window.location.reload()
   },
 
   clearMessage: () => set({ message: null, error: null }),
