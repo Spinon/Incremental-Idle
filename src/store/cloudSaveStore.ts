@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import {
   CLOUD_SAVE_SLOT_KEY,
+  SAVE_KEYS,
   SAVE_SCHEMA_VERSION,
   applyLocalSaveSnapshot,
   captureLocalSaveSnapshot,
@@ -51,6 +52,65 @@ function compareIso(a: string | null | undefined, b: string | null | undefined):
   const av = a ? Date.parse(a) : 0
   const bv = b ? Date.parse(b) : 0
   return av - bv
+}
+
+function readPersistedState(snapshot: LocalSaveSnapshot, key: keyof typeof SAVE_KEYS): Record<string, unknown> {
+  const raw = snapshot.entries[SAVE_KEYS[key]]
+  if (!raw) return {}
+
+  try {
+    const parsed = JSON.parse(raw)
+    const state = parsed?.state
+    return state && typeof state === 'object' && !Array.isArray(state) ? state : {}
+  } catch {
+    return {}
+  }
+}
+
+function num(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function saveSummary(snapshot: LocalSaveSnapshot) {
+  const hero = readPersistedState(snapshot, 'hero')
+  const map = readPersistedState(snapshot, 'map')
+  const inventory = readPersistedState(snapshot, 'inventory')
+  const spells = readPersistedState(snapshot, 'spells')
+  const quests = readPersistedState(snapshot, 'quests')
+
+  return {
+    entryCount: Object.keys(snapshot.entries).length,
+    level: num(hero.level),
+    xp: num(hero.xp),
+    gold: num(hero.gold),
+    tilesPlaced: num(map.tilesPlaced),
+    inventoryCount: Array.isArray(inventory.inventory) ? inventory.inventory.length : 0,
+    earnedWordCount: Array.isArray(spells.earnedWordIds) ? spells.earnedWordIds.length : 0,
+    questCount: Array.isArray(quests.quests) ? quests.quests.length : 0,
+  }
+}
+
+function hasMeaningfulDifference(local: LocalSaveSnapshot, remote: LocalSaveSnapshot): boolean {
+  const l = saveSummary(local)
+  const r = saveSummary(remote)
+
+  if (l.entryCount === 0 || r.entryCount === 0) return true
+  if (Math.abs(l.entryCount - r.entryCount) >= 3) return true
+  if (Math.abs(l.level - r.level) >= 2) return true
+  if (Math.abs(l.tilesPlaced - r.tilesPlaced) >= 5) return true
+  if (Math.abs(l.inventoryCount - r.inventoryCount) >= 5) return true
+  if (Math.abs(l.earnedWordCount - r.earnedWordCount) >= 3) return true
+  if (Math.abs(l.questCount - r.questCount) >= 2) return true
+
+  const goldGap = Math.abs(l.gold - r.gold)
+  const biggestGold = Math.max(l.gold, r.gold)
+  if (goldGap >= 100 && goldGap / Math.max(1, biggestGold) >= 0.25) return true
+
+  const xpGap = Math.abs(l.xp - r.xp)
+  const biggestXp = Math.max(l.xp, r.xp)
+  if (xpGap >= 100 && xpGap / Math.max(1, biggestXp) >= 0.25) return true
+
+  return false
 }
 
 async function fetchRemoteSave(userId: string): Promise<CloudSaveRow | null> {
@@ -206,29 +266,33 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     try {
       const remote = await fetchRemoteSave(user.id)
       const hadLocalUpdatedAt = getLocalSaveUpdatedAt() !== null
-      const local = captureLocalSaveSnapshot()
+      const local = captureLocalSaveSnapshot({ markChanged: false })
       if (!remote) {
         await get().pushLocalSave()
         return
       }
 
       const remoteSnapshot = remote.save_data
-      const hasLocalProgress = Object.keys(local.entries).length > 0
-      if (!hadLocalUpdatedAt && hasLocalProgress && remote.local_save_id !== local.localSaveId) {
+      const sameDevice = remote.local_save_id === local.localSaveId
+      const shouldAskPlayer = !sameDevice && (
+        !hadLocalUpdatedAt ||
+        hasMeaningfulDifference(local, remoteSnapshot)
+      )
+
+      if (shouldAskPlayer) {
         set({
           status: 'signed-in',
           pendingRemote: remote,
           remoteUpdatedAt: remote.updated_at,
           localSnapshotAt: local.capturedAt,
           remoteChecked: true,
-          message: 'Cloud save found. Choose which progress to keep.',
+          message: 'Cloud and local progress differ. Choose which one to keep.',
         })
         return
       }
 
       const localIsNewer = compareIso(local.capturedAt, remote.local_updated_at) > 0
       const remoteIsNewer = compareIso(remote.local_updated_at, local.capturedAt) > 0
-      const sameDevice = remote.local_save_id === local.localSaveId
 
       if (remoteIsNewer && !sameDevice) {
         set({

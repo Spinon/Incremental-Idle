@@ -82,18 +82,21 @@ export function markLocalSaveChanged(date = new Date()): string {
   return value
 }
 
-export function captureLocalSaveSnapshot(): LocalSaveSnapshot {
+export function captureLocalSaveSnapshot(options: { markChanged?: boolean } = {}): LocalSaveSnapshot {
   const entries: LocalSaveSnapshot['entries'] = {}
   for (const key of Object.values(SAVE_KEYS)) {
     const value = localStorage.getItem(key)
     if (value !== null) entries[key] = value
   }
 
+  const existingUpdatedAt = getLocalSaveUpdatedAt()
+  const shouldMarkChanged = options.markChanged !== false
+
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     appVersion: __APP_VERSION__,
     localSaveId: getLocalSaveId(),
-    capturedAt: getLocalSaveUpdatedAt() ?? markLocalSaveChanged(),
+    capturedAt: existingUpdatedAt ?? (shouldMarkChanged ? markLocalSaveChanged() : ''),
     entries,
   }
 }
