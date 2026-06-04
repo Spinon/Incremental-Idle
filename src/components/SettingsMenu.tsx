@@ -9,7 +9,10 @@ export default function SettingsMenu() {
   const [open, setOpen]           = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetInput, setResetInput] = useState('')
-  const [email, setEmail] = useState('')
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
   const { theme, lang, setTheme, setLang } = useSettingsStore()
   const notifsEnabled = useNotifStore(s => s.enabled)
   const setNotifsEnabled = useNotifStore(s => s.setEnabled)
@@ -34,10 +37,20 @@ export default function SettingsMenu() {
     window.location.reload()
   }
 
-  async function handleCloudLogin() {
-    const trimmed = email.trim()
-    if (!trimmed) return
-    await cloud.signInWithEmail(trimmed)
+  async function handlePasswordUpdate() {
+    setPasswordError(null)
+    if (newPassword.length < 6) {
+      setPasswordError(lang === 'en' ? 'Password must have at least 6 characters.' : 'A senha precisa ter pelo menos 6 caracteres.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(lang === 'en' ? 'Passwords do not match.' : 'As senhas nao conferem.')
+      return
+    }
+    await cloud.updatePassword(newPassword)
+    setNewPassword('')
+    setConfirmPassword('')
+    setPasswordOpen(false)
   }
 
   const optionBase   = 'flex-1 py-1.5 rounded-lg text-sm font-medium border transition-all text-center'
@@ -111,10 +124,10 @@ export default function SettingsMenu() {
               </div>
             </div>
 
-            {/* Cloud save */}
+            {/* Account */}
             <div>
               <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
-                {lang === 'en' ? 'Cloud save' : 'Save na nuvem'}
+                {lang === 'en' ? 'Account' : 'Conta'}
               </p>
 
               {!cloud.configured ? (
@@ -123,11 +136,11 @@ export default function SettingsMenu() {
                     ? 'Supabase is not configured in this build.'
                     : 'Supabase ainda nÃ£o estÃ¡ configurado neste build.'}
                 </p>
-              ) : cloud.user ? (
+              ) : (
                 <div className="flex flex-col gap-2">
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/30 px-2.5 py-2">
                     <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      {cloud.user.email}
+                      {cloud.user?.email}
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
                       {cloud.status === 'syncing'
@@ -176,10 +189,61 @@ export default function SettingsMenu() {
                       onClick={() => cloud.pullRemoteSave()}
                       disabled={cloud.status === 'syncing'}
                       className={cn(optionBase, optionIdle, 'text-xs disabled:opacity-50')}
+                      title={lang === 'en' ? 'Refresh cloud status' : 'Atualizar status da nuvem'}
                     >
-                      {lang === 'en' ? 'Check cloud' : 'Ver nuvem'}
+                      {lang === 'en' ? 'Refresh' : 'Atualizar'}
                     </button>
                   </div>
+
+                  {passwordOpen && (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/30 p-2.5">
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          placeholder={lang === 'en' ? 'New password' : 'Nova senha'}
+                          className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-400"
+                        />
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          placeholder={lang === 'en' ? 'Confirm password' : 'Confirmar senha'}
+                          className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-400"
+                        />
+                        {passwordError && (
+                          <p className="text-[10px] leading-4 text-red-500 dark:text-red-300">{passwordError}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setPasswordOpen(false); setPasswordError(null); setNewPassword(''); setConfirmPassword('') }}
+                            className="rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-500 dark:text-slate-300"
+                          >
+                            {lang === 'en' ? 'Cancel' : 'Cancelar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handlePasswordUpdate}
+                            className="rounded-md bg-indigo-600 px-2 py-1 text-[10px] font-black text-white hover:bg-indigo-500"
+                          >
+                            {lang === 'en' ? 'Update' : 'Alterar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!passwordOpen && (
+                    <button
+                      type="button"
+                      onClick={() => setPasswordOpen(true)}
+                      className="py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      {lang === 'en' ? 'Change password' : 'Alterar senha'}
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -187,25 +251,6 @@ export default function SettingsMenu() {
                     className="py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     {lang === 'en' ? 'Sign out' : 'Sair'}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleCloudLogin() }}
-                    placeholder={lang === 'en' ? 'email@example.com' : 'email@exemplo.com'}
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCloudLogin}
-                    disabled={cloud.status === 'loading' || email.trim().length === 0}
-                    className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-black text-white transition-colors hover:bg-indigo-500 disabled:opacity-40"
-                  >
-                    {lang === 'en' ? 'Send magic link' : 'Enviar link de login'}
                   </button>
                 </div>
               )}

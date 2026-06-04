@@ -13,6 +13,7 @@ import {
 } from './save'
 
 type CloudStatus = 'idle' | 'loading' | 'signed-out' | 'signed-in' | 'syncing' | 'error'
+type AuthMode = 'sign-in' | 'sign-up' | 'password-recovery-request' | 'password-recovery-verify' | 'password-reset'
 
 interface CloudSaveRow {
   user_id: string
@@ -28,6 +29,9 @@ interface CloudSaveRow {
 
 interface CloudSaveStore {
   configured: boolean
+  initialized: boolean
+  authMode: AuthMode
+  recoveryEmail: string | null
   status: CloudStatus
   session: Session | null
   user: User | null
@@ -39,7 +43,12 @@ interface CloudSaveStore {
   pendingRemote: CloudSaveRow | null
 
   init(): Promise<void>
-  signInWithEmail(email: string): Promise<void>
+  setAuthMode(mode: AuthMode): void
+  signInWithPassword(email: string, password: string): Promise<void>
+  signUpWithPassword(email: string, password: string): Promise<void>
+  requestPasswordRecovery(email: string): Promise<void>
+  verifyRecoveryOtp(email: string, token: string): Promise<void>
+  updatePassword(password: string): Promise<void>
   signOut(): Promise<void>
   pushLocalSave(): Promise<void>
   pullRemoteSave(): Promise<void>
@@ -47,6 +56,8 @@ interface CloudSaveStore {
   chooseRemote(): Promise<void>
   clearMessage(): void
 }
+
+let initPromise: Promise<void> | null = null
 
 function compareIso(a: string | null | undefined, b: string | null | undefined): number {
   const av = a ? Date.parse(a) : 0
@@ -152,6 +163,9 @@ async function upsertSnapshot(userId: string, snapshot: LocalSaveSnapshot): Prom
 
 export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   configured: isSupabaseConfigured,
+  initialized: false,
+  authMode: 'sign-in',
+  recoveryEmail: null,
   status: isSupabaseConfigured ? 'idle' : 'error',
   session: null,
   user: null,
@@ -164,11 +178,14 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
   init: async () => {
     if (!supabase) return
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
     set({ status: 'loading', error: null })
 
     const { data, error } = await supabase.auth.getSession()
     if (error) {
-      set({ status: 'error', error: error.message })
+      set({ status: 'error', error: error.message, initialized: true })
       return
     }
 
@@ -178,15 +195,18 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       session,
       user: session?.user ?? null,
       remoteChecked: false,
+      initialized: true,
     })
 
-    supabase.auth.onAuthStateChange((_event, nextSession) => {
+    supabase.auth.onAuthStateChange((event, nextSession) => {
       set({
         session: nextSession,
         user: nextSession?.user ?? null,
         status: nextSession ? 'signed-in' : 'signed-out',
+        authMode: event === 'PASSWORD_RECOVERY' ? 'password-reset' : get().authMode,
         pendingRemote: null,
         remoteChecked: false,
+        initialized: true,
       })
       if (nextSession?.user) {
         window.setTimeout(() => {
@@ -198,16 +218,53 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     })
 
     if (session?.user) await get().pullRemoteSave()
+    })()
+
+    return initPromise
   },
 
-  signInWithEmail: async (email) => {
+  setAuthMode: (authMode) => set({ authMode, message: null, error: null }),
+
+  signInWithPassword: async (email, password) => {
+    if (!supabase) return
+    set({ status: 'loading', error: null, message: null })
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+    if (error) {
+      set({ status: 'error', error: error.message })
+      return
+    }
+    set({ status: 'signed-in', authMode: 'sign-in', message: 'Login successful.' })
+  },
+
+  signUpWithPassword: async (email, password) => {
+    if (!supabase) return
+    set({ status: 'loading', error: null, message: null })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    })
+    if (error) {
+      set({ status: 'error', error: error.message })
+      return
+    }
+    set({
+      status: data.session ? 'signed-in' : 'signed-out',
+      authMode: 'sign-in',
+      message: data.session
+        ? 'Account created.'
+        : 'Account created. Check your email to confirm before logging in.',
+    })
+  },
+
+  requestPasswordRecovery: async (email) => {
     if (!supabase) return
     set({ status: 'loading', error: null, message: null })
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: window.location.origin + window.location.pathname,
-      },
+      options: { shouldCreateUser: false },
     })
     if (error) {
       set({ status: 'error', error: error.message })
@@ -215,7 +272,44 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     }
     set({
       status: 'signed-out',
-      message: 'Magic link sent. Check your email to finish signing in.',
+      authMode: 'password-recovery-verify',
+      recoveryEmail: email,
+      message: 'Recovery code sent. Check your email.',
+    })
+  },
+
+  verifyRecoveryOtp: async (email, token) => {
+    if (!supabase) return
+    set({ status: 'loading', error: null, message: null })
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    })
+    if (error) {
+      set({ status: 'error', error: error.message })
+      return
+    }
+    set({
+      status: 'signed-in',
+      authMode: 'password-reset',
+      recoveryEmail: null,
+      message: 'Code confirmed. Choose a new password.',
+    })
+  },
+
+  updatePassword: async (password) => {
+    if (!supabase) return
+    set({ status: 'loading', error: null, message: null })
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) {
+      set({ status: 'error', error: error.message })
+      return
+    }
+    set({
+      status: 'signed-in',
+      authMode: 'sign-in',
+      message: 'Password updated.',
     })
   },
 

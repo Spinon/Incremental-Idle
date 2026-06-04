@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import MiniBattlePlayer from './components/MiniBattlePlayer'
 import BattleArena from './components/BattleArena'
+import AuthGate from './components/AuthGate'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
 import HeroPanel from './components/HeroPanel'
@@ -323,5 +324,9 @@ function GameRoot() {
 }
 
 export default function App() {
-  return <GameRoot />
+  return (
+    <AuthGate>
+      <GameRoot />
+    </AuthGate>
+  )
 }
