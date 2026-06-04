@@ -7,7 +7,6 @@ const AUTO_TELEPORT_MS = 6000
 
 export default function TowerInterior() {
   const exitBlueTower = useMapStore(s => s.exitBlueTower)
-  const autoExitBlueTower = useMapStore(s => s.autoExitBlueTower)
   const blueTowerAutoTarget = useMapStore(s => s.blueTowerAutoTarget)
   const playerPos = useMapStore(s => s.playerPos)
   const grid = useMapStore(s => s.grid)
@@ -35,7 +34,7 @@ export default function TowerInterior() {
   }
 
   function autoLeaveTower() {
-    autoExitBlueTower()
+    exitBlueTower()
   }
 
   function startTeleportSelection() {
@@ -63,7 +62,7 @@ export default function TowerInterior() {
       }
     }, 50)
     return () => clearInterval(id)
-  }, [autoExitBlueTower, elapsed, paused, setSceneAutoElapsed])
+  }, [elapsed, exitBlueTower, paused, setSceneAutoElapsed])
 
   return (
     <div
