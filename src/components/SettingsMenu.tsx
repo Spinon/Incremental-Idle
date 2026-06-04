@@ -5,7 +5,7 @@ import { useNotifStore } from '../store/notifStore'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
-export default function SettingsMenu() {
+export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean }) {
   const [open, setOpen]           = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetInput, setResetInput] = useState('')
@@ -110,6 +110,7 @@ export default function SettingsMenu() {
             </div>
 
             {/* Notifications */}
+            {!authOnly && (
             <div>
               <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
                 {lang === 'en' ? 'Notifications' : 'Notificações'}
@@ -123,8 +124,10 @@ export default function SettingsMenu() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Account */}
+            {!authOnly && (
             <div>
               <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
                 {lang === 'en' ? 'Account' : 'Conta'}
@@ -270,8 +273,10 @@ export default function SettingsMenu() {
                 </button>
               )}
             </div>
+            )}
 
             {/* Danger zone */}
+            {!authOnly && (
             <div>
               <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
                 {lang === 'en' ? 'Danger zone' : 'Zona de risco'}
@@ -283,6 +288,7 @@ export default function SettingsMenu() {
                 🗑 {lang === 'en' ? 'Reset Progress' : 'Resetar Progresso'}
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
