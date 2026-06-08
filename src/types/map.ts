@@ -9,6 +9,11 @@ export interface TileContent {
   monsterType?: string
   /** Monster rarity string (MonsterRarity) */
   monsterRarity?: string
+  /** Bounty quest bound to this tile; makes the monster encounter special. */
+  bountyQuestId?: string
+  bountyTargetName?: string
+  bountyTargetNameEn?: string
+  bountyIsNpc?: boolean
 }
 
 export interface MapTile {

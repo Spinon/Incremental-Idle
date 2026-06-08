@@ -13,6 +13,7 @@ import type { Biome, Direction, MapTile, PlacedTile, TileContent } from '../type
 import type { MarketOffer } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import type { QuestObjectiveBounty } from '../types/quest'
 
 export const DIR_OPPOSITE: Record<Direction, Direction> = { N: 'S', S: 'N', E: 'W', W: 'E' }
 export const DIR_DELTA: Record<Direction, { dx: number; dy: number }> = {
@@ -97,6 +98,9 @@ interface TileEnemyQueue {
   tilesPlaced: number
   enraged: boolean
   questId?: string
+  targetName?: string
+  targetNameEn?: string
+  isNpc?: boolean
 }
 
 interface TileEntryResult {
@@ -106,9 +110,71 @@ interface TileEntryResult {
 
 type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
 
+function contentFromBounty(bounty: BountyTileEntry): TileContent {
+  return {
+    type: 'monster',
+    monsterLevel: bounty.targetLevel,
+    monsterType: bounty.monsterType,
+    monsterRarity: bounty.targetRarity,
+    bountyQuestId: bounty.questId,
+    bountyTargetName: bounty.targetName,
+    bountyTargetNameEn: bounty.targetNameEn,
+    bountyIsNpc: bounty.isNpc,
+  }
+}
+
+function bountyFromTileContent(tile: PlacedTile): BountyTileEntry | null {
+  if (tile.content.type !== 'monster' || !tile.content.bountyQuestId) return null
+  return {
+    questId: tile.content.bountyQuestId,
+    targetName: tile.content.bountyTargetName ?? tile.content.monsterType ?? 'Bounty',
+    targetNameEn: tile.content.bountyTargetNameEn ?? tile.content.bountyTargetName ?? tile.content.monsterType ?? 'Bounty',
+    monsterType: tile.content.monsterType ?? 'bandit',
+    targetLevel: tile.content.monsterLevel ?? tile.level,
+    targetRarity: (tile.content.monsterRarity ?? 'normal') as MonsterRarity,
+    isNpc: !!tile.content.bountyIsNpc,
+  }
+}
+
+function bountyFromQuest(questId: string, objective: QuestObjectiveBounty): BountyTileEntry {
+  return {
+    questId,
+    targetName: objective.targetName,
+    targetNameEn: objective.targetNameEn,
+    monsterType: objective.monsterType,
+    targetLevel: objective.targetLevel,
+    targetRarity: objective.targetRarity as MonsterRarity,
+    isNpc: objective.isNpc,
+  }
+}
+
+function applyBountyToTile(tile: PlacedTile | undefined, bounty: BountyTileEntry): void {
+  if (!tile || tile.explored) return
+  tile.content = contentFromBounty(bounty)
+  tile.level = Math.max(tile.level, bounty.targetLevel)
+}
+
+function reconcileActiveBounties(st: Pick<MapStore, 'bountyTiles' | 'grid'>): void {
+  const activeBountyKeys = new Set<string>()
+  const quests = useQuestStore.getState().quests
+  for (const quest of quests) {
+    if (quest.status !== 'active' || quest.objective.type !== 'bounty') continue
+    const objective = quest.objective as QuestObjectiveBounty
+    const key = gridKey(objective.targetX, objective.targetY)
+    const bounty = st.bountyTiles[key] ?? bountyFromQuest(quest.id, objective)
+    st.bountyTiles[key] = bounty
+    applyBountyToTile(st.grid[key], bounty)
+    activeBountyKeys.add(key)
+  }
+
+  for (const key of Object.keys(st.bountyTiles)) {
+    if (!activeBountyKeys.has(key)) delete st.bountyTiles[key]
+  }
+}
+
 function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult {
   const tileKey = `${tile.x},${tile.y}`
-  const bounty  = st.bountyTiles[tileKey]
+  const bounty  = st.bountyTiles[tileKey] ?? bountyFromTileContent(tile)
 
   if (!bounty && tile.content.type === 'market') return { enemy: null, questTileLevel: null }
 
@@ -167,6 +233,9 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
     tilesPlaced: st.tilesPlaced,
     enraged:     isFirstEncounter && !bounty,
     questId:     bounty?.questId,
+    targetName:  bounty?.targetName,
+    targetNameEn: bounty?.targetNameEn,
+    isNpc:       bounty?.isNpc,
   }
 
   if (bounty) {
@@ -205,6 +274,9 @@ function queueTileEnemy(enemy: TileEnemyQueue | null): void {
     enemy.enraged,
     enemy.baseLevel,
     enemy.questId,
+    enemy.targetName,
+    enemy.targetNameEn,
+    enemy.isNpc,
   )
 }
 
@@ -513,6 +585,7 @@ export const useMapStore = create<MapStore>()(
       }),
 
       tryAutoPlace: (maxTileLevel?: number): boolean => {
+        set((st) => { reconcileActiveBounties(st) })
         const { grid, deck } = get()
         // Only consider tiles within the hero's reachable level — tiles above
         // the cap would be invisible to findNearestUnexplored, making the hero
@@ -567,6 +640,7 @@ export const useMapStore = create<MapStore>()(
         let result: TileEntryResult = { enemy: null, questTileLevel: null }
 
         set((st) => {
+          reconcileActiveBounties(st)
           const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
           if (!tile || tile.content.type === 'market') return
           result = processTileEntry(st, tile)
@@ -718,15 +792,9 @@ export const useMapStore = create<MapStore>()(
 
       registerBountyTile: (questId, objective) => set((st) => {
         const key = `${objective.targetX},${objective.targetY}`
-        st.bountyTiles[key] = {
-          questId,
-          targetName:   objective.targetName,
-          targetNameEn: objective.targetNameEn,
-          monsterType:  objective.monsterType,
-          targetLevel:  objective.targetLevel,
-          targetRarity: objective.targetRarity as import('../types/monster').MonsterRarity,
-          isNpc:        objective.isNpc,
-        }
+        const bounty = bountyFromQuest(questId, objective)
+        st.bountyTiles[key] = bounty
+        applyBountyToTile(st.grid[key], bounty)
       }),
 
       activatePendingBlueTower: (): boolean => {
@@ -773,6 +841,7 @@ export const useMapStore = create<MapStore>()(
       placeTile: (tileId, x, y): boolean => {
         let placed = false
         set((st) => {
+        reconcileActiveBounties(st)
         const key = gridKey(x, y)
         if (st.grid[key]) return
         const idx = st.deck.findIndex(t => t.id === tileId)
@@ -799,10 +868,13 @@ export const useMapStore = create<MapStore>()(
         // what the player saw in the preview matches what they get — but recalculate
         // any level-dependent values (monsterLevel, xpAmount) from tileLevel so
         // the difficulty is always consistent with the tile's badge.
-        const tileLevel = tile.level
+        const bounty = st.bountyTiles[key]
+        const tileLevel = bounty ? Math.max(tile.level, bounty.targetLevel) : tile.level
         const sighted   = st.sightedCells[key]
         let content: TileContent
-        if (sighted) {
+        if (bounty) {
+          content = contentFromBounty(bounty)
+        } else if (sighted) {
           if (sighted.type === 'monster') {
             content = {
               type: 'monster',
@@ -821,7 +893,7 @@ export const useMapStore = create<MapStore>()(
         delete st.sightedCells[key]
 
         st.deck.splice(idx, 1)
-        st.grid[key] = { ...tile, x, y, explored: false, content }
+        st.grid[key] = { ...tile, level: tileLevel, x, y, explored: false, content }
         st.tilesPlaced += 1
         placed = true
         })
@@ -857,6 +929,7 @@ export const useMapStore = create<MapStore>()(
         let didMove = false
 
         set((st) => {
+          reconcileActiveBounties(st)
           if (!st.destination && st.autoExplore !== 'manual') {
             const cap    = (heroLevel !== undefined && !st.riskMode) ? heroLevel : undefined
             const target = findNearestUnexplored(st.grid, st.playerPos, cap)
@@ -937,6 +1010,7 @@ export const useMapStore = create<MapStore>()(
       }),
 
       tickMap: (deltaMs, moveSpeed, maxDeck, vision, heroLevel) => set((st) => {
+        reconcileActiveBounties(st)
         const speed = Math.max(0.5, moveSpeed)
 
         // Tile deck generation

@@ -416,6 +416,9 @@ interface NearbyEntry {
   monsterType: string
   monsterRarity: MonsterRarity
   enraged: boolean
+  bounty: boolean
+  bountyName?: string
+  bountyNameEn?: string
   explored: boolean
   dist: number
   /** Pre-computed display stats (stable, no Math.random jitter per-render). */
@@ -447,7 +450,8 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
       if (tile.content.type === 'market' || tile.content.type === 'quest' || tile.content.type === 'blueTower') continue
       const dist = Math.max(Math.abs(tile.x - playerPos.x), Math.abs(tile.y - playerPos.y))
       if (dist > revealRange) continue
-      const isEnraged = tile.content.type === 'monster' && !tile.explored
+      const isBounty = tile.content.type === 'monster' && !!tile.content.bountyQuestId
+      const isEnraged = tile.content.type === 'monster' && !tile.explored && !isBounty
       const baseLevel = tile.content.monsterLevel ?? tile.level
       const lvl       = isEnraged ? previewEnragedLevel(baseLevel, tilesPlaced) : baseLevel
       const fallback  = stableMonsterForTile(tile)
@@ -458,7 +462,12 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
       result.push({
         x: tile.x, y: tile.y, baseLevel, level: lvl,
         monsterType: mType, monsterRarity: mRarity,
-        enraged: isEnraged, explored: tile.explored, dist,
+        enraged: isEnraged,
+        bounty: isBounty,
+        bountyName: tile.content.bountyTargetName,
+        bountyNameEn: tile.content.bountyTargetNameEn,
+        explored: tile.explored,
+        dist,
         stats: { hp: monster.maxHp, atk: monster.atk, def: monster.def },
       })
     }
@@ -537,14 +546,19 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
               <span className="text-sm leading-none shrink-0">{template.emoji}</span>
               <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate">
                 {rarityLabel && <span className={cn('mr-1 text-[10px]', rarityColor)}>[{rarityLabel}]</span>}
-                {monsterName(template, isEn)}
+                {e.bounty ? (isEn ? e.bountyNameEn : e.bountyName) ?? monsterName(template, isEn) : monsterName(template, isEn)}
               </span>
+              {e.bounty && (
+                <span className="ml-auto text-[9px] font-black uppercase text-emerald-400 shrink-0">
+                  {isEn ? 'Bounty' : 'Caçada'}
+                </span>
+              )}
               {e.enraged && (
                 <span className="ml-auto text-[9px] font-black uppercase text-red-400 shrink-0">
                   {isEn ? 'Enraged' : 'Furioso'}
                 </span>
               )}
-              <span className={cn(e.enraged ? 'ml-1' : 'ml-auto', 'text-[10px] font-black tabular-nums shrink-0', levelColor(e.level, heroLevel))}>
+              <span className={cn(e.enraged || e.bounty ? 'ml-1' : 'ml-auto', 'text-[10px] font-black tabular-nums shrink-0', levelColor(e.level, heroLevel))}>
                 Nv.{e.enraged ? `${e.baseLevel}+` : e.level}
               </span>
             </div>
@@ -612,6 +626,7 @@ function ActiveTileInfoPanel({
   const contentLabel =
     !content                   ? (isEn ? 'Unknown' : 'Desconhecido') :
     content.type === 'market'  ? (isEn ? 'Market' : 'Mercado') :
+    content.type === 'monster' && content.bountyQuestId ? (isEn ? 'Bounty Target' : 'Alvo de missão') :
     content.type === 'monster' ? (isEn ? 'Monster Lair' : 'Covil') :
     content.type === 'treasure'? (isEn ? 'Treasure' : 'Tesouro') :
     content.type === 'blueTower'? (isEn ? 'Blue Tower' : 'Torre Azul') :
@@ -629,7 +644,8 @@ function ActiveTileInfoPanel({
   const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'quest' && content.type !== 'blueTower'
     ? (() => {
         const baseLevel = content.monsterLevel ?? tile.level
-        const enraged = !tile.explored && content.type === 'monster'
+        const bounty = content.type === 'monster' && !!content.bountyQuestId
+        const enraged = !tile.explored && content.type === 'monster' && !bounty
         const lvl = enraged ? previewEnragedLevel(baseLevel, tilesPlaced) : baseLevel
         const rarity = (content.monsterRarity ?? 'normal') as MonsterRarity
         const template = content.monsterType
@@ -641,6 +657,9 @@ function ActiveTileInfoPanel({
           level: lvl,
           baseLevel,
           enraged,
+          bounty,
+          bountyName: content.bountyTargetName,
+          bountyNameEn: content.bountyTargetNameEn,
           rarity,
         }
       })()
@@ -708,6 +727,11 @@ function ActiveTileInfoPanel({
         {enemyInfo?.enraged && (
           <span className="rounded border border-red-400/20 px-1.5 py-0.5 font-semibold text-red-400">
             {isEn ? 'Enraged' : 'Furioso'} +{enemyInfo.level - enemyInfo.baseLevel}
+          </span>
+        )}
+        {enemyInfo?.bounty && (
+          <span className="rounded border border-emerald-400/20 px-1.5 py-0.5 font-semibold text-emerald-400">
+            {isEn ? 'Bounty target' : 'Alvo de missão'}
           </span>
         )}
         {enemyInfo && enemyInfo.rarity !== 'normal' && (

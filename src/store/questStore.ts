@@ -18,6 +18,7 @@ interface QuestStore {
   onPlayerMove(x: number, y: number): void
   onMonsterKill(monsterType: string, x: number, y: number): void
   onBountyDefeated(questId: string): void
+  onBountyDefeatedAt(x: number, y: number): void
 
   // Reset on new run
   clearAll(): void
@@ -110,6 +111,16 @@ export const useQuestStore = create<QuestStore>()(
           }
         })
         get().completeQuest(questId)
+      },
+
+      onBountyDefeatedAt: (x, y) => {
+        const quest = get().quests.find(q => (
+          q.status === 'active' &&
+          q.objective.type === 'bounty' &&
+          q.objective.targetX === x &&
+          q.objective.targetY === y
+        ))
+        if (quest) get().onBountyDefeated(quest.id)
       },
 
       clearAll: () => set((st) => {

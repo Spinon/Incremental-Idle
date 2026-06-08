@@ -270,9 +270,11 @@ export function useGameLoop() {
             const bs          = useBattleStore.getState()
             const playerPos   = useMapStore.getState().playerPos
             const monsterType = bs.enemy.monsterType ?? ''
-            const questId     = bs.nextEnemyQuestId
+            const questId     = bs.activeEnemyQuestId
             if (questId) {
               useQuestStore.getState().onBountyDefeated(questId)
+            } else {
+              useQuestStore.getState().onBountyDefeatedAt(playerPos.x, playerPos.y)
             }
             useQuestStore.getState().onMonsterKill(monsterType, playerPos.x, playerPos.y)
           }
