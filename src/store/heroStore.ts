@@ -76,16 +76,17 @@ export const useHeroStore = create<HeroStore>()(
       if (st.freePoints <= 0) return
 
       // Target weights for a well-rounded combat-sustain build.
-      // Recalculados pós-rebalance (DR→Força, Accuracy→Dex, Int→def mágica).
+      // Recalc pós-Fúria: Int virou defesa essencial (resistência universal
+      // mitiga os golpes de fúria elementais dos monstros) + dano mágico mais forte.
       // Order reflects priority when there are fewer points than targets.
       const WEIGHTS: Record<keyof Attributes, number> = {
-        forca:        0.22,  // ATK + Dano Crítico + Redução de Dano + stamina/HP (bruiser)
-        vitalidade:   0.20,  // HP + DEF física + stamina (tanque; trimmed — divide defesa c/ Força)
-        agilidade:    0.18,  // Vel. Ataque + Esquiva + exploração
-        destreza:     0.15,  // Chance Crítico + Precisão (essencial vs dodge late-game)
-        sabedoria:    0.13,  // sustento de mana p/ spells
-        inteligencia: 0.08,  // dano mágico + resistência mágica (secundário p/ não-caster)
-        carisma:      0.04,  // drop + eficiência de ouro
+        forca:        0.20,  // ATK + Dano Crítico + Redução de Dano + stamina/HP (bruiser)
+        vitalidade:   0.18,  // HP + DEF física + stamina (tanque; divide defesa c/ Força)
+        agilidade:    0.16,  // Vel. Ataque + Esquiva + exploração
+        destreza:     0.14,  // Chance Crítico + Precisão (essencial vs dodge)
+        inteligencia: 0.14,  // resistência mágica (vs Fúria) + dano mágico — agora pilar
+        sabedoria:    0.12,  // sustento de mana + cura + Res. Vital
+        carisma:      0.06,  // drop + eficiência de ouro
       }
       const attrs = Object.keys(WEIGHTS) as (keyof Attributes)[]
 
