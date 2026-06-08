@@ -58,7 +58,7 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
     attackSpeed:   BASE.attackSpeed  + fa.agilidade * 0.1                + (eq?.atkSpeed    ?? 0),
     //  Dodge moved to Agilidade (speed/reflexes)
     dodgeChance: Math.min(0.5, fa.agilidade * 0.005),
-    magicDamage: BASE.magicDamage + fa.inteligencia * 1                  + (eq?.magicDamage ?? 0),
+    magicDamage: BASE.magicDamage + fa.inteligencia * 1.6                + (eq?.magicDamage ?? 0),
 
     // ── Advanced combat ──────────────────────────────────────────────────────
     //  Destreza: precision → critical hits + accuracy (negates target dodge)

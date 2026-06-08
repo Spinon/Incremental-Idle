@@ -77,6 +77,8 @@ function monsterStats(a: Attributes) {
     accuracy:        Math.min(0.50, Math.round(a.destreza * 0.006 * 1000) / 1000),
     // Defensive — forca gives brawn-based damage reduction (identical to hero)
     damageReduction: Math.min(0.35, Math.round(a.forca * 0.01 * 1000) / 1000),
+    // Magic damage — powers the Fury elemental strike (scales w/ inteligência)
+    magicDamage:     Math.round(a.inteligencia * 1.2),
   }
 }
 
@@ -174,6 +176,9 @@ export function estimateMonster(
     critDamage: s.critDamage,
     accuracy: s.accuracy,
     damageReduction: s.damageReduction,
+    magicDamage: s.magicDamage,
+    fury: 0,
+    furyMax: 6,
     element: template.element,
     statusChance: template.statusChance,
     weakTo: template.weakTo ?? [],
@@ -228,6 +233,9 @@ export function buildMonster(
     critDamage:      s.critDamage,
     accuracy:        s.accuracy,
     damageReduction: s.damageReduction,
+    magicDamage:     s.magicDamage,
+    fury:            0,
+    furyMax:         6,
     element:         template.element,
     statusChance:    template.statusChance,
     weakTo:          template.weakTo ?? [],

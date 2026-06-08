@@ -36,6 +36,9 @@ export interface Unit {
   critDamage: number
   accuracy: number
   damageReduction: number
+  magicDamage: number            // powers the Fury elemental strike (monsters)
+  fury: number                   // builds per hit dealt/taken; triggers strike at furyMax
+  furyMax: number
   // Elemental properties
   element?:   ElementType        // physical attack element (monsters only)
   statusChance?: number          // probability to apply element status on hit
@@ -128,6 +131,10 @@ interface BattleStore {
    */
   nextEnemyEnraged: boolean
   nextEnemyQuestId: string | null
+  activeEnemyQuestId: string | null
+  nextEnemyQuestName: string | null
+  nextEnemyQuestNameEn: string | null
+  nextEnemyQuestNpc: boolean
   hitsLeft: number
   comboSize: number
   defeatSnapshot: DefeatSnapshot | null
@@ -140,7 +147,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string): void
+  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean): void
   captureDefeat(playerLevel: number, tilesPlaced: number): void
   applyHit(): void
   switchAttacker(): void
@@ -161,6 +168,7 @@ const INITIAL_PLAYER: Unit = {
   name: 'Hero', level: 0, hp: 30, maxHp: 30,
   atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
   critChance: 0, critDamage: 1.5, accuracy: 0, damageReduction: 0,
+  magicDamage: 0, fury: 0, furyMax: 6,
   weakTo: [], resIgnea: 0, resGlacial: 0, resSombria: 0, resVital: 0,
   enraged: false,
 }
@@ -284,6 +292,10 @@ export const useBattleStore = create<BattleStore>()(
     nextTilesPlaced: 0,
     nextEnemyEnraged: false,
     nextEnemyQuestId: null,
+    activeEnemyQuestId: null,
+    nextEnemyQuestName: null,
+    nextEnemyQuestNameEn: null,
+    nextEnemyQuestNpc: false,
     hitsLeft: 1,
     comboSize: 1,
     defeatSnapshot: null,
@@ -296,7 +308,7 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId) => set((st) => {
+    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc) => set((st) => {
       st.nextEnemyLevel     = level
       st.nextEnemyBaseLevel = baseLevel ?? level
       st.nextEnemyType      = monsterType   ?? FOREST_RANDOM_MONSTERS[Math.floor(Math.random() * FOREST_RANDOM_MONSTERS.length)].id
@@ -304,6 +316,9 @@ export const useBattleStore = create<BattleStore>()(
       st.nextEnemyRarity    = monsterRarity ?? pickMonsterRarity(st.nextTilesPlaced)
       st.nextEnemyEnraged   = enraged       ?? false
       st.nextEnemyQuestId   = questId       ?? null
+      st.nextEnemyQuestName = questName     ?? null
+      st.nextEnemyQuestNameEn = questNameEn ?? null
+      st.nextEnemyQuestNpc  = questNpc      ?? false
     }),
 
     captureDefeat: (playerLevel, tilesPlaced) => set((st) => {
@@ -468,6 +483,29 @@ export const useBattleStore = create<BattleStore>()(
         else arr.push({ ...status })
       }
 
+      // ── FÚRIA do monstro ───────────────────────────────────────────────────
+      // Sobe +1 por hit resolvido (dado OU tomado). Só monstros com magicDamage
+      // (ou seja, com Inteligência) acumulam — early game intocado.
+      // Ao encher: golpe extra ELEMENTAL no herói, mitigado pelas resistências.
+      if (st.phase !== 'over' && st.enemy.hp > 0 && st.enemy.magicDamage > 0) {
+        st.enemy.fury += 1
+        if (st.enemy.fury >= st.enemy.furyMax) {
+          st.enemy.fury = 0
+          const el  = st.enemy.element ?? 'umbra'
+          const mod = elementalModifier(
+            el, st.player.weakTo,
+            st.player.resIgnea, st.player.resGlacial, st.player.resSombria, st.player.resVital,
+          )
+          const furyDmg = Math.max(1, Math.round(st.enemy.magicDamage * 2.2 * mod))
+          const pHp = Math.max(0, st.player.hp - furyDmg)
+          st.player.hp = pHp
+          st.log.unshift({
+            attacker: st.enemy.name, defender: st.player.name, dmg: furyDmg,
+            spell: { name: 'Fúria', nameEn: 'Fury', icon: '🔥', effectType: 'damage', value: furyDmg },
+          })
+          if (pHp === 0) { st.winner = 'enemy'; st.phase = 'over' }
+        }
+      }
     }),
 
     switchAttacker: () => set((st) => {
@@ -694,11 +732,21 @@ export const useBattleStore = create<BattleStore>()(
     reset: () => set((st) => {
       const template = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
       const wasEnraged = st.nextEnemyEnraged
+      const questId = st.nextEnemyQuestId
       st.player.hp    = st.player.maxHp
       st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
       st.enemy.enraged = st.nextEnemyEnraged
+      if (questId) {
+        st.enemy.name   = st.nextEnemyQuestName   ?? st.enemy.name
+        st.enemy.namePt = st.nextEnemyQuestName   ?? st.enemy.namePt
+        st.enemy.nameEn = st.nextEnemyQuestNameEn ?? st.enemy.nameEn
+      }
+      st.activeEnemyQuestId = questId
       st.nextEnemyEnraged  = false  // consume the flag — next reset starts fresh
-      st.nextEnemyQuestId  = null   // consumed by useGameLoop on victory
+      st.nextEnemyQuestId  = null
+      st.nextEnemyQuestName = null
+      st.nextEnemyQuestNameEn = null
+      st.nextEnemyQuestNpc = false
       if (wasEnraged) {
         const baseLevel = Math.max(1, st.nextEnemyBaseLevel ?? st.nextEnemyLevel)
         st.nextEnemyLevel     = baseLevel

@@ -8,6 +8,7 @@ import { useUIStore } from '../store/uiStore'
 import { useMapStore } from '../store/mapStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { SPELL_ICONS, WORD_ICONS } from '../data/spells'
+import { getSpellManaCost } from '../formulas/spells'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
@@ -593,7 +594,7 @@ export default function MiniBattlePlayer() {
               {spellSlots.map((sid, slot) => {
                 const spell = sid ? availableSpells.find(s => s.id === sid) : null
                 const cd = sid ? (cooldowns[sid] ?? 0) : 0
-                const canCast = spell && mana >= spell.manaCost && cd === 0
+                const canCast = spell && mana >= getSpellManaCost(spell) && cd === 0
                 const isAuto = autoSlots[slot]?.enabled ?? false
                 return (
                   <button
@@ -602,7 +603,7 @@ export default function MiniBattlePlayer() {
                     onClick={() => spell && castSpell(spell.id)}
                     disabled={!spell || !canCast}
                     title={spell
-                      ? `[${slot + 5}] ${spell.name} - ${spell.manaCost} mana${cd > 0 ? ` (${cd} ${isEn ? 'left' : 'rest.'})` : ''}`
+                      ? `[${slot + 5}] ${spell.name} - ${getSpellManaCost(spell)} mana${cd > 0 ? ` (${cd} ${isEn ? 'left' : 'rest.'})` : ''}`
                       : (isEn ? `Spell slot ${slot + 1} empty` : `Slot de magia ${slot + 1} vazio`)}
                     className={cn(
                       'relative h-8 rounded border flex items-center justify-center transition',

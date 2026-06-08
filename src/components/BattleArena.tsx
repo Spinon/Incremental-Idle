@@ -6,6 +6,7 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
 import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
+import { getSpellManaCost } from '../formulas/spells'
 import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
@@ -619,8 +620,8 @@ export default function BattleArena() {
               }
             />
             <ResourceBar
-              current={100}
-              max={100}
+              current={store.enemy.fury}
+              max={store.enemy.furyMax}
               label={enemyResourceLabel}
               color="bg-red-500"
               borderColor="border-red-300/60 dark:border-red-800/70"
@@ -792,7 +793,7 @@ export default function BattleArena() {
         {spellSlots.map((sid, slot) => {
           const spell = sid ? availableSpells.find(s => s.id === sid) : null
           const cd    = sid ? (cooldowns[sid] ?? 0) : 0
-          const canCast = spell && mana >= spell.manaCost && cd === 0
+          const canCast = spell && mana >= getSpellManaCost(spell) && cd === 0
           const isAuto  = autoSlots[slot]?.enabled ?? false
           return (
             <button
@@ -800,7 +801,7 @@ export default function BattleArena() {
               onClick={() => spell && castSpell(spell.id)}
               disabled={!spell || !canCast}
               title={spell
-                ? `[${slot + 5}] ${spell.name} — ${spell.manaCost} mana · CD ${spell.cooldown} ${isEn ? 'turns' : 'turnos'}${cd > 0 ? ` (${cd} ${isEn ? 'left' : 'rest.'})` : ''}`
+                ? `[${slot + 5}] ${spell.name} — ${getSpellManaCost(spell)} mana · CD ${spell.cooldown} ${isEn ? 'turns' : 'turnos'}${cd > 0 ? ` (${cd} ${isEn ? 'left' : 'rest.'})` : ''}`
                 : (isEn ? `Spell slot ${slot + 1} (empty)` : `Slot de magia ${slot + 1} (vazio)`)}
               style={{ width: 44, height: 44 }}
               className={cn(

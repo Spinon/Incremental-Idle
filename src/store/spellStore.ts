@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { LEARNABLE_WORDS, WORD_MAP, getAutoWordSlots } from '../data/words'
 import { SPELL_MAP, SPELL_ICONS, getAvailableSpells } from '../data/spells'
-import { calcSpellDamage, calcSpellHeal } from '../formulas/spells'
+import { calcSpellDamage, calcSpellHeal, getSpellManaCost } from '../formulas/spells'
 import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
 import { useMapStore } from './mapStore'
@@ -82,7 +82,7 @@ export const useSpellStore = create<SpellStore>()(
       const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
       const isSlotOneSpell = get().spellSlots[0] === spellId
       const manaCost = Math.max(1, Math.round(
-        spell.manaCost * (isSlotOneSpell ? (1 - weaponProfile.staffSlotOneManaDiscount) : 1),
+        getSpellManaCost(spell) * (isSlotOneSpell ? (1 - weaponProfile.staffSlotOneManaDiscount) : 1),
       ))
       if (heroState.mana < manaCost) return
 

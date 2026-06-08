@@ -76,15 +76,16 @@ export const useHeroStore = create<HeroStore>()(
       if (st.freePoints <= 0) return
 
       // Target weights for a well-rounded combat-sustain build.
+      // Recalculados pós-rebalance (DR→Força, Accuracy→Dex, Int→def mágica).
       // Order reflects priority when there are fewer points than targets.
       const WEIGHTS: Record<keyof Attributes, number> = {
-        vitalidade:   0.28,  // DEF ratio + HP — highest return
-        agilidade:    0.20,  // atkSpeed, dodge, exploration
-        forca:        0.15,  // damage + stamina
-        sabedoria:    0.15,  // mana sustain (threshold ≈ 6 pts at Lv10)
-        inteligencia: 0.10,  // magic DEF + magic damage
-        destreza:     0.07,  // crit chance + damage reduction
-        carisma:      0.05,  // drop rate + gold efficiency
+        forca:        0.22,  // ATK + Dano Crítico + Redução de Dano + stamina/HP (bruiser)
+        vitalidade:   0.20,  // HP + DEF física + stamina (tanque; trimmed — divide defesa c/ Força)
+        agilidade:    0.18,  // Vel. Ataque + Esquiva + exploração
+        destreza:     0.15,  // Chance Crítico + Precisão (essencial vs dodge late-game)
+        sabedoria:    0.13,  // sustento de mana p/ spells
+        inteligencia: 0.08,  // dano mágico + resistência mágica (secundário p/ não-caster)
+        carisma:      0.04,  // drop + eficiência de ouro
       }
       const attrs = Object.keys(WEIGHTS) as (keyof Attributes)[]
 

@@ -134,13 +134,13 @@ function statBase(stat: keyof ItemStats, level: number): number {
   type S = keyof ItemStats
   const flat: Record<S, number> = {
     atk:         1.5,   def:         1.0,   hp:          25,
-    atkSpeed:    0.05,  magicDamage: 1.5,   vision:      8,
+    atkSpeed:    0.05,  magicDamage: 1.0,   vision:      8,
     moveSpeed:   0.05,  dropChance:  0.005, goldMult:    0.05,
     xpBonus:     0.03,
   }
   const perLv: Record<S, number> = {
     atk:         0.20,  def:         0.15,  hp:          2.5,
-    atkSpeed:    0.006, magicDamage: 0.20,  vision:      0.5,
+    atkSpeed:    0.006, magicDamage: 0.12,  vision:      0.5,
     moveSpeed:   0.003, dropChance:  0.0003, goldMult:   0.004,
     xpBonus:     0.003,
   }

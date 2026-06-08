@@ -165,7 +165,7 @@ export function getWeaponStatBonuses(
         bonuses.attackSpeed -= 0.04
         break
       case 'staff':
-        bonuses.magicDamage += 2 + scale * 0.8
+        bonuses.magicDamage += 1.5 + scale * 0.5
         break
       case 'bow':
         bonuses.atk += 1 + scale * 0.55

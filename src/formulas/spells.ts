@@ -1,5 +1,22 @@
-import type { Spell, ActiveBuff } from '../types/spell'
+import type { Spell, ActiveBuff, SpellRarity } from '../types/spell'
 import type { DerivedStats } from '../types/hero'
+
+/**
+ * Multiplicador de custo de mana por tier (raridade). Encarece progressivamente
+ * as spells de tier alto — além do custo-base já crescente definido nos dados.
+ */
+const TIER_MANA_MULT: Record<SpellRarity, number> = {
+  common:   1.0,
+  uncommon: 1.15,
+  rare:     1.4,
+  epic:     1.7,
+  unique:   2.1,
+}
+
+/** Custo de mana efetivo da spell, escalado pelo tier (raridade). */
+export function getSpellManaCost(spell: Spell): number {
+  return Math.max(1, Math.round(spell.manaCost * TIER_MANA_MULT[spell.rarity]))
+}
 
 /** Final damage dealt by a spell, accounting for chaos variance */
 export function calcSpellDamage(spell: Spell, derived: DerivedStats): number {

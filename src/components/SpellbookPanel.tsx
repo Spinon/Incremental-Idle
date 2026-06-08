@@ -7,7 +7,7 @@ import { findSpell, SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
-import { applySpellBuffs } from '../formulas/spells'
+import { applySpellBuffs, getSpellManaCost } from '../formulas/spells'
 import { cn } from '../lib/utils'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
 import type { DerivedStats } from '../types/hero'
@@ -449,9 +449,9 @@ function SpellCard({
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[9px] text-blue-500 dark:text-blue-400 font-semibold">
-            {spell.manaCost} mana
+            {getSpellManaCost(spell)} mana
           </span>
-          {firstSlotManaCost !== null && firstSlotManaCost !== spell.manaCost && (
+          {firstSlotManaCost !== null && firstSlotManaCost !== getSpellManaCost(spell) && (
             <span className="text-[9px] text-blue-400 dark:text-blue-300 font-semibold">
               slot 1: {firstSlotManaCost}
             </span>
@@ -659,7 +659,7 @@ export default function SpellbookPanel() {
               </div>
               {previewSpell && (
                 <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-1">
-                  {spellDescription(previewSpell, isEn)} · {previewSpell.manaCost} mana · CD {previewSpell.cooldown}t
+                  {spellDescription(previewSpell, isEn)} · {getSpellManaCost(previewSpell)} mana · CD {previewSpell.cooldown}t
                 </p>
               )}
             </div>
@@ -892,7 +892,7 @@ export default function SpellbookPanel() {
                   spell={spell}
                   effectiveCooldown={Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))}
                   firstSlotManaCost={spellSlots[0] === spell.id
-                    ? Math.max(1, Math.round(spell.manaCost * (1 - weaponProfile.staffSlotOneManaDiscount)))
+                    ? Math.max(1, Math.round(getSpellManaCost(spell) * (1 - weaponProfile.staffSlotOneManaDiscount)))
                     : null}
                   derived={spellDerived}
                   onAssign={() => setAssigningSpell(a => a === spell.id ? null : spell.id)}
