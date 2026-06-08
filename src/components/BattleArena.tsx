@@ -7,9 +7,8 @@ import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellS
 import { useUIStore } from '../store/uiStore'
 import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
-import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
-import { applySpellBuffs } from '../formulas/spells'
+import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 import { useSettingsStore } from '../store/settingsStore'
@@ -29,7 +28,7 @@ const RARITY_BORDER: Record<ItemRarity | SpellRarity, string> = {
 }
 
 const EFFECT_ICON: Record<string, string> = {
-  damage: '⚔', heal: '✦', buff: '▲', debuff: '▼', utility: '◎',
+  damage: '⚔', heal: '✦', buff: '▲', debuff: '▼', utility: '◎', fizzle: '∅',
 }
 const EFFECT_COLOR: Record<string, string> = {
   damage:  'text-red-400',
@@ -37,6 +36,7 @@ const EFFECT_COLOR: Record<string, string> = {
   buff:    'text-blue-400',
   debuff:  'text-purple-400',
   utility: 'text-amber-400',
+  fizzle:  'text-slate-400',
 }
 
 const BUFF_STATUS_TYPES = new Set<StatusType>(['regen', 'blessed'])
@@ -230,6 +230,8 @@ export default function BattleArena() {
   const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
   const consumables    = useInventoryStore(s => s.consumables)
   const equipment      = useInventoryStore(s => s.equipment)
+  const weaponProgress = useInventoryStore(s => s.weaponProgress)
+  const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const quickslots     = useInventoryStore(s => s.quickslots)
   const removeConsumable = useInventoryStore(s => s.removeConsumable)
 
@@ -244,8 +246,12 @@ export default function BattleArena() {
   const activeDebuff    = useSpellStore(s => s.activeDebuff)
   const setAutoSlot     = useSpellStore(s => s.setAutoSlot)
   const mana            = useHeroStore(s => s.mana)
-  const derivedStats    = applySpellBuffs(
-    getDerivedStats(attrs, getEquipmentBonuses(equipment), heroLevel),
+  const derivedStats    = getEffectiveDerivedStatsFromBonuses(
+    attrs,
+    getEquipmentBonuses(equipment),
+    heroLevel,
+    weaponProgress,
+    equippedWeapons,
     activeBuffs,
   )
   const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)

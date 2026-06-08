@@ -3,14 +3,14 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { LEARNABLE_WORDS, WORD_MAP, getAutoWordSlots } from '../data/words'
 import { SPELL_MAP, SPELL_ICONS, getAvailableSpells } from '../data/spells'
-import { applySpellBuffs, calcSpellDamage, calcSpellHeal } from '../formulas/spells'
-import { getDerivedStats } from '../formulas/derived'
+import { calcSpellDamage, calcSpellHeal } from '../formulas/spells'
 import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
 import { useMapStore } from './mapStore'
 import { useInventoryStore } from './inventoryStore'
 import { getEquipmentBonuses } from '../formulas/items'
-import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
+import { getWeaponCombatProfile } from '../formulas/weapons'
+import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
@@ -80,7 +80,6 @@ export const useSpellStore = create<SpellStore>()(
       const heroState = useHeroStore.getState()
       const weaponState = useInventoryStore.getState()
       const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
-      const weaponStats = getWeaponStatBonuses(weaponState.weaponProgress, weaponState.equippedWeapons)
       const isSlotOneSpell = get().spellSlots[0] === spellId
       const manaCost = Math.max(1, Math.round(
         spell.manaCost * (isSlotOneSpell ? (1 - weaponProfile.staffSlotOneManaDiscount) : 1),
@@ -92,11 +91,14 @@ export const useSpellStore = create<SpellStore>()(
 
       const { effect } = spell
       const equip = getEquipmentBonuses(weaponState.equipment)
-      const baseDerived = getDerivedStats(heroState.attributes, equip, heroState.level)
-      const derived = applySpellBuffs({
-        ...baseDerived,
-        magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
-      }, get().activeBuffs)
+      const derived = getEffectiveDerivedStatsFromBonuses(
+        heroState.attributes,
+        equip,
+        heroState.level,
+        weaponState.weaponProgress,
+        weaponState.equippedWeapons,
+        get().activeBuffs,
+      )
 
       // ── Compute values that require derived stats ─────────────────────
       let dmg  = 0
@@ -136,7 +138,7 @@ export const useSpellStore = create<SpellStore>()(
       if (heal > 0) battleStore.healPlayer(heal)
 
       // ── Elemental status application ──────────────────────────────────
-      if (spellElement) {
+      if (spellElement && effect.type !== 'fizzle') {
         const cfg = ELEMENT_DEFAULT_STATUS[spellElement]
         const chance = cfg.chance
         if (Math.random() < chance) {
@@ -175,25 +177,28 @@ export const useSpellStore = create<SpellStore>()(
       // ── Update spellStore state (Immer set — no side effects here) ────
       set((st) => {
         // Cooldown in turns
-        st.cooldowns[spellId] = Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))
+        const effectiveCooldown = Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))
+        st.cooldowns[spellId] = effectiveCooldown
 
         // Buff / utility side-effects
         if (effect.statAdds && effect.duration) {
+          const effectiveDuration = Math.min(effect.duration, effectiveCooldown)
           st.activeBuffs = st.activeBuffs.filter(b => b.spellId !== spellId)
           st.activeBuffs.push({
             spellId,
             statAdds: effect.statAdds,
-            remaining: effect.duration,
+            remaining: effectiveDuration,
           })
         }
 
         // Store debuff record
         if (shouldDebuff) {
+          const effectiveDebuffDuration = Math.min(effect.debuffDuration ?? 8, effectiveCooldown)
           st.activeDebuff = {
             spellId,
             atkMult:      effect.enemyAtkMult      ?? 1,
             atkSpeedMult: effect.enemyAtkSpeedMult ?? 1,
-            remaining:    effect.debuffDuration ?? 8,
+            remaining:    effectiveDebuffDuration,
             savedAtk,
             savedAtkSpeed,
           }

@@ -443,7 +443,13 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   chooseRemote: async () => {
     const remote = get().pendingRemote
     if (!remote) return
-    applyLocalSaveSnapshot(remote.save_data)
+    const remoteLastActiveAt = remote.save_data.lastActiveAt
+      ?? Date.parse(remote.local_updated_at || remote.updated_at)
+    applyLocalSaveSnapshot({
+      ...remote.save_data,
+      capturedAt: remote.save_data.capturedAt || remote.local_updated_at,
+      lastActiveAt: Number.isFinite(remoteLastActiveAt) ? remoteLastActiveAt : undefined,
+    })
     window.location.reload()
   },
 

@@ -6,10 +6,10 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
-import { SAVE_KEYS } from '../store/save'
-import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
+import { OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
+import { getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
-import { applySpellBuffs } from '../formulas/spells'
+import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
@@ -40,8 +40,8 @@ const RARITY_LABEL_EN: Record<string, string> = {
 
 const STEP_MS = 200
 const SYNC_PROMPT_MS = 30 * 1000
-const SYNC_CHUNK_STEPS = 80
-const LAST_ACTIVE_KEY = 'incremental-idle-last-active-at'
+const OFFLINE_STEP_MS = 5 * 1000
+const SYNC_CHUNK_STEPS = 240
 const MID_FIGHT_KEY = 'ii-mid-fight'
 const OFFLINE_SYNC_SNAPSHOT_KEY = 'incremental-idle-offline-sync-snapshot'
 const OFFLINE_SYNC_PENDING_KEY = 'incremental-idle-offline-sync-pending'
@@ -59,15 +59,38 @@ export interface OfflineSyncState {
   processedMs: number
 }
 
+interface RunStepOptions {
+  offline?: boolean
+}
+
+interface SimulationContext {
+  offline: boolean
+}
+
+type BlockingSystemHandler = (context: SimulationContext) => boolean
+
+function resolveBattleSimulation({ offline }: SimulationContext): boolean {
+  if (!offline) return false
+  if (useMapStore.getState().scene !== 'map') return false
+  if (useBattleStore.getState().phase === 'over') return false
+
+  useBattleStore.getState().skipBattle()
+  return true
+}
+
+const BLOCKING_SYSTEM_HANDLERS: BlockingSystemHandler[] = [
+  resolveBattleSimulation,
+]
+
 function readLastActiveAt(): number | null {
-  const raw = localStorage.getItem(LAST_ACTIVE_KEY)
+  const raw = localStorage.getItem(OFFLINE_LAST_ACTIVE_KEY)
   if (!raw) return null
   const value = Number(raw)
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
 function writeLastActiveAt(now = Date.now()) {
-  localStorage.setItem(LAST_ACTIVE_KEY, String(now))
+  localStorage.setItem(OFFLINE_LAST_ACTIVE_KEY, String(now))
 }
 
 function snapshotPersistedState(): Record<string, string | null> {
@@ -147,13 +170,25 @@ export function useGameLoop() {
       }
     }
 
-    const runStep = (deltaMs: number) => {
+    function advanceBlockingSystems(options: RunStepOptions) {
+      const context: SimulationContext = { offline: !!options.offline }
+      for (const handler of BLOCKING_SYSTEM_HANDLERS) handler(context)
+    }
+
+    const runStep = (deltaMs: number, options: RunStepOptions = {}) => {
+      advanceBlockingSystems(options)
+
       const speed    = useBattleStore.getState().speed
       const attrs    = useHeroStore.getState().attributes
       const heroLvl  = useHeroStore.getState().level
-      const equip    = getEquipmentBonuses(useInventoryStore.getState().equipment)
-      const derived  = applySpellBuffs(
-        getDerivedStats(attrs, equip, heroLvl),
+      const inv      = useInventoryStore.getState()
+      const equip    = getEquipmentBonuses(inv.equipment)
+      const derived  = getEffectiveDerivedStatsFromBonuses(
+        attrs,
+        equip,
+        heroLvl,
+        inv.weaponProgress,
+        inv.equippedWeapons,
         useSpellStore.getState().activeBuffs,
       )
 
@@ -162,7 +197,7 @@ export function useGameLoop() {
 
       const turn     = useBattleStore.getState().turn
       const attacker = useBattleStore.getState().attacker
-      if (turn !== prevTurn.current) {
+      if (useBattleStore.getState().phase !== 'over' && turn !== prevTurn.current) {
         prevTurn.current = turn
         // Cooldowns only tick at the end of the player's turn
         // (switchAttacker just ran → attacker is now 'enemy')
@@ -212,6 +247,7 @@ export function useGameLoop() {
 
       if (scene === 'map' && prevPhase.current !== 'over' && phase === 'over') {
         const winner = useBattleStore.getState().winner
+        let resolvedBlockingSystem = false
 
         if (winner === 'enemy') {
           // ── Defeat: snapshot who killed us, then force player home ────────
@@ -220,9 +256,12 @@ export function useGameLoop() {
             useMapStore.getState().tilesPlaced,
           )
           useMapStore.getState().handleDefeat()
+          resolvedBlockingSystem = true
         } else {
           // ── Victory: advance, rewards, drops ────────────────────────────
-          useSpellStore.getState().onBattleTurn()
+          if (useBattleStore.getState().attacker !== 'enemy') {
+            useSpellStore.getState().onBattleTurn()
+          }
           prevTurn.current = -1
           useSpellStore.getState().clearEnemyDebuff()
 
@@ -258,9 +297,14 @@ export function useGameLoop() {
             // placed (map is geometrically enclosed, not just level-capped).
             const afterPlace = useMapStore.getState()
             const attrs2     = useHeroStore.getState().attributes
-            const equip2     = getEquipmentBonuses(useInventoryStore.getState().equipment)
-            const d2         = applySpellBuffs(
-              getDerivedStats(attrs2, equip2, heroLv),
+            const inv2       = useInventoryStore.getState()
+            const equip2     = getEquipmentBonuses(inv2.equipment)
+            const d2         = getEffectiveDerivedStatsFromBonuses(
+              attrs2,
+              equip2,
+              heroLv,
+              inv2.weaponProgress,
+              inv2.equippedWeapons,
               useSpellStore.getState().activeBuffs,
             )
             const maxDk      = Math.min(8, 3 + Math.floor(d2.vision / 50))
@@ -294,9 +338,14 @@ export function useGameLoop() {
 
           // Item drop
           const heroAttrs = useHeroStore.getState().attributes
-          const equip     = getEquipmentBonuses(useInventoryStore.getState().equipment)
-          const dropDerived = applySpellBuffs(
-            getDerivedStats(heroAttrs, equip, useHeroStore.getState().level),
+          const inv3      = useInventoryStore.getState()
+          const equip     = getEquipmentBonuses(inv3.equipment)
+          const dropDerived = getEffectiveDerivedStatsFromBonuses(
+            heroAttrs,
+            equip,
+            useHeroStore.getState().level,
+            inv3.weaponProgress,
+            inv3.equippedWeapons,
             useSpellStore.getState().activeBuffs,
           )
           if (Math.random() < dropDerived.dropChance) {
@@ -363,6 +412,14 @@ export function useGameLoop() {
               })
             }
           }
+          resolvedBlockingSystem = true
+        }
+
+        if (options.offline && resolvedBlockingSystem) {
+          useBattleStore.getState().reset()
+          prevTurn.current = -1
+          prevPhase.current = 'idle'
+          return
         }
       }
 
@@ -378,37 +435,39 @@ export function useGameLoop() {
     function startOfflineSync(elapsedMs: number) {
       if (syncActive.current || elapsedMs < STEP_MS) return
 
-      const totalSteps = Math.floor(elapsedMs / STEP_MS)
-      if (totalSteps <= 0) return
+      const totalMs = Math.floor(elapsedMs / STEP_MS) * STEP_MS
+      if (totalMs <= 0) return
 
       syncActive.current = true
       syncSnapshot.current = snapshotPersistedState()
       beginOfflineTransaction(syncSnapshot.current)
       lagMs = 0
 
-      let processedSteps = 0
+      let processedMs = 0
       setOfflineSync({
         status: 'running',
-        elapsedMs: totalSteps * STEP_MS,
+        elapsedMs: totalMs,
         processedMs: 0,
       })
 
       function processChunk() {
         if (cancelled || !syncActive.current) return
 
-        const remaining = totalSteps - processedSteps
-        const steps = Math.min(SYNC_CHUNK_STEPS, remaining)
-        for (let i = 0; i < steps; i += 1) {
-          runStep(STEP_MS)
+        let steps = 0
+        let remainingMs = totalMs - processedMs
+
+        while (remainingMs > 0 && steps < SYNC_CHUNK_STEPS && processedMs < totalMs) {
+          const deltaMs = Math.min(OFFLINE_STEP_MS, remainingMs)
+          runStep(deltaMs, { offline: true })
+          processedMs += deltaMs
+          remainingMs = totalMs - processedMs
+          steps += 1
         }
 
-        processedSteps += steps
-        const processedMs = processedSteps * STEP_MS
-
-        if (processedSteps >= totalSteps) {
+        if (processedMs >= totalMs) {
           setOfflineSync({
             status: 'ready',
-            elapsedMs: totalSteps * STEP_MS,
+            elapsedMs: totalMs,
             processedMs,
           })
           writeLastActiveAt()
@@ -418,7 +477,7 @@ export function useGameLoop() {
 
         setOfflineSync({
           status: 'running',
-          elapsedMs: totalSteps * STEP_MS,
+          elapsedMs: totalMs,
           processedMs,
         })
         window.setTimeout(processChunk, 0)
@@ -449,6 +508,7 @@ export function useGameLoop() {
 
     function pump() {
       if (syncActive.current) return
+      if (document.hidden) return
 
       const now = performance.now()
       const elapsedMs = now - lastTickAt
@@ -493,24 +553,14 @@ export function useGameLoop() {
       writeLastActiveAt()
     }
 
-    function persistLastActive() {
-      writeLastActiveAt()
-    }
-
     window.addEventListener('focus', pumpOnResume)
-    window.addEventListener('pagehide', persistLastActive)
-    window.addEventListener('beforeunload', persistLastActive)
     document.addEventListener('visibilitychange', pumpOnResume)
-    document.addEventListener('visibilitychange', persistLastActive)
 
     return () => {
       cancelled = true
       clearInterval(id)
       window.removeEventListener('focus', pumpOnResume)
-      window.removeEventListener('pagehide', persistLastActive)
-      window.removeEventListener('beforeunload', persistLastActive)
       document.removeEventListener('visibilitychange', pumpOnResume)
-      document.removeEventListener('visibilitychange', persistLastActive)
     }
   }, [tickResources, setSpeed, gainXp, earnGold])
 

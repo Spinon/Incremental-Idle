@@ -973,7 +973,7 @@ const ELEM_FORM_TEMPLATES: string[] = [
 
 /**
  * Generates a placeholder spell for any word pair that has no crafted entry.
- * Always returns a valid Spell — effect is utility with no stat adds (useless but castable).
+ * Always returns a valid Spell — effect is fizzle (useless but castable).
  */
 function generateFallbackSpell(wordId1: string, wordId2: string): Spell {
   const [a, b]   = [wordId1, wordId2].sort()
@@ -1016,7 +1016,7 @@ function generateFallbackSpell(wordId1: string, wordId2: string): Spell {
     rarity:      rarity as Spell['rarity'],
     manaCost: 4,
     cooldown:    1,
-    effect:      { type: 'utility' },
+    effect:      { type: 'fizzle' },
     description,
   }
 }

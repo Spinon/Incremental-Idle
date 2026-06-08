@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { ALL_WORDS, LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
-import { findSpell, SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
+import { findSpell, SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
@@ -42,7 +42,7 @@ const RARITY_LABEL_EN: Record<SpellRarity, string> = {
   common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', unique: 'Unique',
 }
 const EFFECT_ICON: Record<string, string> = {
-  damage: '⚔', heal: '✦', buff: '▲', debuff: '▼', utility: '◎',
+  damage: '⚔', heal: '✦', buff: '▲', debuff: '▼', utility: '◎', fizzle: '∅',
 }
 const EFFECT_COLOR: Record<string, string> = {
   damage:  'text-red-500 dark:text-red-400',
@@ -50,7 +50,13 @@ const EFFECT_COLOR: Record<string, string> = {
   buff:    'text-blue-500 dark:text-blue-400',
   debuff:  'text-purple-500 dark:text-purple-400',
   utility: 'text-amber-500 dark:text-amber-400',
+  fizzle:  'text-slate-400 dark:text-slate-500',
 }
+
+const SPELL_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'utility', 'fizzle'] as const
+const SPELL_RARITIES: SpellRarity[] = ['common', 'uncommon', 'rare', 'epic', 'unique']
+type SpellEffectFilter = 'all' | typeof SPELL_EFFECT_TYPES[number]
+type SpellRarityFilter = 'all' | SpellRarity
 
 const PERCENT_EFFECT_STATS = new Set([
   'attackSpeed', 'dodgeChance', 'critChance', 'critDamage', 'damageReduction',
@@ -62,7 +68,7 @@ const STAT_LABEL: Record<string, { pt: string; en: string }> = {
   def: { pt: 'DEF', en: 'DEF' },
   attackSpeed: { pt: 'Vel. Atk', en: 'Atk Speed' },
   dodgeChance: { pt: 'Esquiva', en: 'Dodge' },
-  magicDamage: { pt: 'Dano Magico', en: 'Magic Dmg' },
+  magicDamage: { pt: 'Dano mágico', en: 'Magic damage' },
   critChance: { pt: 'Crit', en: 'Crit' },
   critDamage: { pt: 'Dano Crit', en: 'Crit Dmg' },
   damageReduction: { pt: 'Reducao', en: 'Reduction' },
@@ -103,12 +109,19 @@ function spellRawAmount(spell: Spell, derived: DerivedStats): number {
   return Math.max(1, base + scaling * statValue)
 }
 
-function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean): {
+function cappedDuration(duration: number | undefined, maxDuration?: number): number | undefined {
+  if (duration === undefined) return undefined
+  return Math.min(duration, maxDuration ?? duration)
+}
+
+function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean, maxDuration?: number): {
   primary: string
   details: string[]
 } {
   const e = spell.effect
   const details: string[] = []
+  const duration = cappedDuration(e.duration, maxDuration)
+  const debuffDuration = cappedDuration(e.debuffDuration, maxDuration)
 
   if (e.type === 'damage') {
     const raw = spellRawAmount(spell, derived)
@@ -119,7 +132,7 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean):
     if (e.lifesteal) details.push(`${isEn ? 'Lifesteal' : 'Roubo de vida'} ${fmtPercent(e.lifesteal)}`)
     if (e.enemyAtkMult !== undefined) details.push(`ATK ${formatDebuffMult(e.enemyAtkMult)}`)
     if (e.enemyAtkSpeedMult !== undefined) details.push(`${isEn ? 'Speed' : 'Vel'} ${formatDebuffMult(e.enemyAtkSpeedMult)}`)
-    if (e.debuffDuration) details.push(`${e.debuffDuration}t`)
+    if (debuffDuration) details.push(`${debuffDuration}t`)
     return {
       primary: `${isEn ? 'Damage' : 'Dano'}: Base ${fmtNumber(e.base ?? 0)} -> ${valueText}`,
       details,
@@ -132,7 +145,7 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean):
     if (e.scalingStat) details.push(`${statLabel(e.scalingStat, isEn)} ${fmtNumber(derived[e.scalingStat] as number)}`)
     if (derived.healBonus !== 1) details.push(`${isEn ? 'Heal bonus' : 'Bonus cura'} ${fmtPercent(derived.healBonus - 1)}`)
     if (e.statAdds) details.push(...Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)))
-    if (e.duration) details.push(`${e.duration}t`)
+    if (duration) details.push(`${duration}t`)
     return {
       primary: `${isEn ? 'Heal' : 'Cura'}: Base ${fmtNumber(e.base ?? 0)} -> ${effective}`,
       details,
@@ -147,7 +160,7 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean):
         : (isEn ? 'Refresh deck' : 'Renova deck')
       details.push(`${action} x${e.tileCount ?? (e.tileAction === 'create' ? 2 : 3)}`)
     }
-    if (e.duration) details.push(`${e.duration}t`)
+    if (duration) details.push(`${duration}t`)
     return {
       primary: e.statAdds
         ? `${isEn ? 'Effect' : 'Efeito'}: ${Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)).join(' + ')}`
@@ -159,9 +172,16 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean):
   if (e.type === 'debuff') {
     if (e.enemyAtkMult !== undefined) details.push(`ATK ${formatDebuffMult(e.enemyAtkMult)}`)
     if (e.enemyAtkSpeedMult !== undefined) details.push(`${isEn ? 'Speed' : 'Vel'} ${formatDebuffMult(e.enemyAtkSpeedMult)}`)
-    if (e.debuffDuration) details.push(`${e.debuffDuration}t`)
+    if (debuffDuration) details.push(`${debuffDuration}t`)
     return {
       primary: `${isEn ? 'Debuff' : 'Debuff'}: ${details.join(' + ')}`,
+      details,
+    }
+  }
+
+  if (e.type === 'fizzle') {
+    return {
+      primary: isEn ? 'Fizzle: no practical effect' : 'Falha: sem efeito prático',
       details,
     }
   }
@@ -180,6 +200,7 @@ const SPELLBOOK_TEXT = {
       buff: 'Bônus',
       debuff: 'Debuff',
       utility: 'Util',
+      fizzle: 'Falha',
     },
     category: {
       element: 'Elem',
@@ -201,6 +222,13 @@ const SPELLBOOK_TEXT = {
     autoTitle: 'Configurar auto-uso',
     autoCast: 'Auto-uso de Magias',
     always: 'sempre',
+    search: 'Buscar magia',
+    searchPlaceholder: 'nome, palavra, efeito...',
+    filterAll: 'Todos',
+    filterEffect: 'Efeito',
+    filterRarity: 'Raridade',
+    clearFilters: 'limpar',
+    noFilteredSpells: 'Nenhuma magia encontrada com esses filtros.',
     noSpells: 'Aprenda pelo menos 2 palavras para desbloquear magias.',
   },
   en: {
@@ -213,6 +241,7 @@ const SPELLBOOK_TEXT = {
       buff: 'Buff',
       debuff: 'Debuff',
       utility: 'Util',
+      fizzle: 'Fizzle',
     },
     category: {
       element: 'Elem',
@@ -234,6 +263,13 @@ const SPELLBOOK_TEXT = {
     autoTitle: 'Configure auto-cast',
     autoCast: 'Spell Auto-cast',
     always: 'always',
+    search: 'Search spell',
+    searchPlaceholder: 'name, word, effect...',
+    filterAll: 'All',
+    filterEffect: 'Effect',
+    filterRarity: 'Rarity',
+    clearFilters: 'clear',
+    noFilteredSpells: 'No spells match these filters.',
     noSpells: 'Learn at least 2 words to unlock spells.',
   },
 } as const
@@ -241,7 +277,7 @@ const SPELLBOOK_TEXT = {
 function statList(stats?: Record<string, number>): string {
   if (!stats) return ''
   return Object.entries(stats)
-    .map(([stat, value]) => `${value > 0 ? '+' : ''}${value} ${stat}`)
+    .map(([stat, value]) => `${value > 0 ? '+' : ''}${value} ${statLabel(stat, true)}`)
     .join(', ')
 }
 
@@ -250,15 +286,16 @@ function spellDescription(spell: Spell, isEn: boolean): string {
 
   const { effect } = spell
   if (effect.type === 'damage') {
-    const pieces = [`Deals ${effect.base ?? 0} base damage`]
-    if (effect.scaling) pieces.push(`scales with ${effect.scalingStat ?? 'magic'}`)
-    if (effect.lifesteal) pieces.push(`heals for ${Math.round(effect.lifesteal * 100)}% of damage dealt`)
+    const pieces = [`Deals magical damage with ${effect.base ?? 0} base power`]
+    if (effect.scaling) pieces.push(`its power increases with ${statLabel(effect.scalingStat ?? 'magicDamage', true)}`)
+    if (effect.lifesteal) pieces.push(`restores ${Math.round(effect.lifesteal * 100)}% of damage dealt as HP`)
     if (effect.enemyAtkMult || effect.enemyAtkSpeedMult) pieces.push(`weakens the enemy for ${effect.debuffDuration ?? 0} turns`)
+    if (effect.chaos) pieces.push('damage varies unpredictably')
     return `${pieces.join(', ')}.`
   }
   if (effect.type === 'heal') {
-    const pieces = [`Restores ${effect.base ?? 0} base HP`]
-    if (effect.scaling) pieces.push(`scales with ${effect.scalingStat ?? 'magic'}`)
+    const pieces = [`Restores HP with ${effect.base ?? 0} base healing`]
+    if (effect.scaling) pieces.push(`its healing increases with ${statLabel(effect.scalingStat ?? 'magicDamage', true)}`)
     if (effect.statAdds) pieces.push(`also grants ${statList(effect.statAdds)} for ${effect.duration ?? 0} turns`)
     return `${pieces.join(', ')}.`
   }
@@ -266,7 +303,10 @@ function spellDescription(spell: Spell, isEn: boolean): string {
     return `Grants ${statList(effect.statAdds)} for ${effect.duration ?? 0} turns.`
   }
   if (effect.type === 'debuff') {
-    return `Weakens the enemy for ${effect.debuffDuration ?? 0} turns.`
+    const parts = []
+    if (effect.enemyAtkMult !== undefined) parts.push(`enemy ATK ${formatDebuffMult(effect.enemyAtkMult)}`)
+    if (effect.enemyAtkSpeedMult !== undefined) parts.push(`enemy speed ${formatDebuffMult(effect.enemyAtkSpeedMult)}`)
+    return `Weakens the enemy${parts.length ? `: ${parts.join(', ')}` : ''} for ${effect.debuffDuration ?? 0} turns.`
   }
   if (effect.tileAction === 'create') {
     return `Creates ${effect.tileCount ?? 2} new map tiles.`
@@ -274,7 +314,58 @@ function spellDescription(spell: Spell, isEn: boolean): string {
   if (effect.tileAction === 'refresh') {
     return `Refreshes ${effect.tileCount ?? 3} map tiles.`
   }
+  if (effect.type === 'fizzle') {
+    return 'The magic collapses before producing any practical effect.'
+  }
   return 'A utility spell with no direct combat effect.'
+}
+
+function spellSearchText(spell: Spell, isEn: boolean, derived: DerivedStats): string {
+  const w1 = ALL_WORDS.find(w => w.id === spell.word1Id)
+  const w2 = ALL_WORDS.find(w => w.id === spell.word2Id)
+  const effectLabel = SPELLBOOK_TEXT[isEn ? 'en' : 'pt'].effect[spell.effect.type]
+  const alternateEffectLabel = SPELLBOOK_TEXT[isEn ? 'pt' : 'en'].effect[spell.effect.type]
+  const rarityLabel = (isEn ? RARITY_LABEL_EN : RARITY_LABEL)[spell.rarity]
+  const summary = spellEffectSummary(spell, derived, isEn)
+  const alternateSummary = spellEffectSummary(spell, derived, !isEn)
+  return [
+    spell.id,
+    spell.name,
+    spell.description,
+    spellDescription(spell, isEn),
+    spellDescription(spell, !isEn),
+    summary.primary,
+    ...summary.details,
+    alternateSummary.primary,
+    ...alternateSummary.details,
+    spell.word1Id,
+    spell.word2Id,
+    w1?.nameEn,
+    w1?.namePt,
+    w2?.nameEn,
+    w2?.namePt,
+    effectLabel,
+    alternateEffectLabel,
+    spell.effect.type,
+    rarityLabel,
+    spell.rarity,
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+function spellMatchesFilters(
+  spell: Spell,
+  isEn: boolean,
+  derived: DerivedStats,
+  query: string,
+  effectFilter: SpellEffectFilter,
+  rarityFilter: SpellRarityFilter,
+): boolean {
+  if (effectFilter !== 'all' && spell.effect.type !== effectFilter) return false
+  if (rarityFilter !== 'all' && spell.rarity !== rarityFilter) return false
+
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return spellSearchText(spell, isEn, derived).includes(q)
 }
 
 // ─── Word card ────────────────────────────────────────────────────────────────
@@ -314,7 +405,6 @@ function WordCard({ word, isSelected, onClick }: {
 // ─── Spell card ───────────────────────────────────────────────────────────────
 function SpellCard({
   spell,
-  cooldownRemaining,
   effectiveCooldown,
   firstSlotManaCost,
   derived,
@@ -322,7 +412,6 @@ function SpellCard({
   isAssigning,
 }: {
   spell: Spell
-  cooldownRemaining: number
   effectiveCooldown: number
   firstSlotManaCost: number | null
   derived: DerivedStats
@@ -331,8 +420,7 @@ function SpellCard({
 }) {
   const isEn = useSettingsStore(s => s.lang === 'en')
   const tx = SPELLBOOK_TEXT[isEn ? 'en' : 'pt']
-  const pct = cooldownRemaining / spell.cooldown
-  const summary = spellEffectSummary(spell, derived, isEn)
+  const summary = spellEffectSummary(spell, derived, isEn, effectiveCooldown)
   return (
     <div className={cn(
       'rounded-xl border-2 px-3 py-2.5 flex items-start gap-3',
@@ -395,14 +483,6 @@ function SpellCard({
             </div>
           )}
         </div>
-        {cooldownRemaining > 0 && (
-          <div className="mt-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-indigo-400 dark:bg-indigo-500 transition-[width]"
-              style={{ width: `${(1 - pct) * 100}%` }}
-            />
-          </div>
-        )}
       </div>
 
       {/* Assign button */}
@@ -439,7 +519,6 @@ export default function SpellbookPanel() {
   const cooldowns     = useSpellStore(s => s.cooldowns)
   const setSpellSlot  = useSpellStore(s => s.setSpellSlot)
   const activeBuffs   = useSpellStore(s => s.activeBuffs)
-  const activeDebuff  = useSpellStore(s => s.activeDebuff)
   const spellAutoSlots = useSpellStore(s => s.autoSlots)
   const setAutoSlot    = useSpellStore(s => s.setAutoSlot)
 
@@ -461,6 +540,9 @@ export default function SpellbookPanel() {
   const [selectedWords, setSelectedWords] = useState<string[]>([])
   const [assigningSpell, setAssigningSpell] = useState<string | null>(null)
   const [showAutoConfig, setShowAutoConfig] = useState(false)
+  const [spellQuery, setSpellQuery] = useState('')
+  const [effectFilter, setEffectFilter] = useState<SpellEffectFilter>('all')
+  const [rarityFilter, setRarityFilter] = useState<SpellRarityFilter>('all')
   const autoConfigRef = useRef<HTMLDivElement>(null)
 
   // ── Word selection for preview combo ──
@@ -495,6 +577,11 @@ export default function SpellbookPanel() {
   }, [showAutoConfig])
 
   const knownWords = ALL_WORDS.filter(w => knownWordIds.includes(w.id))
+  const filteredSpells = useMemo(
+    () => availableSpells.filter(spell => spellMatchesFilters(spell, isEn, spellDerived, spellQuery, effectFilter, rarityFilter)),
+    [availableSpells, effectFilter, isEn, rarityFilter, spellDerived, spellQuery],
+  )
+  const hasSpellFilters = spellQuery.trim() !== '' || effectFilter !== 'all' || rarityFilter !== 'all'
 
   return (
     <div>
@@ -728,40 +815,81 @@ export default function SpellbookPanel() {
             </div>
           </div>
 
-          {/* Active effects */}
-          {(activeBuffs.length > 0 || activeDebuff) && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {activeBuffs.map(b => {
-                const spell = SPELL_MAP.get(b.spellId)
-                return (
-                  <span key={b.spellId} title={spell?.name} className="inline-flex items-center gap-0.5 text-[8px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5 font-semibold">
-                    {SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'} {spell?.name ?? b.spellId} <span className="opacity-60">{b.remaining}t</span>
-                  </span>
-                )
-              })}
-              {activeDebuff && (() => {
-                const spell = SPELL_MAP.get(activeDebuff.spellId)
-                return (
-                  <span title={spell?.name} className="inline-flex items-center gap-0.5 text-[8px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded px-1.5 py-0.5 font-semibold">
-                    {SPELL_ICONS[activeDebuff.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▼'} {spell?.name ?? 'Debuff'} <span className="opacity-60">{activeDebuff.remaining}t</span>
-                  </span>
-                )
-              })()}
+          {/* Search and filters */}
+          <div className="mb-3 rounded-xl border border-slate-200/80 dark:border-slate-800/90 bg-slate-50 dark:bg-slate-900/50 px-2.5 py-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="relative flex-1 min-w-0">
+                <span className="sr-only">{tx.search}</span>
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">⌕</span>
+                <input
+                  type="search"
+                  value={spellQuery}
+                  onChange={e => setSpellQuery(e.target.value)}
+                  placeholder={tx.searchPlaceholder}
+                  className="h-8 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-6 pr-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-indigo-400 dark:focus:border-indigo-500"
+                />
+              </label>
+
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 sm:pb-0">
+                <select
+                  value={effectFilter}
+                  onChange={e => setEffectFilter(e.target.value as SpellEffectFilter)}
+                  title={tx.filterEffect}
+                  className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-indigo-400 dark:focus:border-indigo-500"
+                >
+                  <option value="all">{tx.filterEffect}: {tx.filterAll}</option>
+                  {SPELL_EFFECT_TYPES.map(type => (
+                    <option key={type} value={type}>{tx.effect[type]}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={rarityFilter}
+                  onChange={e => setRarityFilter(e.target.value as SpellRarityFilter)}
+                  title={tx.filterRarity}
+                  className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-indigo-400 dark:focus:border-indigo-500"
+                >
+                  <option value="all">{tx.filterRarity}: {tx.filterAll}</option>
+                  {SPELL_RARITIES.map(rarity => (
+                    <option key={rarity} value={rarity}>{(isEn ? RARITY_LABEL_EN : RARITY_LABEL)[rarity]}</option>
+                  ))}
+                </select>
+
+                {hasSpellFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpellQuery('')
+                      setEffectFilter('all')
+                      setRarityFilter('all')
+                    }}
+                    className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    {tx.clearFilters}
+                  </button>
+                )}
+              </div>
             </div>
-          )}
+            <div className="mt-1.5 text-[9px] font-semibold text-slate-400 dark:text-slate-600">
+              {filteredSpells.length}/{availableSpells.length}
+            </div>
+          </div>
 
           {/* Spell list */}
           {availableSpells.length === 0 ? (
             <p className="text-[10px] text-slate-400 dark:text-slate-600 italic text-center py-3">
               {tx.noSpells}
             </p>
+          ) : filteredSpells.length === 0 ? (
+            <p className="text-[10px] text-slate-400 dark:text-slate-600 italic text-center py-3">
+              {tx.noFilteredSpells}
+            </p>
           ) : (
             <div className="flex flex-col gap-1.5">
-              {availableSpells.map(spell => (
+              {filteredSpells.map(spell => (
                 <SpellCard
                   key={spell.id}
                   spell={spell}
-                  cooldownRemaining={cooldowns[spell.id] ?? 0}
                   effectiveCooldown={Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))}
                   firstSlotManaCost={spellSlots[0] === spell.id
                     ? Math.max(1, Math.round(spell.manaCost * (1 - weaponProfile.staffSlotOneManaDiscount)))

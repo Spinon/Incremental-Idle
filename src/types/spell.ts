@@ -2,7 +2,7 @@ import type { DerivedStats } from './hero'
 
 export type SpellRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'unique'
 export type WordCategory = 'element' | 'form'
-export type SpellEffectType = 'damage' | 'heal' | 'buff' | 'debuff' | 'utility'
+export type SpellEffectType = 'damage' | 'heal' | 'buff' | 'debuff' | 'utility' | 'fizzle'
 
 export interface Word {
   id: string

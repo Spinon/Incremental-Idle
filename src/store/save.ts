@@ -14,6 +14,7 @@ export const SAVE_KEYS = {
 export const CLOUD_SAVE_SLOT_KEY = 'default'
 export const CLOUD_SAVE_LOCAL_ID_KEY = 'incremental-idle-cloud-local-id'
 export const CLOUD_SAVE_LOCAL_UPDATED_AT_KEY = 'incremental-idle-cloud-local-updated-at'
+export const OFFLINE_LAST_ACTIVE_KEY = 'incremental-idle-last-active-at'
 
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
 
@@ -22,6 +23,7 @@ export interface LocalSaveSnapshot {
   appVersion: string
   localSaveId: string
   capturedAt: string
+  lastActiveAt?: number
   entries: Partial<Record<SaveKey, string>>
 }
 
@@ -91,12 +93,14 @@ export function captureLocalSaveSnapshot(options: { markChanged?: boolean } = {}
 
   const existingUpdatedAt = getLocalSaveUpdatedAt()
   const shouldMarkChanged = options.markChanged !== false
+  const lastActiveAt = Number(localStorage.getItem(OFFLINE_LAST_ACTIVE_KEY))
 
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     appVersion: __APP_VERSION__,
     localSaveId: getLocalSaveId(),
     capturedAt: existingUpdatedAt ?? (shouldMarkChanged ? markLocalSaveChanged() : ''),
+    lastActiveAt: Number.isFinite(lastActiveAt) && lastActiveAt > 0 ? lastActiveAt : Date.now(),
     entries,
   }
 }
@@ -115,5 +119,15 @@ export function applyLocalSaveSnapshot(snapshot: LocalSaveSnapshot): void {
   }
   if (typeof snapshot.capturedAt === 'string' && snapshot.capturedAt) {
     localStorage.setItem(CLOUD_SAVE_LOCAL_UPDATED_AT_KEY, snapshot.capturedAt)
+  }
+
+  const fallbackLastActiveAt = typeof snapshot.capturedAt === 'string'
+    ? Date.parse(snapshot.capturedAt)
+    : NaN
+  const lastActiveAt = typeof snapshot.lastActiveAt === 'number' && Number.isFinite(snapshot.lastActiveAt)
+    ? snapshot.lastActiveAt
+    : fallbackLastActiveAt
+  if (Number.isFinite(lastActiveAt) && lastActiveAt > 0) {
+    localStorage.setItem(OFFLINE_LAST_ACTIVE_KEY, String(lastActiveAt))
   }
 }

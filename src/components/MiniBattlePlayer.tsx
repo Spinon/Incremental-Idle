@@ -9,9 +9,8 @@ import { useMapStore } from '../store/mapStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
-import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
-import { applySpellBuffs } from '../formulas/spells'
+import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
@@ -32,6 +31,7 @@ const MINI_EFFECT_ICON: Record<string, string> = {
   buff: '▲',
   debuff: '▼',
   utility: '◎',
+  fizzle: '∅',
 }
 
 const MINI_PLAYER_WIDTH = 236
@@ -150,6 +150,8 @@ export default function MiniBattlePlayer() {
   const gainXp = useHeroStore(s => s.gainXp)
   const gold = useHeroStore(s => s.gold)
   const equipment = useInventoryStore(s => s.equipment)
+  const weaponProgress = useInventoryStore(s => s.weaponProgress)
+  const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const consumables = useInventoryStore(s => s.consumables)
   const quickslots = useInventoryStore(s => s.quickslots)
   const removeConsumable = useInventoryStore(s => s.removeConsumable)
@@ -165,7 +167,14 @@ export default function MiniBattlePlayer() {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
   const equipBonuses = getEquipmentBonuses(equipment)
-  const derivedStats = applySpellBuffs(getDerivedStats(attrs, equipBonuses, heroLevel), activeBuffs)
+  const derivedStats = getEffectiveDerivedStatsFromBonuses(
+    attrs,
+    equipBonuses,
+    heroLevel,
+    weaponProgress,
+    equippedWeapons,
+    activeBuffs,
+  )
   const knownWordIds = getKnownWordIds(heroLevel, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
 
