@@ -65,16 +65,18 @@ function monsterStats(a: Attributes) {
   return {
     // ── Same coefficients as hero ─────────────────────────────────────────
     atk:             Math.max(1, Math.round(a.forca * 2.5 + a.destreza * 0.6)),
-    // DEF: vitalidade (tank) + inteligência (combat wisdom), same as hero
-    def:             Math.max(0, Math.round(a.vitalidade * 0.5 + a.inteligencia * 0.2)),
+    // DEF: armadura física = só vitalidade (same as hero)
+    def:             Math.max(0, Math.round(a.vitalidade * 0.5)),
     maxHp:           Math.max(5, Math.round(a.vitalidade * 8 + a.forca * 3 + 5)),
     attackSpeed:     Math.max(0.1, Math.round((0.5 + a.agilidade * 0.12 + a.destreza * 0.04) * 100) / 100),
     dodgeChance:     Math.min(0.50, Math.round(a.agilidade * 0.005 * 1000) / 1000),
     // Critical hits — destreza gives chance, forca amplifies damage (identical to hero)
     critChance:      Math.min(0.50, Math.round((BASE_CRIT_CHANCE + a.destreza * CRIT_CHANCE_PER_DEX) * 1000) / 1000),
     critDamage:      1.5 + a.forca * 0.01,
-    // Defensive efficiency — destreza gives technique-based damage reduction
-    damageReduction: Math.min(0.35, Math.round(a.destreza * 0.01 * 1000) / 1000),
+    // Precision — destreza negates target dodge (identical to hero)
+    accuracy:        Math.min(0.50, Math.round(a.destreza * 0.006 * 1000) / 1000),
+    // Defensive — forca gives brawn-based damage reduction (identical to hero)
+    damageReduction: Math.min(0.35, Math.round(a.forca * 0.01 * 1000) / 1000),
   }
 }
 
@@ -152,10 +154,10 @@ export function estimateMonster(
   const labelEn  = MONSTER_RARITY_LABEL_EN[rarity]
   const namePt = labelPt ? `[${labelPt}] ${template.namePt}` : template.namePt
   const nameEn = labelEn ? `[${labelEn}] ${template.nameEn}` : template.nameEn
-  const resIgnea   = Math.min(0.5, attrs.vitalidade   * 0.008)
-  const resGlacial = Math.min(0.5, attrs.destreza     * 0.008)
+  const resIgnea   = Math.min(0.5, attrs.vitalidade   * 0.008 + attrs.inteligencia * 0.004)
+  const resGlacial = Math.min(0.5, attrs.destreza     * 0.008 + attrs.inteligencia * 0.004)
   const resSombria = Math.min(0.5, attrs.inteligencia * 0.008)
-  const resVital   = Math.min(0.5, attrs.sabedoria    * 0.008)
+  const resVital   = Math.min(0.5, attrs.sabedoria    * 0.008 + attrs.inteligencia * 0.004)
 
   return {
     name: namePt,
@@ -170,6 +172,7 @@ export function estimateMonster(
     dodgeChance: s.dodgeChance,
     critChance: s.critChance,
     critDamage: s.critDamage,
+    accuracy: s.accuracy,
     damageReduction: s.damageReduction,
     element: template.element,
     statusChance: template.statusChance,
@@ -205,10 +208,10 @@ export function buildMonster(
   const nameEn = labelEn ? `[${labelEn}] ${template.nameEn}` : template.nameEn
 
   // Elemental resistances derived from attributes (same formula as hero)
-  const resIgnea   = Math.min(0.5, attrs.vitalidade   * 0.008)
-  const resGlacial = Math.min(0.5, attrs.destreza     * 0.008)
+  const resIgnea   = Math.min(0.5, attrs.vitalidade   * 0.008 + attrs.inteligencia * 0.004)
+  const resGlacial = Math.min(0.5, attrs.destreza     * 0.008 + attrs.inteligencia * 0.004)
   const resSombria = Math.min(0.5, attrs.inteligencia * 0.008)
-  const resVital   = Math.min(0.5, attrs.sabedoria    * 0.008)
+  const resVital   = Math.min(0.5, attrs.sabedoria    * 0.008 + attrs.inteligencia * 0.004)
 
   return {
     name:            namePt,
@@ -223,6 +226,7 @@ export function buildMonster(
     dodgeChance:     s.dodgeChance,
     critChance:      s.critChance,
     critDamage:      s.critDamage,
+    accuracy:        s.accuracy,
     damageReduction: s.damageReduction,
     element:         template.element,
     statusChance:    template.statusChance,

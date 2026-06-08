@@ -4,7 +4,11 @@ import { immer } from 'zustand/middleware/immer'
 import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import { useInventoryStore } from './inventoryStore'
+import { useHeroStore } from './heroStore'
+import { useSpellStore } from './spellStore'
 import { getWeaponCombatProfile, WEAPON_EFFECT_LABELS } from '../formulas/weapons'
+import { getEquipmentBonuses } from '../formulas/items'
+import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
 import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
@@ -30,6 +34,7 @@ export interface Unit {
   dodgeChance: number
   critChance: number
   critDamage: number
+  accuracy: number
   damageReduction: number
   // Elemental properties
   element?:   ElementType        // physical attack element (monsters only)
@@ -70,7 +75,7 @@ export interface SpellLogData {
   name: string
   nameEn?: string
   icon: string
-  effectType: 'damage' | 'heal' | 'buff' | 'debuff' | 'utility'
+  effectType: 'damage' | 'heal' | 'buff' | 'debuff' | 'utility' | 'fizzle'
   /** Damage dealt (damage spells) or HP restored (heal spells); 0 for buff/debuff/utility. */
   value: number
 }
@@ -96,7 +101,7 @@ export interface LogEntry {
 
 interface HeroSync {
   atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number
-  critChance: number; critDamage: number; damageReduction: number
+  critChance: number; critDamage: number; accuracy: number; damageReduction: number
   resIgnea: number; resGlacial: number; resSombria: number; resVital: number
 }
 
@@ -155,7 +160,7 @@ interface BattleStore {
 const INITIAL_PLAYER: Unit = {
   name: 'Hero', level: 0, hp: 30, maxHp: 30,
   atk: 5, def: 2, atkSpeed: 1.0, dodgeChance: 0,
-  critChance: 0, critDamage: 1.5, damageReduction: 0,
+  critChance: 0, critDamage: 1.5, accuracy: 0, damageReduction: 0,
   weakTo: [], resIgnea: 0, resGlacial: 0, resSombria: 0, resVital: 0,
   enraged: false,
 }
@@ -206,9 +211,10 @@ function calcDmg(a: Unit, d: Unit): { dmg: number; isCrit: boolean } {
   return { dmg: Math.max(1, Math.round(base * variance)), isCrit }
 }
 
-/** Returns true when the defender dodges the hit. */
-function checkDodge(defender: Unit): boolean {
-  return Math.random() < defender.dodgeChance
+/** Returns true when the defender dodges the hit. Attacker accuracy negates dodge. */
+function checkDodge(attacker: Unit, defender: Unit): boolean {
+  const effDodge = Math.max(0, defender.dodgeChance - attacker.accuracy)
+  return Math.random() < effDodge
 }
 
 function calcHits(mySpeed: number, theirSpeed: number): number {
@@ -227,6 +233,36 @@ const WEAPON_LOG_ICON: Record<WeaponType, string> = {
 function weaponLog(type: WeaponType): LogEntry['weaponEffect'] {
   const label = WEAPON_EFFECT_LABELS[type]
   return { type, name: label.pt, nameEn: label.en, icon: WEAPON_LOG_ICON[type] }
+}
+
+function syncBattlePlayerFromStores() {
+  const hero = useHeroStore.getState()
+  const inventory = useInventoryStore.getState()
+  const spell = useSpellStore.getState()
+  const derived = getEffectiveDerivedStatsFromBonuses(
+    hero.attributes,
+    getEquipmentBonuses(inventory.equipment),
+    hero.level,
+    inventory.weaponProgress,
+    inventory.equippedWeapons,
+    spell.activeBuffs,
+  )
+
+  useBattleStore.getState().syncFromHero({
+    atk: derived.atk,
+    def: derived.def,
+    maxHp: derived.maxHp,
+    atkSpeed: Math.max(0.1, derived.attackSpeed),
+    dodgeChance: derived.dodgeChance,
+    critChance: Math.min(0.75, derived.critChance),
+    critDamage: derived.critDamage,
+    accuracy: derived.accuracy,
+    damageReduction: derived.damageReduction,
+    resIgnea: derived.resIgnea,
+    resGlacial: derived.resGlacial,
+    resSombria: derived.resSombria,
+    resVital: derived.resVital,
+  })
 }
 
 export const useBattleStore = create<BattleStore>()(
@@ -292,7 +328,7 @@ export const useBattleStore = create<BattleStore>()(
       st.deathHistory = st.deathHistory.slice(0, 8)
     }),
 
-    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, damageReduction,
+    syncFromHero: ({ atk, def, maxHp, atkSpeed, dodgeChance, critChance, critDamage, accuracy, damageReduction,
                      resIgnea, resGlacial, resSombria, resVital }) => set((st) => {
       const prevMaxHp = Math.max(1, st.player.maxHp)
       const hpRatio = st.player.hp > 0 ? st.player.hp / prevMaxHp : 0
@@ -305,6 +341,7 @@ export const useBattleStore = create<BattleStore>()(
       st.player.dodgeChance     = dodgeChance
       st.player.critChance      = critChance
       st.player.critDamage      = critDamage
+      st.player.accuracy        = accuracy
       st.player.damageReduction = damageReduction
       st.player.resIgnea        = resIgnea
       st.player.resGlacial      = resGlacial
@@ -335,7 +372,7 @@ export const useBattleStore = create<BattleStore>()(
 
       // ── Shock: defender cannot dodge ─────────────────────────────────────
       const shocked = defSt.some(s => s.type === 'shock')
-      if (!shocked && checkDodge(defUnit)) {
+      if (!shocked && checkDodge(atkUnit, defUnit)) {
         st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, missed: true })
         st.hitsLeft -= 1
         return
@@ -348,12 +385,12 @@ export const useBattleStore = create<BattleStore>()(
       // Blind → attacker cannot crit
       if (atkSt.some(s => s.type === 'blind')) effAtk.critChance = 0
 
-      // Distortion → attacker's ATK swapped with destreza-equivalent
-      // (critChance + damageReduction) × 100 replaces raw ATK:
+      // Distortion → attacker's ATK swapped with its precision (destreza-equivalent):
+      // (critChance + accuracy) × 100 replaces raw ATK:
       //   forca-dominant monsters (high ATK, low dex) become very weak
       //   destreza-dominant monsters (spider) are barely affected
       if (atkSt.some(s => s.type === 'distortion')) {
-        effAtk.atk = Math.max(1, Math.round((atkUnit.critChance + atkUnit.damageReduction) * 100))
+        effAtk.atk = Math.max(1, Math.round((atkUnit.critChance + atkUnit.accuracy) * 100))
       }
 
       // Curse → defender's damage reduction zeroed
@@ -471,6 +508,7 @@ export const useBattleStore = create<BattleStore>()(
 
     skipBattle: () => {
       let guard = 2000
+      syncBattlePlayerFromStores()
       while (useBattleStore.getState().phase !== 'over' && guard-- > 0) {
         useBattleStore.getState().applyHit()
         const afterHit = useBattleStore.getState()
@@ -478,6 +516,9 @@ export const useBattleStore = create<BattleStore>()(
         if (afterHit.hitsLeft <= 0) {
           useBattleStore.getState().switchAttacker()
           if (useBattleStore.getState().attacker === 'enemy') {
+            useSpellStore.getState().onBattleTurn()
+            syncBattlePlayerFromStores()
+            if (useBattleStore.getState().phase === 'over') break
             useBattleStore.getState().tickStatuses()
           }
         }

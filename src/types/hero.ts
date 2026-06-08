@@ -33,7 +33,8 @@ export interface DerivedStats {
   // Combat — advanced
   critChance: number        // Base 5% + Destreza — probability of a critical hit (0–0.5)
   critDamage: number        // Força   — critical hit damage multiplier (≥1.5)
-  damageReduction: number   // Destreza — fraction of all incoming damage negated (0–0.35)
+  accuracy: number          // Destreza — reduces the target's effective dodge (0–0.5)
+  damageReduction: number   // Força    — fraction of all incoming damage negated (0–0.35)
   healBonus: number         // Sabedoria — multiplies all spell heals cast by the hero
   // Resources
   maxStamina: number

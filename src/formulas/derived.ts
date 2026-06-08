@@ -51,8 +51,8 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
   return {
     // ── Primary combat ───────────────────────────────────────────────────────
     atk:    BASE.atk    + fa.forca      * 1.5  + lvl * 1.5              + (eq?.atk ?? 0),
-    //  DEF: Vitalidade (tank), Inteligência (magical insight), passive level
-    def:    BASE.def    + fa.vitalidade * 0.5  + fa.inteligencia * 0.2
+    //  DEF: armadura física = só Vitalidade (tank) + passivo de nível
+    def:    BASE.def    + fa.vitalidade * 0.5
                         + Math.floor(lvl * 0.5)                          + (eq?.def ?? 0),
     maxHp:  BASE.maxHp  + fa.vitalidade * 15   + fa.forca * 5 + lvl * 8 + (eq?.hp  ?? 0),
     attackSpeed:   BASE.attackSpeed  + fa.agilidade * 0.1                + (eq?.atkSpeed    ?? 0),
@@ -61,10 +61,12 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
     magicDamage: BASE.magicDamage + fa.inteligencia * 1                  + (eq?.magicDamage ?? 0),
 
     // ── Advanced combat ──────────────────────────────────────────────────────
-    //  Destreza: precision → critical hits + all-damage reduction (technique)
+    //  Destreza: precision → critical hits + accuracy (negates target dodge)
     critChance:      Math.min(0.50, BASE.critChance + fa.destreza * 0.006),
     critDamage:      1.5 + fa.forca * 0.01,        // Força amplifies crit damage
-    damageReduction: Math.min(0.35, fa.destreza * 0.01),
+    accuracy:        Math.min(0.50, fa.destreza * 0.006),
+    //  Força: brawn → shrugs off blows (all-damage reduction)
+    damageReduction: Math.min(0.35, fa.forca * 0.01),
     healBonus:       1 + fa.sabedoria * 0.02,       // Sabedoria: heal potency
 
     // ── Stamina ──────────────────────────────────────────────────────────────
@@ -92,11 +94,12 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
     xpBonus:         BASE.xpBonus       + fa.carisma * 0.03 + (eq?.xpBonus    ?? 0),
 
     // ── Elemental resistances ─────────────────────────────────────────────
-    // 0.008 per attribute point → max 50 % at ~63 pts (full investment cap)
-    resIgnea:   Math.min(0.5, fa.vitalidade   * 0.008 + (eq?.resIgnea   ?? 0)),
-    resGlacial: Math.min(0.5, fa.destreza     * 0.008 + (eq?.resGlacial ?? 0)),
+    // Home stat: 0.008/pt (cap 50% ≈ 63 pts). Inteligência = "defesa mágica":
+    // sombria é a especialidade dela (0.008) + um pouco de TODOS os elementos (0.004).
+    resIgnea:   Math.min(0.5, fa.vitalidade   * 0.008 + fa.inteligencia * 0.004 + (eq?.resIgnea   ?? 0)),
+    resGlacial: Math.min(0.5, fa.destreza     * 0.008 + fa.inteligencia * 0.004 + (eq?.resGlacial ?? 0)),
     resSombria: Math.min(0.5, fa.inteligencia * 0.008 + (eq?.resSombria ?? 0)),
-    resVital:   Math.min(0.5, fa.sabedoria    * 0.008 + (eq?.resVital   ?? 0)),
+    resVital:   Math.min(0.5, fa.sabedoria    * 0.008 + fa.inteligencia * 0.004 + (eq?.resVital   ?? 0)),
   }
 }
 

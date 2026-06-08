@@ -25,10 +25,9 @@ import { useSpellStore } from './store/spellStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useNotifStore } from './store/notifStore'
 import { useUIStore } from './store/uiStore'
-import { getDerivedStats, getBaseSpeed } from './formulas/derived'
+import { getBaseSpeed } from './formulas/derived'
 import { getEquipmentBonuses } from './formulas/items'
-import { getWeaponStatBonuses } from './formulas/weapons'
-import { applySpellBuffs } from './formulas/spells'
+import { getEffectiveDerivedStatsFromBonuses } from './formulas/effectiveStats'
 import { useT } from './i18n/useT'
 import type { OfflineSyncState } from './hooks/useGameLoop'
 
@@ -123,8 +122,8 @@ function OfflineSyncOverlay({
 }
 
 function GameRoot() {
-  useCloudSaveSync()
   const { offlineSync, acceptOfflineProgress, discardOfflineProgress } = useGameLoop()
+  useCloudSaveSync(offlineSync.status !== 'idle')
 
   const theme        = useSettingsStore((s) => s.theme)
   const lang         = useSettingsStore((s) => s.lang)
@@ -214,10 +213,17 @@ function GameRoot() {
   useEffect(() => {
     if (scene !== 'map') {
       const equip = getEquipmentBonuses(equipment)
-      const d     = applySpellBuffs(getDerivedStats(attributes, equip, heroLevel), activeBuffs)
+      const d = getEffectiveDerivedStatsFromBonuses(
+        attributes,
+        equip,
+        heroLevel,
+        weaponProgress,
+        equippedWeapons,
+        activeBuffs,
+      )
       setSpeed(getBaseSpeed(d))
     }
-  }, [activeBuffs, attributes, equipment, heroLevel, scene, setSpeed])
+  }, [activeBuffs, attributes, equipment, equippedWeapons, heroLevel, scene, setSpeed, weaponProgress])
 
   // Interior scenes live inside the battle tab; expose them through
   // the mini player when the user is currently looking at another tab.
@@ -231,21 +237,19 @@ function GameRoot() {
   // heroLevel is included so passive level bonuses take effect on level-up.
   useEffect(() => {
     const equip = getEquipmentBonuses(equipment)
-    const weaponStats = getWeaponStatBonuses(weaponProgress, equippedWeapons)
-    const base  = getDerivedStats(attributes, equip, heroLevel)
-    const d     = applySpellBuffs({
-      ...base,
-      atk: base.atk + weaponStats.atk,
-      def: base.def + weaponStats.def,
-      attackSpeed: Math.max(0.1, base.attackSpeed + weaponStats.attackSpeed),
-      critChance: Math.min(0.75, base.critChance + weaponStats.critChance),
-      magicDamage: base.magicDamage + weaponStats.magicDamage,
-    }, activeBuffs)
+    const d = getEffectiveDerivedStatsFromBonuses(
+      attributes,
+      equip,
+      heroLevel,
+      weaponProgress,
+      equippedWeapons,
+      activeBuffs,
+    )
     syncFromHero({
       atk: d.atk, def: d.def, maxHp: d.maxHp,
       atkSpeed: Math.max(0.1, d.attackSpeed), dodgeChance: d.dodgeChance,
       critChance: Math.min(0.75, d.critChance), critDamage: d.critDamage,
-      damageReduction: d.damageReduction,
+      accuracy: d.accuracy, damageReduction: d.damageReduction,
       resIgnea: d.resIgnea, resGlacial: d.resGlacial,
       resSombria: d.resSombria, resVital: d.resVital,
     })

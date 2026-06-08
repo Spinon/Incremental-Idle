@@ -4,9 +4,8 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useSpellStore } from '../store/spellStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
-import { applySpellBuffs } from '../formulas/spells'
 import { getEquipmentBonuses } from '../formulas/items'
-import { getWeaponStatBonuses } from '../formulas/weapons'
+import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import type { Attributes, DerivedStats } from '../types/hero'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -54,6 +53,7 @@ function formatStatValue(key: StatKey, value: number): string {
     case 'xpBonus':
       return formatMultiplierBonus(value)
     case 'dodgeChance':
+    case 'accuracy':
     case 'critChance':
     case 'damageReduction':
     case 'dropChance':
@@ -81,17 +81,15 @@ export default function HeroPanel() {
   const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const activeBuffs  = useSpellStore(s => s.activeBuffs)
   const equipBonuses = getEquipmentBonuses(equipment)
-  const weaponStats  = getWeaponStatBonuses(weaponProgress, equippedWeapons)
   const baseDerived  = getDerivedStats(attributes, undefined, level)
-  const equipmentDerived = getDerivedStats(attributes, equipBonuses, level)
-  const derived      = applySpellBuffs({
-    ...equipmentDerived,
-    atk: equipmentDerived.atk + weaponStats.atk,
-    def: equipmentDerived.def + weaponStats.def,
-    attackSpeed: Math.max(0.1, equipmentDerived.attackSpeed + weaponStats.attackSpeed),
-    critChance: Math.min(0.75, equipmentDerived.critChance + weaponStats.critChance),
-    magicDamage: equipmentDerived.magicDamage + weaponStats.magicDamage,
-  }, activeBuffs)
+  const derived      = getEffectiveDerivedStatsFromBonuses(
+    attributes,
+    equipBonuses,
+    level,
+    weaponProgress,
+    equippedWeapons,
+    activeBuffs,
+  )
   const maxSpeed     = getBaseSpeed(derived)
   const baseMaxSpeed = getBaseSpeed(baseDerived)
   const t            = useT()
@@ -108,6 +106,7 @@ export default function HeroPanel() {
         { key: 'maxHp', label: t.statNames.hpMax },
         { key: 'attackSpeed', label: t.statNames.atkSpeed },
         { key: 'dodgeChance', label: t.statNames.dodge },
+        { key: 'accuracy', label: t.statNames.accuracy },
         { key: 'critChance', label: t.statNames.critChance },
         { key: 'critDamage', label: t.statNames.critDamage },
         { key: 'damageReduction', label: t.statNames.damageReduction },
