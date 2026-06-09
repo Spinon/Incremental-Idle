@@ -20,6 +20,7 @@ import {
   WEAPON_TYPES,
 } from '../formulas/weapons'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 const BASE_SLOTS      = 12
 const EXPAND_SLOTS    = 6
@@ -166,6 +167,7 @@ export const useInventoryStore = create<InventoryStore>()(
             added = true
           }
         })
+        if (added) requestCriticalCloudSave()
         return added
       },
 
@@ -283,35 +285,43 @@ export const useInventoryStore = create<InventoryStore>()(
         st.equippedWeapons = enforceWeaponLoadout(st.equippedWeapons)
       }),
 
-      grantWeaponXp: (amount) => set((st) => {
-        st.weaponProgress = normalizeWeaponProgress(st.weaponProgress)
-        st.equippedWeapons = normalizeEquippedWeapons(st.equippedWeapons)
-        const equipped = equippedWeaponTypes(st.equippedWeapons)
-        if (equipped.length === 0) return
+      grantWeaponXp: (amount) => {
+        let leveledUp = false
+        set((st) => {
+          st.weaponProgress = normalizeWeaponProgress(st.weaponProgress)
+          st.equippedWeapons = normalizeEquippedWeapons(st.equippedWeapons)
+          const equipped = equippedWeaponTypes(st.equippedWeapons)
+          if (equipped.length === 0) return
 
-        for (const type of equipped) {
-          const p = st.weaponProgress[type]
-          if (isWeaponAtForgeCap(p)) continue
-          const share = equipped.length === 1 ? 1 : (type === st.equippedWeapons.mainHand ? 0.75 : 0.55)
-          p.xp += Math.max(1, Math.round(amount * share))
+          for (const type of equipped) {
+            const p = st.weaponProgress[type]
+            if (isWeaponAtForgeCap(p)) continue
+            const share = equipped.length === 1 ? 1 : (type === st.equippedWeapons.mainHand ? 0.75 : 0.55)
+            p.xp += Math.max(1, Math.round(amount * share))
 
-          while (p.xp >= p.xpToNext && p.level < p.maxLevel) {
-            p.xp -= p.xpToNext
-            p.level += 1
-            p.xpToNext = weaponXpForLevel(p.level, p.tier)
+            while (p.xp >= p.xpToNext && p.level < p.maxLevel) {
+              p.xp -= p.xpToNext
+              p.level += 1
+              p.xpToNext = weaponXpForLevel(p.level, p.tier)
+              leveledUp = true
+            }
+            if (p.level >= p.maxLevel) {
+              p.level = p.maxLevel
+              p.xp = 0
+              p.xpToNext = weaponXpForLevel(p.level, p.tier)
+            }
           }
-          if (p.level >= p.maxLevel) {
-            p.level = p.maxLevel
-            p.xp = 0
-            p.xpToNext = weaponXpForLevel(p.level, p.tier)
-          }
-        }
-      }),
+        })
+        if (leveledUp) requestCriticalCloudSave()
+      },
 
-      addWeaponMaterial: (tier, count = 1) => set((st) => {
-        const key = Math.max(1, Math.round(tier))
-        st.weaponMaterials[key] = (st.weaponMaterials[key] ?? 0) + Math.max(1, Math.round(count))
-      }),
+      addWeaponMaterial: (tier, count = 1) => {
+        set((st) => {
+          const key = Math.max(1, Math.round(tier))
+          st.weaponMaterials[key] = (st.weaponMaterials[key] ?? 0) + Math.max(1, Math.round(count))
+        })
+        requestCriticalCloudSave()
+      },
 
       forgeWeapon: (type) => {
         let forged = false
@@ -330,6 +340,7 @@ export const useInventoryStore = create<InventoryStore>()(
           p.xpToNext = weaponXpForLevel(p.level, p.tier)
           forged = true
         })
+        if (forged) requestCriticalCloudSave()
         return forged
       },
 

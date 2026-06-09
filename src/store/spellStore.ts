@@ -16,6 +16,7 @@ import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
 import type { Spell } from '../types/spell'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 /** Returns the primary element word from a spell (word1 first, then word2). */
 function getSpellElement(spell: Spell): ElementType | null {
@@ -58,9 +59,16 @@ export const useSpellStore = create<SpellStore>()(
     activeDebuff:  null,
     autoSlots:     Array(SPELL_SLOT_COUNT).fill(null).map(() => ({ ...DEFAULT_AUTO })),
 
-    earnWord: (wordId) => set((st) => {
-      if (!st.earnedWordIds.includes(wordId)) st.earnedWordIds.push(wordId)
-    }),
+    earnWord: (wordId) => {
+      let earned = false
+      set((st) => {
+        if (!st.earnedWordIds.includes(wordId)) {
+          st.earnedWordIds.push(wordId)
+          earned = true
+        }
+      })
+      if (earned) requestCriticalCloudSave()
+    },
 
     setSpellSlot: (slotIndex, spellId) => set((st) => {
       st.spellSlots[slotIndex] = spellId

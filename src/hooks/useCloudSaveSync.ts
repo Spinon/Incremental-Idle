@@ -8,7 +8,7 @@ import { useQuestStore } from '../store/questStore'
 import { CLOUD_RESTORE_OFFLINE_PENDING_KEY, LOCAL_PLAY_KEY, markLocalSaveChanged } from '../store/save'
 import { useSpellStore } from '../store/spellStore'
 
-const SYNC_DEBOUNCE_MS = 5000
+const SYNC_DEBOUNCE_MS = 20000
 
 export function useCloudSaveSync(paused = false) {
   const timer = useRef<number | null>(null)

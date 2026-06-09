@@ -6,6 +6,7 @@ import { DIFFICULTY_LABEL_PT, DIFFICULTY_LABEL_EN } from '../formulas/quests'
 import { useHeroStore } from './heroStore'
 import { useNotifStore } from './notifStore'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 interface QuestStore {
   quests: Quest[]
@@ -46,10 +47,12 @@ export const useQuestStore = create<QuestStore>()(
           const q = st.quests.find(q => q.id === id)
           if (q) q.status = 'completed'
         })
+        requestCriticalCloudSave()
         // Grant rewards after current tick to avoid state mutation ordering issues
         Promise.resolve().then(() => {
           useHeroStore.getState().gainXp(quest.rewards.xp)
           useHeroStore.getState().earnGold(quest.rewards.gold)
+          requestCriticalCloudSave()
           useNotifStore.getState().push({
             title:   `✅ Missão Concluída!`,
             titleEn: `✅ Quest Complete!`,

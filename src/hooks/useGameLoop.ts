@@ -8,6 +8,7 @@ import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
 import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
+import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 import { getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
@@ -446,6 +447,10 @@ export function useGameLoop(paused = false) {
           }
 
           resolvedBlockingSystem = true
+        }
+
+        if (resolvedBlockingSystem) {
+          requestCriticalCloudSave()
         }
 
         if (options.offline && resolvedBlockingSystem) {

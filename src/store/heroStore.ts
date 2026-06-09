@@ -6,6 +6,7 @@ import { DEFAULT_HERO_CONFIG } from '../types/hero'
 import { getDerivedStats, staminaDrainAt } from '../formulas/derived'
 import type { Speed } from './battleStore'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 interface HeroStore {
   name: string
@@ -197,19 +198,24 @@ export const useHeroStore = create<HeroStore>()(
       st.maxSkipCharges = Math.max(st.maxSkipCharges, Math.ceil(st.skipCharges))
     }),
 
-    gainXp: (amount, xpBonusOverride) => set((st) => {
-      const derived = getDerivedStats(st.attributes, undefined, st.level)
-      const actual = Math.round(amount * (xpBonusOverride ?? derived.xpBonus))
-      st.lastXpGain = actual
-      st.xpGainVersion += 1
-      st.xp += actual
-      while (st.xp >= st.xpToNext) {
-        st.xp -= st.xpToNext
-        st.level += 1
-        st.freePoints += 3
-        st.xpToNext = xpForLevel(st.level)
-      }
-    }),
+    gainXp: (amount, xpBonusOverride) => {
+      let leveledUp = false
+      set((st) => {
+        const derived = getDerivedStats(st.attributes, undefined, st.level)
+        const actual = Math.round(amount * (xpBonusOverride ?? derived.xpBonus))
+        st.lastXpGain = actual
+        st.xpGainVersion += 1
+        st.xp += actual
+        while (st.xp >= st.xpToNext) {
+          st.xp -= st.xpToNext
+          st.level += 1
+          st.freePoints += 3
+          st.xpToNext = xpForLevel(st.level)
+          leveledUp = true
+        }
+      })
+      if (leveledUp) requestCriticalCloudSave()
+    },
 
     tickResources: (deltaMs, speed, derivedOverride) => set((st) => {
       const derived = derivedOverride ?? getDerivedStats(st.attributes, undefined, st.level)
