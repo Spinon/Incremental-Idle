@@ -15,6 +15,7 @@ export const CLOUD_SAVE_SLOT_KEY = 'default'
 export const CLOUD_SAVE_LOCAL_ID_KEY = 'incremental-idle-cloud-local-id'
 export const CLOUD_SAVE_LOCAL_UPDATED_AT_KEY = 'incremental-idle-cloud-local-updated-at'
 export const OFFLINE_LAST_ACTIVE_KEY = 'incremental-idle-last-active-at'
+export const LOCAL_PLAY_KEY = 'incremental-idle-local-play'
 
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
 
@@ -114,9 +115,7 @@ export function applyLocalSaveSnapshot(snapshot: LocalSaveSnapshot): void {
     else localStorage.removeItem(key)
   }
 
-  if (typeof snapshot.localSaveId === 'string' && snapshot.localSaveId) {
-    localStorage.setItem(CLOUD_SAVE_LOCAL_ID_KEY, snapshot.localSaveId)
-  }
+  getLocalSaveId()
   if (typeof snapshot.capturedAt === 'string' && snapshot.capturedAt) {
     localStorage.setItem(CLOUD_SAVE_LOCAL_UPDATED_AT_KEY, snapshot.capturedAt)
   }

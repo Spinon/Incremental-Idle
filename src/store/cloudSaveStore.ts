@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import {
   CLOUD_SAVE_SLOT_KEY,
+  LOCAL_PLAY_KEY,
   SAVE_KEYS,
   SAVE_SCHEMA_VERSION,
   applyLocalSaveSnapshot,
@@ -180,6 +181,16 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
   init: async () => {
     if (!supabase) return
+    if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') {
+      set({
+        status: 'signed-out',
+        session: null,
+        user: null,
+        pendingRemote: null,
+        remoteChecked: false,
+      })
+      return
+    }
     if (initPromise) return initPromise
 
     initPromise = (async () => {
@@ -243,6 +254,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       authMode: 'sign-in',
       message: 'Login successful.',
     })
+    if (data.session?.user) await get().pullRemoteSave()
   },
 
   signUpWithPassword: async (email, password) => {
@@ -265,6 +277,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         ? 'Account created.'
         : 'Account created. Check your email to confirm before logging in.',
     })
+    if (data.session?.user) await get().pullRemoteSave()
   },
 
   requestPasswordRecovery: async (email) => {
@@ -345,6 +358,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   },
 
   pushLocalSave: async () => {
+    if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
     const user = get().user
     if (!user) return
 
@@ -367,6 +381,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   },
 
   pullRemoteSave: async () => {
+    if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
     const user = get().user
     if (!user) return
 
@@ -382,10 +397,8 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
       const remoteSnapshot = remote.save_data
       const sameDevice = remote.local_save_id === local.localSaveId
-      const shouldAskPlayer = !sameDevice && (
-        !hadLocalUpdatedAt ||
-        hasMeaningfulDifference(local, remoteSnapshot)
-      )
+      const meaningfulDifference = hasMeaningfulDifference(local, remoteSnapshot)
+      const shouldAskPlayer = !hadLocalUpdatedAt || meaningfulDifference
 
       if (shouldAskPlayer) {
         set({
@@ -401,6 +414,18 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
       const localIsNewer = compareIso(local.capturedAt, remote.local_updated_at) > 0
       const remoteIsNewer = compareIso(remote.local_updated_at, local.capturedAt) > 0
+
+      if (remoteIsNewer && sameDevice) {
+        const remoteLastActiveAt = remote.save_data.lastActiveAt
+          ?? Date.parse(remote.local_updated_at || remote.updated_at)
+        applyLocalSaveSnapshot({
+          ...remoteSnapshot,
+          capturedAt: remoteSnapshot.capturedAt || remote.local_updated_at,
+          lastActiveAt: Number.isFinite(remoteLastActiveAt) ? remoteLastActiveAt : undefined,
+        })
+        window.location.reload()
+        return
+      }
 
       if (remoteIsNewer && !sameDevice) {
         set({

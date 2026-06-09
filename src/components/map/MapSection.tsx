@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
 import { useInventoryStore } from '../../store/inventoryStore'
@@ -23,9 +23,15 @@ const ZOOM_MIN = 0.30
 const ZOOM_MAX = 2.50
 const ZOOM_STEP = 0.05
 const MAP_VIEWPORT_HEIGHT = 468
+const FOLLOW_RESUME_DELAY_MS = 5000
 
 function clampZoom(z: number) {
   return Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100
+}
+
+function adaptiveFollowZoom(tilesPlaced: number) {
+  const zoomOutSteps = Math.floor(Math.max(0, tilesPlaced) / 25)
+  return clampZoom(Math.max(0.5, 1 - zoomOutSteps * 0.05))
 }
 
 function levelColor(tileLv: number, heroLv: number): string {
@@ -53,15 +59,29 @@ export default function MapSection() {
   const [zoom,        setZoom]        = useState(1.0)
   const [cameraPos,   setCameraPos]   = useState({ x: 0, y: 0 })
   const [selectedPos, setSelectedPos] = useState<{ x: number; y: number } | null>(null)
+  const [cameraMode,  setCameraMode]  = useState<'follow' | 'free'>('follow')
+  const [followInterrupted, setFollowInterrupted] = useState(false)
+  const [followResumeStartedAt, setFollowResumeStartedAt] = useState<number | null>(null)
+  const [followResumeProgress, setFollowResumeProgress] = useState(0)
 
   const grid           = useMapStore(s => s.grid)
+  const followResumeTimer = useRef<number | null>(null)
+  const followResumeFrame = useRef<number | null>(null)
 
-  // Recenter camera when a new journey resets the grid to the origin
+  // Reset camera state when a new journey resets the grid to the origin
   const gridSize = Object.keys(grid).length
   useEffect(() => {
     if (gridSize === 1) {
+      if (followResumeTimer.current != null) {
+        window.clearTimeout(followResumeTimer.current)
+        followResumeTimer.current = null
+      }
       setCameraPos({ x: 0, y: 0 })
       setZoom(1.0)
+      setCameraMode('follow')
+      setFollowInterrupted(false)
+      setFollowResumeStartedAt(null)
+      setFollowResumeProgress(0)
     }
   }, [gridSize])
 
@@ -83,6 +103,85 @@ export default function MapSection() {
   const teleportOrigin = useUIStore(s => s.blueTowerTeleportOrigin)
   const setTeleportSelecting = useUIStore(s => s.setBlueTowerTeleportSelecting)
   const setTeleportOrigin = useUIStore(s => s.setBlueTowerTeleportOrigin)
+
+  const followZoom = useMemo(() => adaptiveFollowZoom(tilesPlaced), [tilesPlaced])
+  const isFollowActive = cameraMode === 'follow' && !followInterrupted
+
+  useEffect(() => {
+    return () => {
+      if (followResumeTimer.current != null) window.clearTimeout(followResumeTimer.current)
+      if (followResumeFrame.current != null) window.cancelAnimationFrame(followResumeFrame.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!followInterrupted || followResumeStartedAt == null) {
+      setFollowResumeProgress(0)
+      return
+    }
+
+    const tick = () => {
+      const elapsed = Date.now() - followResumeStartedAt
+      setFollowResumeProgress(Math.min(1, elapsed / FOLLOW_RESUME_DELAY_MS))
+      followResumeFrame.current = window.requestAnimationFrame(tick)
+    }
+
+    tick()
+    return () => {
+      if (followResumeFrame.current != null) {
+        window.cancelAnimationFrame(followResumeFrame.current)
+        followResumeFrame.current = null
+      }
+    }
+  }, [followInterrupted, followResumeStartedAt])
+
+  useEffect(() => {
+    if (!isFollowActive) return
+    setCameraPos({ x: playerPos.x, y: playerPos.y })
+    setZoom(followZoom)
+  }, [followZoom, isFollowActive, playerPos.x, playerPos.y])
+
+  function resumeFollowNow() {
+    if (followResumeTimer.current != null) {
+      window.clearTimeout(followResumeTimer.current)
+      followResumeTimer.current = null
+    }
+    setCameraMode('follow')
+    setFollowInterrupted(false)
+    setFollowResumeStartedAt(null)
+    setFollowResumeProgress(0)
+    setCameraPos({ x: playerPos.x, y: playerPos.y })
+    setZoom(followZoom)
+  }
+
+  function switchToFreeCamera() {
+    if (followResumeTimer.current != null) {
+      window.clearTimeout(followResumeTimer.current)
+      followResumeTimer.current = null
+    }
+    setCameraMode('free')
+    setFollowInterrupted(false)
+    setFollowResumeStartedAt(null)
+    setFollowResumeProgress(0)
+  }
+
+  function handleCameraModeToggle() {
+    if (isFollowActive) switchToFreeCamera()
+    else resumeFollowNow()
+  }
+
+  function handleManualMapInput() {
+    if (cameraMode !== 'follow') return
+    setFollowResumeStartedAt(Date.now())
+    setFollowResumeProgress(0)
+    setFollowInterrupted(true)
+    if (followResumeTimer.current != null) window.clearTimeout(followResumeTimer.current)
+    followResumeTimer.current = window.setTimeout(() => {
+      followResumeTimer.current = null
+      setFollowInterrupted(false)
+      setFollowResumeStartedAt(null)
+    }, FOLLOW_RESUME_DELAY_MS)
+  }
 
   useEffect(() => {
     if (!draggingId) return
@@ -139,7 +238,6 @@ export default function MapSection() {
     return markers
   }, [allQuests])
 
-  const isPanned     = cameraPos.x !== playerPos.x || cameraPos.y !== playerPos.y
   const selectedTile = selectedPos ? (grid[gridKey(selectedPos.x, selectedPos.y)] ?? null) : null
   const selectedSight = selectedPos && !selectedTile
     ? (sightedCells[gridKey(selectedPos.x, selectedPos.y)] ?? null)
@@ -188,6 +286,7 @@ export default function MapSection() {
 
   function handleEnemySelect(x: number, y: number) {
     if (!grid[gridKey(x, y)]) return
+    handleManualMapInput()
     setDestination(x, y)
     setSelectedPos({ x, y })
     setCameraPos({ x, y })
@@ -268,24 +367,40 @@ export default function MapSection() {
             className="w-6 h-6 rounded text-xs border transition-colors bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
           >⌂</button>
 
-          {/* Recenter button */}
+          {/* Camera mode toggle */}
           <button
-            onClick={() => setCameraPos({ x: playerPos.x, y: playerPos.y })}
-            disabled={!isPanned}
-            title="Centralizar"
+            onClick={handleCameraModeToggle}
+            title={isFollowActive
+              ? (lang === 'en' ? 'Following the player' : 'Seguindo o player')
+              : (lang === 'en' ? 'Free camera' : 'Camera livre')}
             className={cn(
-              'w-6 h-6 rounded text-xs border transition-colors',
-              !isPanned
-                ? 'opacity-30 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
+              'relative h-6 px-2 rounded text-[10px] font-semibold border transition-colors overflow-hidden',
+              isFollowActive
+                ? 'bg-sky-600 border-sky-500 text-white hover:bg-sky-500'
                 : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
             )}
-          >◎</button>
+          >
+            <span className="relative z-10">
+              {isFollowActive ? (lang === 'en' ? 'Follow' : 'Seguir') : (lang === 'en' ? 'Free Camera' : 'Camera Livre')}
+            </span>
+            {cameraMode === 'follow' && followInterrupted && (
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-sky-400/25">
+                <span
+                  className="block h-full bg-sky-400"
+                  style={{ width: `${Math.round(followResumeProgress * 100)}%` }}
+                />
+              </span>
+            )}
+          </button>
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
           {/* Zoom controls */}
           <button
-            onClick={() => setZoom(z => clampZoom(z - ZOOM_STEP))}
+            onClick={() => {
+              handleManualMapInput()
+              setZoom(z => clampZoom(z - ZOOM_STEP))
+            }}
             disabled={zoom <= ZOOM_MIN}
             className={cn(
               'w-6 h-6 rounded text-xs font-bold border transition-colors',
@@ -298,7 +413,10 @@ export default function MapSection() {
             {Math.round(zoom * 100)}%
           </span>
           <button
-            onClick={() => setZoom(z => clampZoom(z + ZOOM_STEP))}
+            onClick={() => {
+              handleManualMapInput()
+              setZoom(z => clampZoom(z + ZOOM_STEP))
+            }}
             disabled={zoom >= ZOOM_MAX}
             className={cn(
               'w-6 h-6 rounded text-xs font-bold border transition-colors',
@@ -334,6 +452,7 @@ export default function MapSection() {
             onTileClick={handleTileClick}
             onCameraChange={(x, y) => setCameraPos({ x, y })}
             onZoom={dir => setZoom(z => clampZoom(z + dir * ZOOM_STEP))}
+            onUserInteraction={handleManualMapInput}
           />
 
           {/* Tile info panel — shows below viewport when a tile is selected */}

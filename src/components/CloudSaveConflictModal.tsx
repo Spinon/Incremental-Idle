@@ -1,5 +1,17 @@
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { SAVE_KEYS } from '../store/save'
+
+function readLevel(raw: string | undefined | null): number {
+  if (!raw) return 0
+  try {
+    const parsed = JSON.parse(raw)
+    const level = parsed?.state?.level
+    return typeof level === 'number' && Number.isFinite(level) ? level : 0
+  } catch {
+    return 0
+  }
+}
 
 export default function CloudSaveConflictModal() {
   const lang = useSettingsStore(s => s.lang)
@@ -10,6 +22,8 @@ export default function CloudSaveConflictModal() {
   if (!pendingRemote) return null
 
   const isEn = lang === 'en'
+  const localLevel = readLevel(localStorage.getItem(SAVE_KEYS.hero))
+  const remoteLevel = readLevel(pendingRemote.save_data.entries[SAVE_KEYS.hero])
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
@@ -34,6 +48,16 @@ export default function CloudSaveConflictModal() {
               ? 'Keeping local replaces the cloud save. Restoring cloud reloads the game with the cloud progress.'
               : 'Manter local substitui o save da nuvem. Restaurar nuvem recarrega o jogo com o progresso salvo na nuvem.'}
           </p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+            <div className="rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2">
+              <p className="font-bold text-slate-400">{isEn ? 'This device' : 'Este dispositivo'}</p>
+              <p className="mt-1 text-lg font-black text-slate-100">Lv. {localLevel || '-'}</p>
+            </div>
+            <div className="rounded-md border border-indigo-900/70 bg-indigo-950/35 px-3 py-2">
+              <p className="font-bold text-indigo-300">{isEn ? 'Cloud' : 'Nuvem'}</p>
+              <p className="mt-1 text-lg font-black text-indigo-100">Lv. {remoteLevel || '-'}</p>
+            </div>
+          </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
             <button

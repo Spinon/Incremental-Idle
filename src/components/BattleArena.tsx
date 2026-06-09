@@ -13,6 +13,7 @@ import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 import { useSettingsStore } from '../store/settingsStore'
+import { useCloudSaveStore } from '../store/cloudSaveStore'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
 import type { DeathRecord } from '../store/battleStore'
@@ -217,6 +218,7 @@ function ResourceBar({
 export default function BattleArena() {
   const store      = useBattleStore()
   const deathHistory = useBattleStore(s => s.deathHistory)
+  const pausedForCloudChoice = !!useCloudSaveStore(s => s.pendingRemote)
   const gainXp     = useHeroStore((s) => s.gainXp)
   const heroLevel  = useHeroStore((s) => s.level)
   const xpGranted  = useRef(false)
@@ -403,6 +405,7 @@ export default function BattleArena() {
     clearTimers()
     setImpact(false)
 
+    if (pausedForCloudChoice) return
     if (store.skipAnim && store.phase !== 'over') return
 
     let cancelled = false
@@ -457,7 +460,7 @@ export default function BattleArena() {
     }
 
     return () => { cancelled = true; clearTimers() }
-  }, [store.phase, store.turn, store.speed, store.skipAnim])
+  }, [store.phase, store.turn, store.speed, store.skipAnim, pausedForCloudChoice])
 
   const isPlayerAttacking = store.attacker === 'player' && store.phase === 'attacking'
   const isEnemyAttacking  = store.attacker === 'enemy'  && store.phase === 'attacking'
