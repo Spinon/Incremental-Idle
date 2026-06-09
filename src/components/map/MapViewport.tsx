@@ -18,8 +18,10 @@ interface Props {
   cameraPos: { x: number; y: number }  // grid units (float); camera centre
   draggingId: string | null
   draggedTile: MapTile | null
+  selectedDeckId: string | null
   questMarkers: QuestMapMarker[]
   onDrop(tileId: string, x: number, y: number): void
+  onPlaceSelected(x: number, y: number): void
   onTileClick(x: number, y: number): void
   onCameraChange(x: number, y: number): void
   onZoom(dir: 1 | -1): void
@@ -57,7 +59,7 @@ function ghostBg(content: TileContent): string {
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, questMarkers, onDrop, onTileClick, onCameraChange, onZoom, onUserInteraction,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, selectedDeckId, questMarkers, onDrop, onPlaceSelected, onTileClick, onCameraChange, onZoom, onUserInteraction,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
@@ -268,13 +270,14 @@ export default function MapViewport({
               className={cn(
                 'w-full h-full rounded relative overflow-hidden transition-colors cursor-pointer hover:bg-slate-800/30',
                 sight ? ghostBg(sight) : '',
-                draggingId && placement === 'valid' && 'border-2 border-dashed border-emerald-400/70 bg-emerald-900/20 hover:bg-emerald-900/35 cursor-copy',
-                draggingId && placement === 'invalid' && 'border-2 border-dashed border-red-500/60 bg-red-950/25 hover:bg-red-950/35 cursor-not-allowed',
-                draggingId && placement === 'none' && isValidTarget && 'border-2 border-dashed border-slate-500/35 bg-slate-900/15 cursor-help',
+                (draggingId || selectedDeckId) && placement === 'valid' && 'border-2 border-dashed border-emerald-400/70 bg-emerald-900/20 hover:bg-emerald-900/35 cursor-copy',
+                (draggingId || selectedDeckId) && placement === 'invalid' && 'border-2 border-dashed border-red-500/60 bg-red-950/25 hover:bg-red-950/35 cursor-not-allowed',
+                (draggingId || selectedDeckId) && placement === 'none' && isValidTarget && 'border-2 border-dashed border-slate-500/35 bg-slate-900/15 cursor-help',
               )}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
                 onUserInteraction()
+                if (selectedDeckId) { onPlaceSelected(gx, gy); return }
                 onTileClick(gx, gy)
               }}
               onPointerUp={e => {

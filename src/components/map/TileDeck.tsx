@@ -13,12 +13,14 @@ interface Props {
   moveSpeed: number
   maxDeck: number
   tilesPlaced: number
+  selectedId?: string | null
   onDragStart(id: string): void
   onDragEnd(): void
+  onSelect?(id: string): void
 }
 
 export default function TileDeck({
-  deck, deckAccum, moveSpeed, maxDeck, tilesPlaced, onDragStart, onDragEnd,
+  deck, deckAccum, moveSpeed, maxDeck, tilesPlaced, selectedId, onDragStart, onDragEnd, onSelect,
 }: Props) {
   const earlyFactor = Math.min(1, 0.4 + tilesPlaced * 0.03)
   const interval    = TILE_GEN_BASE_MS / (Math.max(0.5, moveSpeed) * earlyFactor)
@@ -51,7 +53,14 @@ export default function TileDeck({
       {/* Tile cards */}
       <div className="flex gap-2 flex-wrap">
         {deck.map(tile => (
-          <TileCard key={tile.id} tile={tile} onDragStart={onDragStart} onDragEnd={onDragEnd} />
+          <TileCard
+            key={tile.id}
+            tile={tile}
+            selected={selectedId === tile.id}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onSelect={onSelect}
+          />
         ))}
         {/* Empty slots */}
         {Array.from({ length: maxDeck - deck.length }).map((_, i) => (
@@ -67,9 +76,11 @@ export default function TileDeck({
 
 function TileCard({
   tile,
+  selected,
   onDragStart,
   onDragEnd,
-}: { tile: MapTile; onDragStart(id: string): void; onDragEnd(): void }) {
+  onSelect,
+}: { tile: MapTile; selected?: boolean; onDragStart(id: string): void; onDragEnd(): void; onSelect?(id: string): void }) {
   const isMonster  = tile.content.type === 'monster'
   const isTreasure = tile.content.type === 'treasure'
 
@@ -84,7 +95,11 @@ function TileCard({
       onPointerDown={() => onDragStart(tile.id)}
       onPointerUp={onDragEnd}
       onPointerCancel={onDragEnd}
-      className="relative w-[52px] h-[52px] rounded-lg cursor-grab active:cursor-grabbing select-none transition-colors"
+      onClick={() => onSelect?.(tile.id)}
+      className={cn(
+        'relative w-[52px] h-[52px] rounded-lg cursor-pointer active:cursor-grabbing select-none transition-colors',
+        selected && 'ring-2 ring-sky-400 ring-offset-1 ring-offset-slate-900',
+      )}
       style={{ backgroundColor: baseBg, border: `1px solid ${border}`, touchAction: 'none' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = hoverBg }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = baseBg  }}

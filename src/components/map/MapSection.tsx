@@ -56,6 +56,7 @@ function previewEnragedLevel(baseLevel: number, tilesPlaced: number): number {
 
 export default function MapSection() {
   const [draggingId,  setDraggingId]  = useState<string | null>(null)
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
   const [zoom,        setZoom]        = useState(1.0)
   const [cameraPos,   setCameraPos]   = useState({ x: 0, y: 0 })
   const [selectedPos, setSelectedPos] = useState<{ x: number; y: number } | null>(null)
@@ -443,11 +444,18 @@ export default function MapSection() {
             zoom={zoom}
             cameraPos={cameraPos}
             draggingId={draggingId}
-            draggedTile={deck.find(tile => tile.id === draggingId) ?? null}
+            draggedTile={deck.find(tile => tile.id === (draggingId ?? selectedDeckId)) ?? null}
+            selectedDeckId={selectedDeckId}
             questMarkers={questMarkers}
             onDrop={(tileId, x, y) => {
               placeTile(tileId, x, y)
               setDraggingId(null)
+              setSelectedDeckId(null)
+            }}
+            onPlaceSelected={(x, y) => {
+              if (!selectedDeckId) return
+              placeTile(selectedDeckId, x, y)
+              setSelectedDeckId(null)
             }}
             onTileClick={handleTileClick}
             onCameraChange={(x, y) => setCameraPos({ x, y })}
@@ -504,8 +512,10 @@ export default function MapSection() {
             moveSpeed={derived.moveSpeed}
             maxDeck={maxDeck}
             tilesPlaced={tilesPlaced}
+            selectedId={selectedDeckId}
             onDragStart={setDraggingId}
             onDragEnd={() => setDraggingId(null)}
+            onSelect={(id) => setSelectedDeckId(prev => (prev === id ? null : id))}
           />
         </div>
 
