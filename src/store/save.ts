@@ -16,6 +16,8 @@ export const CLOUD_SAVE_LOCAL_ID_KEY = 'incremental-idle-cloud-local-id'
 export const CLOUD_SAVE_LOCAL_UPDATED_AT_KEY = 'incremental-idle-cloud-local-updated-at'
 export const OFFLINE_LAST_ACTIVE_KEY = 'incremental-idle-last-active-at'
 export const LOCAL_PLAY_KEY = 'incremental-idle-local-play'
+export const CLOUD_RESTORE_OFFLINE_PENDING_KEY = 'incremental-idle-cloud-restore-offline-pending'
+export const CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY = 'incremental-idle-cloud-accepted-remote-updated-at'
 
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
 

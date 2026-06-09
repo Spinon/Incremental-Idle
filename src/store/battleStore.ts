@@ -159,7 +159,7 @@ interface BattleStore {
   applyElementalStatus(status: ActiveStatus, target: 'enemy' | 'hero'): void
   tickStatuses(): void
   clearStatuses(): void
-  restoreMidFight(playerHpRatio: number, enemyHpRatio: number, enemyStatuses: ActiveStatus[], heroStatuses: ActiveStatus[], attacker: Side, hitsLeft: number, comboSize: number): void
+  restoreMidFight(playerHpRatio: number, enemyHpRatio: number, enemyStatuses: ActiveStatus[], heroStatuses: ActiveStatus[], attacker: Side, hitsLeft: number, comboSize: number, enemySnapshot?: Unit): void
   applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
   restoreEnemyStats(savedAtk: number, savedAtkSpeed: number): void
 }
@@ -736,7 +736,16 @@ export const useBattleStore = create<BattleStore>()(
       st.enemyBleedPower = 0
     }),
 
-    restoreMidFight: (playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses, attacker, hitsLeft, comboSize) => set((st) => {
+    restoreMidFight: (playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses, attacker, hitsLeft, comboSize, enemySnapshot) => set((st) => {
+      if (
+        enemySnapshot
+        && typeof enemySnapshot.name === 'string'
+        && typeof enemySnapshot.level === 'number'
+        && typeof enemySnapshot.maxHp === 'number'
+        && enemySnapshot.maxHp > 0
+      ) {
+        st.enemy = { ...enemySnapshot }
+      }
       st.player.hp     = Math.max(1, Math.min(st.player.maxHp, Math.round(st.player.maxHp * playerHpRatio)))
       st.enemy.hp      = Math.max(1, Math.min(st.enemy.maxHp,  Math.round(st.enemy.maxHp  * enemyHpRatio)))
       st.enemyStatuses = enemyStatuses
@@ -791,9 +800,33 @@ export const useBattleStore = create<BattleStore>()(
     migrate: migrateSave,
     merge: mergeSave,
     partialize: (state) => ({
+      player:               state.player,
+      enemy:                state.enemy,
+      phase:                state.phase === 'attacking' ? 'idle' : state.phase,
+      attacker:             state.attacker,
       speed:                state.speed,
+      skipAnim:             false,
+      winner:               state.winner,
+      log:                  state.log.slice(-20),
+      turn:                 state.turn,
+      nextEnemyLevel:       state.nextEnemyLevel,
+      nextEnemyBaseLevel:   state.nextEnemyBaseLevel,
+      nextEnemyType:        state.nextEnemyType,
+      nextEnemyRarity:      state.nextEnemyRarity,
+      nextTilesPlaced:      state.nextTilesPlaced,
+      nextEnemyEnraged:     state.nextEnemyEnraged,
+      nextEnemyQuestId:     state.nextEnemyQuestId,
+      activeEnemyQuestId:   state.activeEnemyQuestId,
+      nextEnemyQuestName:   state.nextEnemyQuestName,
+      nextEnemyQuestNameEn: state.nextEnemyQuestNameEn,
+      nextEnemyQuestNpc:    state.nextEnemyQuestNpc,
+      hitsLeft:             state.hitsLeft,
+      comboSize:            state.comboSize,
       defeatSnapshot:       state.defeatSnapshot,
       deathHistory:         state.deathHistory,
+      enemyStatuses:        state.enemyStatuses,
+      heroStatuses:         state.heroStatuses,
+      enemyBleedPower:      state.enemyBleedPower,
     }),
   }
   )

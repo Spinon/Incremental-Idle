@@ -6,7 +6,8 @@ import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
-import { OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
+import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
+import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
@@ -155,6 +156,7 @@ export function useGameLoop(paused = false) {
     elapsedMs: 0,
     processedMs: 0,
   })
+  const [startupReady, setStartupReady] = useState(false)
 
   useEffect(() => {
     pausedRef.current = paused
@@ -462,6 +464,8 @@ export function useGameLoop(paused = false) {
     let lastTickAt = performance.now()
     let lastActiveWriteAt = performance.now()
     let lagMs = 0
+    let startupOfflineChecked = false
+    let startupReloading = false
 
     function startOfflineSync(elapsedMs: number) {
       if (syncActive.current || elapsedMs < STEP_MS) return
@@ -517,6 +521,30 @@ export function useGameLoop(paused = false) {
       window.setTimeout(processChunk, 0)
     }
 
+    function checkStartupOffline() {
+      if (startupOfflineChecked || pausedRef.current) return
+      startupOfflineChecked = true
+
+      if (restoreInterruptedOfflineTransaction()) {
+        startupReloading = true
+        window.location.reload()
+        return
+      }
+
+      const savedAt = readLastActiveAt()
+      const startupElapsedMs = savedAt ? Date.now() - savedAt : 0
+      if (startupElapsedMs >= SYNC_PROMPT_MS) {
+        startOfflineSync(startupElapsedMs)
+      } else {
+        localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+        writeLastActiveAt()
+        setStartupReady(true)
+      }
+
+      lastTickAt = performance.now()
+      lastActiveWriteAt = lastTickAt
+    }
+
     syncActions.current = {
       accept: () => {
         syncActive.current = false
@@ -526,12 +554,19 @@ export function useGameLoop(paused = false) {
         lastTickAt = performance.now()
         writeLastActiveAt()
         ensureCurrentTileEncounter()
+        if (localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY) === '1') {
+          localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+          useCloudSaveStore.getState().pushLocalSave(true)
+        }
+        setStartupReady(true)
         setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })
       },
       discard: () => {
         if (syncSnapshot.current) {
           restorePersistedState(syncSnapshot.current)
         }
+        localStorage.removeItem(CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY)
+        localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
         clearOfflineTransaction()
         writeLastActiveAt()
         window.location.reload()
@@ -548,6 +583,8 @@ export function useGameLoop(paused = false) {
         lagMs = 0
         return
       }
+      checkStartupOffline()
+      if (startupReloading || syncActive.current || !startupOfflineChecked) return
       const elapsedMs = now - lastTickAt
       lastTickAt = now
 
@@ -574,21 +611,7 @@ export function useGameLoop(paused = false) {
     }
 
     const id = setInterval(pump, STEP_MS)
-    if (restoreInterruptedOfflineTransaction()) {
-      window.location.reload()
-      return () => {
-        cancelled = true
-        clearInterval(id)
-      }
-    }
-
-    const savedAt = readLastActiveAt()
-    const startupElapsedMs = savedAt ? Date.now() - savedAt : 0
-    if (startupElapsedMs >= SYNC_PROMPT_MS) {
-      startOfflineSync(startupElapsedMs)
-    } else {
-      writeLastActiveAt()
-    }
+    checkStartupOffline()
 
     window.addEventListener('focus', pumpOnResume)
     document.addEventListener('visibilitychange', pumpOnResume)
@@ -609,5 +632,5 @@ export function useGameLoop(paused = false) {
     syncActions.current.discard()
   }, [])
 
-  return { offlineSync, acceptOfflineProgress, discardOfflineProgress }
+  return { offlineSync, startupReady, acceptOfflineProgress, discardOfflineProgress }
 }

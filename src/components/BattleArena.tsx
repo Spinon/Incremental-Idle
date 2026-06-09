@@ -215,10 +215,17 @@ function ResourceBar({
   )
 }
 
-export default function BattleArena() {
+export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const store      = useBattleStore()
   const deathHistory = useBattleStore(s => s.deathHistory)
-  const pausedForCloudChoice = !!useCloudSaveStore(s => s.pendingRemote)
+  const cloudStatus = useCloudSaveStore(s => s.status)
+  const cloudUser = useCloudSaveStore(s => s.user)
+  const cloudRemoteChecked = useCloudSaveStore(s => s.remoteChecked)
+  const cloudPendingRemote = useCloudSaveStore(s => s.pendingRemote)
+  const pausedForCloudSave = !!cloudPendingRemote
+    || cloudStatus === 'loading'
+    || (!!cloudUser && !cloudRemoteChecked)
+    || paused
   const gainXp     = useHeroStore((s) => s.gainXp)
   const heroLevel  = useHeroStore((s) => s.level)
   const xpGranted  = useRef(false)
@@ -405,7 +412,7 @@ export default function BattleArena() {
     clearTimers()
     setImpact(false)
 
-    if (pausedForCloudChoice) return
+    if (pausedForCloudSave) return
     if (store.skipAnim && store.phase !== 'over') return
 
     let cancelled = false
@@ -460,7 +467,7 @@ export default function BattleArena() {
     }
 
     return () => { cancelled = true; clearTimers() }
-  }, [store.phase, store.turn, store.speed, store.skipAnim, pausedForCloudChoice])
+  }, [store.phase, store.turn, store.speed, store.skipAnim, pausedForCloudSave])
 
   const isPlayerAttacking = store.attacker === 'player' && store.phase === 'attacking'
   const isEnemyAttacking  = store.attacker === 'enemy'  && store.phase === 'attacking'

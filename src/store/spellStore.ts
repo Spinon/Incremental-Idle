@@ -276,6 +276,9 @@ export const useSpellStore = create<SpellStore>()(
     partialize: (s) => ({
       earnedWordIds: s.earnedWordIds,
       spellSlots:    s.spellSlots,
+      cooldowns:     s.cooldowns,
+      activeBuffs:   s.activeBuffs,
+      activeDebuff:  s.activeDebuff,
       autoSlots:     s.autoSlots,
     }),
   }

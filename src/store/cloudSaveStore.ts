@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import {
+  CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY,
   CLOUD_SAVE_SLOT_KEY,
+  CLOUD_RESTORE_OFFLINE_PENDING_KEY,
   LOCAL_PLAY_KEY,
   SAVE_KEYS,
   SAVE_SCHEMA_VERSION,
@@ -50,7 +52,7 @@ interface CloudSaveStore {
   verifyRecoveryOtp(email: string, token: string): Promise<void>
   updatePassword(password: string): Promise<void>
   signOut(): Promise<void>
-  pushLocalSave(): Promise<void>
+  pushLocalSave(force?: boolean): Promise<void>
   pullRemoteSave(): Promise<void>
   chooseLocal(): Promise<void>
   chooseRemote(): Promise<void>
@@ -58,15 +60,19 @@ interface CloudSaveStore {
 }
 
 let initPromise: Promise<void> | null = null
+const CLOUD_SAVE_CONFLICT_GRACE_MS = 5 * 60 * 1000
 
 function authStatusFromSession(session: Session | null): CloudStatus {
   return session ? 'signed-in' : 'signed-out'
 }
 
+function isoMs(value: string | null | undefined): number {
+  const parsed = value ? Date.parse(value) : 0
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 function compareIso(a: string | null | undefined, b: string | null | undefined): number {
-  const av = a ? Date.parse(a) : 0
-  const bv = b ? Date.parse(b) : 0
-  return av - bv
+  return isoMs(a) - isoMs(b)
 }
 
 function readPersistedState(snapshot: LocalSaveSnapshot, key: keyof typeof SAVE_KEYS): Record<string, unknown> {
@@ -111,7 +117,7 @@ function hasMeaningfulDifference(local: LocalSaveSnapshot, remote: LocalSaveSnap
 
   if (l.entryCount === 0 || r.entryCount === 0) return true
   if (Math.abs(l.entryCount - r.entryCount) >= 3) return true
-  if (Math.abs(l.level - r.level) >= 2) return true
+  if (Math.abs(l.level - r.level) >= 1) return true
   if (Math.abs(l.tilesPlaced - r.tilesPlaced) >= 5) return true
   if (Math.abs(l.inventoryCount - r.inventoryCount) >= 5) return true
   if (Math.abs(l.earnedWordCount - r.earnedWordCount) >= 3) return true
@@ -165,6 +171,30 @@ async function upsertSnapshot(userId: string, snapshot: LocalSaveSnapshot): Prom
   return data as CloudSaveRow
 }
 
+function markAcceptedRemote(row: CloudSaveRow) {
+  localStorage.setItem(CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, row.updated_at)
+}
+
+function clearAcceptedRemote() {
+  localStorage.removeItem(CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY)
+}
+
+function isAcceptedRemote(row: CloudSaveRow): boolean {
+  return localStorage.getItem(CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY) === row.updated_at
+}
+
+function applyRemoteSaveAndReload(row: CloudSaveRow) {
+  const remoteLastActiveAt = row.save_data.lastActiveAt
+    ?? Date.parse(row.local_updated_at || row.updated_at)
+  applyLocalSaveSnapshot({
+    ...row.save_data,
+    capturedAt: row.save_data.capturedAt || row.local_updated_at,
+    lastActiveAt: Number.isFinite(remoteLastActiveAt) ? remoteLastActiveAt : undefined,
+  })
+  markAcceptedRemote(row)
+  window.location.reload()
+}
+
 export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   configured: isSupabaseConfigured,
   authMode: 'sign-in',
@@ -211,15 +241,19 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       })
 
       supabase.auth.onAuthStateChange((event, nextSession) => {
+        const previousUserId = get().user?.id ?? null
+        const nextUserId = nextSession?.user?.id ?? null
+        const userChanged = previousUserId !== nextUserId
+        const shouldClearPending = event === 'SIGNED_OUT' || userChanged
         set({
           session: nextSession,
           user: nextSession?.user ?? null,
           status: authStatusFromSession(nextSession),
           authMode: event === 'PASSWORD_RECOVERY' ? 'password-reset' : get().authMode,
-          pendingRemote: null,
-          remoteChecked: false,
+          pendingRemote: shouldClearPending ? null : get().pendingRemote,
+          remoteChecked: nextSession?.user && !userChanged ? get().remoteChecked : false,
         })
-        if (nextSession?.user) {
+        if (nextSession?.user && (userChanged || !get().remoteChecked)) {
           window.setTimeout(() => {
             get().pullRemoteSave().catch((err: unknown) => {
               set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
@@ -357,8 +391,9 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     })
   },
 
-  pushLocalSave: async () => {
+  pushLocalSave: async (force = false) => {
     if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
+    if (!force && (get().pendingRemote || !get().remoteChecked || get().status === 'syncing')) return
     const user = get().user
     if (!user) return
 
@@ -367,6 +402,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       markLocalSaveChanged()
       const snapshot = captureLocalSaveSnapshot()
       const row = await upsertSnapshot(user.id, snapshot)
+      clearAcceptedRemote()
       set({
         status: 'signed-in',
         remoteUpdatedAt: row.updated_at,
@@ -382,6 +418,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
   pullRemoteSave: async () => {
     if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
+    if (get().pendingRemote || get().status === 'syncing') return
     const user = get().user
     if (!user) return
 
@@ -391,16 +428,25 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       const hadLocalUpdatedAt = getLocalSaveUpdatedAt() !== null
       const local = captureLocalSaveSnapshot({ markChanged: false })
       if (!remote) {
-        await get().pushLocalSave()
+        await get().pushLocalSave(true)
         return
       }
 
       const remoteSnapshot = remote.save_data
-      const sameDevice = remote.local_save_id === local.localSaveId
+      const acceptedRemote = isAcceptedRemote(remote)
+      const localIsNewer = compareIso(local.capturedAt, remote.local_updated_at) > 0
+      const remoteIsNewer = compareIso(remote.local_updated_at, local.capturedAt) > 0
+      const timestampGapMs = Math.abs(compareIso(local.capturedAt, remote.local_updated_at))
+      const withinConflictGrace = timestampGapMs <= CLOUD_SAVE_CONFLICT_GRACE_MS
+      const restoreOfflinePending = localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY) === '1'
       const meaningfulDifference = hasMeaningfulDifference(local, remoteSnapshot)
-      const shouldAskPlayer = !hadLocalUpdatedAt || meaningfulDifference
 
-      if (shouldAskPlayer) {
+      if (!hadLocalUpdatedAt && !meaningfulDifference) {
+        applyRemoteSaveAndReload(remote)
+        return
+      }
+
+      if (!hadLocalUpdatedAt && meaningfulDifference) {
         set({
           status: 'signed-in',
           pendingRemote: remote,
@@ -412,22 +458,31 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         return
       }
 
-      const localIsNewer = compareIso(local.capturedAt, remote.local_updated_at) > 0
-      const remoteIsNewer = compareIso(remote.local_updated_at, local.capturedAt) > 0
-
-      if (remoteIsNewer && sameDevice) {
-        const remoteLastActiveAt = remote.save_data.lastActiveAt
-          ?? Date.parse(remote.local_updated_at || remote.updated_at)
-        applyLocalSaveSnapshot({
-          ...remoteSnapshot,
-          capturedAt: remoteSnapshot.capturedAt || remote.local_updated_at,
-          lastActiveAt: Number.isFinite(remoteLastActiveAt) ? remoteLastActiveAt : undefined,
-        })
-        window.location.reload()
+      if (localIsNewer && (restoreOfflinePending || acceptedRemote || (withinConflictGrace && !meaningfulDifference))) {
+        localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+        await get().pushLocalSave(true)
         return
       }
 
-      if (remoteIsNewer && !sameDevice) {
+      if (acceptedRemote && !remoteIsNewer) {
+        localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+        set({
+          status: 'signed-in',
+          remoteUpdatedAt: remote.updated_at,
+          localSnapshotAt: local.capturedAt,
+          remoteChecked: true,
+          pendingRemote: null,
+          message: 'Cloud save is up to date.',
+        })
+        return
+      }
+
+      if (remoteIsNewer && !meaningfulDifference) {
+        applyRemoteSaveAndReload(remote)
+        return
+      }
+
+      if (remoteIsNewer) {
         set({
           status: 'signed-in',
           pendingRemote: remote,
@@ -440,7 +495,19 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       }
 
       if (localIsNewer) {
-        await get().pushLocalSave()
+        if (localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY) === '1' || !meaningfulDifference) {
+          localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+          await get().pushLocalSave(true)
+          return
+        }
+        set({
+          status: 'signed-in',
+          pendingRemote: remote,
+          remoteUpdatedAt: remote.updated_at,
+          localSnapshotAt: local.capturedAt,
+          remoteChecked: true,
+          message: 'Local progress is newer than the cloud save. Choose which one to keep.',
+        })
         return
       }
 
@@ -462,7 +529,8 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
   },
 
   chooseLocal: async () => {
-    await get().pushLocalSave()
+    clearAcceptedRemote()
+    await get().pushLocalSave(true)
   },
 
   chooseRemote: async () => {
@@ -470,6 +538,17 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     if (!remote) return
     const remoteLastActiveAt = remote.save_data.lastActiveAt
       ?? Date.parse(remote.local_updated_at || remote.updated_at)
+    localStorage.setItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY, '1')
+    markAcceptedRemote(remote)
+    set({
+      status: 'syncing',
+      pendingRemote: null,
+      remoteUpdatedAt: remote.updated_at,
+      localSnapshotAt: remote.local_updated_at,
+      remoteChecked: false,
+      message: 'Restoring cloud save.',
+      error: null,
+    })
     applyLocalSaveSnapshot({
       ...remote.save_data,
       capturedAt: remote.save_data.capturedAt || remote.local_updated_at,

@@ -13,7 +13,6 @@ const SYNC_DEBOUNCE_MS = 5000
 export function useCloudSaveSync(paused = false) {
   const timer = useRef<number | null>(null)
   const pausedRef = useRef(paused)
-  const wasPaused = useRef(paused)
 
   useEffect(() => {
     useCloudSaveStore.getState().init()
@@ -54,20 +53,9 @@ export function useCloudSaveSync(paused = false) {
   }, [])
 
   useEffect(() => {
-    if (wasPaused.current && !paused) {
-      if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') {
-        wasPaused.current = paused
-        return
-      }
-      const cloud = useCloudSaveStore.getState()
-      if (cloud.user && !cloud.pendingRemote && cloud.status !== 'syncing' && cloud.remoteChecked) {
-        markLocalSaveChanged()
-        if (timer.current !== null) window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => {
-          useCloudSaveStore.getState().pushLocalSave()
-        }, SYNC_DEBOUNCE_MS)
-      }
+    if (paused && timer.current !== null) {
+      window.clearTimeout(timer.current)
+      timer.current = null
     }
-    wasPaused.current = paused
   }, [paused])
 }

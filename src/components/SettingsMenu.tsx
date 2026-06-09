@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useNotifStore } from '../store/notifStore'
-import { CLOUD_SAVE_LOCAL_ID_KEY, CLOUD_SAVE_LOCAL_UPDATED_AT_KEY, LOCAL_PLAY_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS, SAVE_SCHEMA_VERSION } from '../store/save'
+import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, CLOUD_SAVE_LOCAL_ID_KEY, CLOUD_SAVE_LOCAL_UPDATED_AT_KEY, LOCAL_PLAY_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS, SAVE_SCHEMA_VERSION, markLocalSaveChanged } from '../store/save'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
@@ -57,6 +57,8 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
       CLOUD_SAVE_LOCAL_ID_KEY,
       CLOUD_SAVE_LOCAL_UPDATED_AT_KEY,
       OFFLINE_LAST_ACTIVE_KEY,
+      CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY,
+      CLOUD_RESTORE_OFFLINE_PENDING_KEY,
       MID_FIGHT_KEY,
       OFFLINE_SYNC_SNAPSHOT_KEY,
       OFFLINE_SYNC_PENDING_KEY,
@@ -89,6 +91,7 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
       },
       version: SAVE_SCHEMA_VERSION,
     }))
+    markLocalSaveChanged()
 
     if (cloudUser) await signOut()
     window.location.reload()

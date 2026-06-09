@@ -17,6 +17,7 @@ import NotifToast from './components/NotifToast'
 import { SpriteGallery } from './components/icons/__SpriteGallery'
 import { useCloudSaveSync } from './hooks/useCloudSaveSync'
 import { useGameLoop } from './hooks/useGameLoop'
+import { useCloudSaveStore } from './store/cloudSaveStore'
 import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
 import { useMapStore } from './store/mapStore'
@@ -121,9 +122,41 @@ function OfflineSyncOverlay({
   )
 }
 
+function CloudSyncOverlay({ isEn }: { isEn: boolean }) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 px-5 py-4 text-slate-100 shadow-2xl">
+        <div className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">
+          {isEn ? 'Cloud save' : 'Save na nuvem'}
+        </div>
+        <h2 className="mt-1 text-lg font-black">
+          {isEn ? 'Synchronizing...' : 'Sincronizando...'}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          {isEn
+            ? 'The game is locked while cloud and offline progress are resolved.'
+            : 'O jogo está bloqueado enquanto a nuvem e o progresso offline são resolvidos.'}
+        </p>
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-indigo-400" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function GameRoot() {
-  const { offlineSync, acceptOfflineProgress, discardOfflineProgress } = useGameLoop()
-  useCloudSaveSync(offlineSync.status !== 'idle')
+  const cloudStatus = useCloudSaveStore(s => s.status)
+  const cloudUser = useCloudSaveStore(s => s.user)
+  const cloudRemoteChecked = useCloudSaveStore(s => s.remoteChecked)
+  const cloudPendingRemote = useCloudSaveStore(s => s.pendingRemote)
+  const gamePausedForCloudSave = !!cloudPendingRemote
+    || cloudStatus === 'loading'
+    || (!!cloudUser && !cloudRemoteChecked)
+
+  const { offlineSync, startupReady, acceptOfflineProgress, discardOfflineProgress } = useGameLoop(gamePausedForCloudSave)
+  const gamePausedForSync = gamePausedForCloudSave || !startupReady || offlineSync.status !== 'idle'
+  useCloudSaveSync(gamePausedForSync)
 
   const theme        = useSettingsStore((s) => s.theme)
   const lang         = useSettingsStore((s) => s.lang)
@@ -141,74 +174,21 @@ function GameRoot() {
   const pushNotif    = useNotifStore((s) => s.push)
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
+  const startupInitialized = useRef(false)
 
   useEffect(() => {
-    const KEY = 'ii-mid-fight'
+    if (startupInitialized.current || gamePausedForSync) return
+    startupInitialized.current = true
 
-    // ── Subscribe: write snapshot to localStorage on every HP change ─────────
-    // Much more reliable than beforeunload (which may not complete) and avoids
-    // Zustand rehydration-timing issues with the partialize approach.
-    const unsub = useBattleStore.subscribe((state, prev) => {
-      const hpChanged = state.player.hp !== prev.player.hp || state.enemy.hp !== prev.enemy.hp
-      const statusChanged = state.enemyStatuses !== prev.enemyStatuses || state.heroStatuses !== prev.heroStatuses
-      if (!hpChanged && !statusChanged) return
-
-      if ((state.phase === 'idle' || state.phase === 'attacking') && state.enemy.hp > 0 && state.player.hp > 0) {
-        localStorage.setItem(KEY, JSON.stringify({
-          playerHpRatio: state.player.hp / state.player.maxHp,
-          enemyHpRatio:  state.enemy.hp  / state.enemy.maxHp,
-          enemyStatuses: state.enemyStatuses,
-          heroStatuses:  state.heroStatuses,
-          attacker:      state.attacker,
-          hitsLeft:      state.hitsLeft,
-          comboSize:     state.comboSize,
-        }))
-      } else {
-        // Fight ended — remove so next reload doesn't restore a finished fight
-        localStorage.removeItem(KEY)
-      }
-    })
-
-    // ── Startup: read snapshot BEFORE reset(), apply AFTER ───────────────────
+    localStorage.removeItem('ii-mid-fight')
     if (!useMapStore.getState().defeatPending) {
-      const raw = localStorage.getItem(KEY)
-      localStorage.removeItem(KEY)          // consume immediately
-
-      useBattleStore.getState().reset()
-      let restoredFight = false
-
-      if (raw) {
-        try {
-          const snap = JSON.parse(raw) as {
-            playerHpRatio: number; enemyHpRatio: number
-            enemyStatuses: unknown; heroStatuses: unknown
-            attacker: unknown; hitsLeft: unknown; comboSize: unknown
-          }
-          if (snap.enemyHpRatio > 0.01 && snap.enemyHpRatio < 0.99) {
-            const attacker  = snap.attacker  === 'enemy' ? 'enemy' : 'player'
-            const hitsLeft  = typeof snap.hitsLeft  === 'number' && snap.hitsLeft  >= 1 ? snap.hitsLeft  : 1
-            const comboSize = typeof snap.comboSize === 'number' && snap.comboSize >= 1 ? snap.comboSize : hitsLeft
-            useBattleStore.getState().restoreMidFight(
-              snap.playerHpRatio,
-              snap.enemyHpRatio,
-              Array.isArray(snap.enemyStatuses) ? snap.enemyStatuses : [],
-              Array.isArray(snap.heroStatuses)  ? snap.heroStatuses  : [],
-              attacker,
-              hitsLeft,
-              comboSize,
-            )
-            restoredFight = true
-          }
-        } catch { /* malformed snapshot — ignore */ }
-      }
-
-      if (!restoredFight && useMapStore.getState().scene === 'map') {
+      const battlePhase = useBattleStore.getState().phase
+      if (battlePhase === 'empty' && useMapStore.getState().scene === 'map') {
         useMapStore.getState().processMarketExitTile()
       }
     }
 
-    return unsub
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gamePausedForSync])
 
   // Apply/remove dark class on <html>
   useEffect(() => {
@@ -217,6 +197,7 @@ function GameRoot() {
 
   // Force base speed when entering non-battle scenes
   useEffect(() => {
+    if (gamePausedForSync) return
     if (scene !== 'map') {
       const equip = getEquipmentBonuses(equipment)
       const d = getEffectiveDerivedStatsFromBonuses(
@@ -229,19 +210,21 @@ function GameRoot() {
       )
       setSpeed(getBaseSpeed(d))
     }
-  }, [activeBuffs, attributes, equipment, equippedWeapons, heroLevel, scene, setSpeed, weaponProgress])
+  }, [activeBuffs, attributes, equipment, equippedWeapons, gamePausedForSync, heroLevel, scene, setSpeed, weaponProgress])
 
   // Interior scenes live inside the battle tab; expose them through
   // the mini player when the user is currently looking at another tab.
   useEffect(() => {
+    if (gamePausedForSync) return
     if (scene === 'home' || scene === 'market' || scene === 'tower') {
       setShowMini(activeTab !== 'battle')
     }
-  }, [activeTab, scene, setShowMini])
+  }, [activeTab, gamePausedForSync, scene, setShowMini])
 
   // Sync hero stats → battle store whenever attributes, equipment or level change.
   // heroLevel is included so passive level bonuses take effect on level-up.
   useEffect(() => {
+    if (gamePausedForSync) return
     const equip = getEquipmentBonuses(equipment)
     const d = getEffectiveDerivedStatsFromBonuses(
       attributes,
@@ -259,10 +242,11 @@ function GameRoot() {
       resIgnea: d.resIgnea, resGlacial: d.resGlacial,
       resSombria: d.resSombria, resVital: d.resVital,
     })
-  }, [activeBuffs, attributes, equipment, equippedWeapons, heroLevel, syncFromHero, weaponProgress])
+  }, [activeBuffs, attributes, equipment, equippedWeapons, gamePausedForSync, heroLevel, syncFromHero, weaponProgress])
 
   // Level-up notification
   useEffect(() => {
+    if (gamePausedForSync) return
     if (prevLevel.current !== 0 && heroLevel > prevLevel.current) {
       pushNotif({
         title:    `🎉 Nível ${heroLevel}!`,
@@ -277,7 +261,7 @@ function GameRoot() {
     }
     prevLevel.current = heroLevel
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heroLevel])
+  }, [gamePausedForSync, heroLevel])
 
   if (typeof window !== 'undefined' && window.location.hash === '#gallery') {
     return <SpriteGallery />
@@ -288,6 +272,9 @@ function GameRoot() {
       <MiniBattlePlayer />
       <NotifToast />
       <CloudSaveConflictModal />
+      {gamePausedForSync && !cloudPendingRemote && offlineSync.status === 'idle' && (
+        <CloudSyncOverlay isEn={lang === 'en'} />
+      )}
       <OfflineSyncOverlay
         sync={offlineSync}
         isEn={lang === 'en'}
@@ -319,7 +306,7 @@ function GameRoot() {
               {scene === 'home'   ? <HouseInterior /> :
                scene === 'market' ? <MarketInterior /> :
                scene === 'tower'  ? <TowerInterior /> :
-                                    <BattleArena />}
+                                    <BattleArena paused={gamePausedForSync} />}
             </div>
             <aside>
               <HeroPanel />
