@@ -217,12 +217,14 @@ export default function StickyBar() {
         {/* Gold */}
         <div className="relative flex items-center shrink-0">
           {goldGainVersion > 0 && (
-            <span
-              key={goldGainVersion}
-              className="anim-xp-float absolute right-full mr-1.5 text-[10px] font-bold text-yellow-400 whitespace-nowrap pointer-events-none"
-            >
-              +{lastGoldGain} ⬡
-            </span>
+            <div className="absolute inset-x-0 bottom-full mb-1 flex justify-center pointer-events-none">
+              <span
+                key={goldGainVersion}
+                className="anim-xp-float text-[10px] font-bold text-yellow-400 whitespace-nowrap"
+              >
+                +{lastGoldGain} ⬡
+              </span>
+            </div>
           )}
           <span className="text-xs font-semibold text-yellow-500 dark:text-yellow-400 tabular-nums">
             ⬡ {gold}
@@ -233,18 +235,20 @@ export default function StickyBar() {
 
         {/* Level + XP */}
         <div className="relative flex flex-1 items-center justify-end gap-1.5 sm:gap-2.5 min-w-0">
-          {xpGainVersion > 0 && (
-            <span
-              key={xpGainVersion}
-              className="anim-xp-float absolute bottom-full left-0 mb-1 text-[10px] font-bold text-indigo-400 whitespace-nowrap pointer-events-none z-50"
-            >
-              +{lastXpGain} XP
-            </span>
-          )}
           <span className="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
             {t.level} {level}
           </span>
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="relative flex items-center gap-1.5 min-w-0">
+            {xpGainVersion > 0 && (
+              <div className="absolute inset-x-0 bottom-full mb-1 flex justify-center pointer-events-none z-50">
+                <span
+                  key={xpGainVersion}
+                  className="anim-xp-float text-[10px] font-bold text-indigo-400 whitespace-nowrap"
+                >
+                  +{lastXpGain} XP
+                </span>
+              </div>
+            )}
             <div className="w-14 min-[420px]:w-20 sm:w-24 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-indigo-500 rounded-full transition-[width] duration-300"

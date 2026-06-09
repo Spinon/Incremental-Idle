@@ -397,35 +397,37 @@ export default function MapSection() {
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
           {/* Zoom controls */}
-          <button
-            onClick={() => {
-              handleManualMapInput()
-              setZoom(z => clampZoom(z - ZOOM_STEP))
-            }}
-            disabled={zoom <= ZOOM_MIN}
-            className={cn(
-              'w-6 h-6 rounded text-xs font-bold border transition-colors',
-              zoom <= ZOOM_MIN
-                ? 'opacity-30 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
-                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
-            )}
-          >−</button>
-          <span className="text-[10px] text-slate-400 tabular-nums w-8 text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={() => {
-              handleManualMapInput()
-              setZoom(z => clampZoom(z + ZOOM_STEP))
-            }}
-            disabled={zoom >= ZOOM_MAX}
-            className={cn(
-              'w-6 h-6 rounded text-xs font-bold border transition-colors',
-              zoom >= ZOOM_MAX
-                ? 'opacity-30 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
-                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
-            )}
-          >+</button>
+          <div className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+            <button
+              onClick={() => {
+                handleManualMapInput()
+                setZoom(z => clampZoom(z - ZOOM_STEP))
+              }}
+              disabled={zoom <= ZOOM_MIN}
+              className={cn(
+                'w-6 h-6 rounded text-xs font-bold border transition-colors',
+                zoom <= ZOOM_MIN
+                  ? 'opacity-30 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
+                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
+              )}
+            >−</button>
+            <span className="text-[10px] text-slate-400 tabular-nums w-8 text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={() => {
+                handleManualMapInput()
+                setZoom(z => clampZoom(z + ZOOM_STEP))
+              }}
+              disabled={zoom >= ZOOM_MAX}
+              className={cn(
+                'w-6 h-6 rounded text-xs font-bold border transition-colors',
+                zoom >= ZOOM_MAX
+                  ? 'opacity-30 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
+                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
+              )}
+            >+</button>
+          </div>
         </div>
       </div>
 
