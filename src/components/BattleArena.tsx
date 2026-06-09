@@ -193,8 +193,8 @@ function ResourceBar({
   const pct = Math.max(0, Math.min(100, (current / max) * 100))
 
   return (
-    <div className="w-44 flex flex-col">
-      <div className={cn('relative w-full h-4 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border shadow-inner', borderColor)}>
+    <div className="w-[clamp(7.25rem,34vw,11rem)] flex flex-col">
+      <div className={cn('relative w-full h-[clamp(0.875rem,3.4vw,1rem)] bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border shadow-inner', borderColor)}>
         <div
           className={cn('h-full rounded-full transition-[width] duration-200', color)}
           style={{ width: `${pct}%` }}
@@ -203,7 +203,7 @@ function ResourceBar({
           className="absolute inset-0 rounded-full"
           style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, transparent 60%)' }}
         />
-        <span className="absolute inset-0 flex items-center justify-between px-2 text-[9px] font-bold tabular-nums select-none text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.75)]">
+        <span className="absolute inset-0 flex items-center justify-between px-2 text-[clamp(0.48rem,2.2vw,0.56rem)] font-bold tabular-nums select-none text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.75)]">
           <span>{label}</span>
           <span>
             {Math.floor(current)}/{Math.round(max)}
@@ -538,7 +538,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         )}
 
         {/* Player */}
-        <div className="absolute left-10 top-10 flex flex-col items-start gap-1">
+        <div className="absolute left-[clamp(0.5rem,5vw,2.5rem)] top-[clamp(0.5rem,3vw,2.5rem)] flex flex-col items-start gap-1">
           <div className="flex flex-col gap-0.5 items-start">
             <HpBar
               name={store.player.name}
@@ -557,7 +557,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
           </div>
           {/* Hero elemental statuses (regen, blessed…) */}
           {(store.heroStatuses.length > 0 || activeBuffs.length > 0) && (
-            <div className="absolute left-[92px] top-[118px] z-0 w-[176px] flex flex-wrap gap-1 justify-start pointer-events-none">
+            <div className="absolute left-[clamp(4rem,18vw,5.75rem)] top-[clamp(5.75rem,19vw,7.375rem)] z-0 w-[clamp(7.25rem,34vw,11rem)] flex flex-wrap gap-1 justify-start pointer-events-none">
               {store.heroStatuses.map(s => (
                 <span
                   key={s.element}
@@ -605,7 +605,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         </div>
 
         {/* Enemy */}
-        <div className="absolute right-10 top-10 flex flex-col items-end gap-1">
+        <div className="absolute right-[clamp(0.5rem,5vw,2.5rem)] top-[clamp(0.5rem,3vw,2.5rem)] flex flex-col items-end gap-1">
           <div className="flex flex-col gap-0.5 items-end">
             <HpBar
               name={enemyDisplayName}
@@ -641,7 +641,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
           </div>
           {/* Enemy elemental statuses */}
           {(store.enemyStatuses.length > 0 || activeDebuff || store.enemyBleedPower > 0) && (
-            <div className="absolute right-[92px] top-[118px] z-0 w-[176px] flex flex-wrap gap-1 justify-end pointer-events-none">
+            <div className="absolute right-[clamp(4rem,18vw,5.75rem)] top-[clamp(5.75rem,19vw,7.375rem)] z-0 w-[clamp(7.25rem,34vw,11rem)] flex flex-wrap gap-1 justify-end pointer-events-none">
               {store.enemyBleedPower > 0 && (
                 <span
                   title={isEn ? `Bleeding (${Math.round(store.enemyBleedPower)}/t)` : `Sangrando (${Math.round(store.enemyBleedPower)}/t)`}

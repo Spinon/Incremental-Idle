@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
@@ -35,9 +36,17 @@ const MINI_EFFECT_ICON: Record<string, string> = {
   fizzle: '∅',
 }
 
-const MINI_PLAYER_WIDTH = 236
+const MINI_PLAYER_DEFAULT_WIDTH = 236
+const MINI_PLAYER_MIN_WIDTH = 190
+const MINI_PLAYER_MAX_WIDTH = 360
 const MINI_PLAYER_SAFE_HEIGHT = 270
 const MINI_PLAYER_EDGE_GAP = 20
+
+function clampMiniWidth(width: number): number {
+  if (typeof window === 'undefined') return MINI_PLAYER_DEFAULT_WIDTH
+  const viewportMax = Math.max(MINI_PLAYER_MIN_WIDTH, window.innerWidth - MINI_PLAYER_EDGE_GAP * 2)
+  return Math.max(MINI_PLAYER_MIN_WIDTH, Math.min(Math.min(MINI_PLAYER_MAX_WIDTH, viewportMax), width))
+}
 
 // ─── Mini HP bar ──────────────────────────────────────────────────────────────
 
@@ -70,13 +79,13 @@ function MiniHpBar({ label, current, max }: { label: string; current: number; ma
   )
 }
 
-function MiniManaBar({ current, max, label }: { current: number; max: number; label: string }) {
+function MiniManaBar({ current, max, label, color = 'bg-blue-500' }: { current: number; max: number; label: string; color?: string }) {
   const pct = Math.max(0, Math.min(100, (current / max) * 100))
 
   return (
     <div className="relative w-full h-[14px] rounded overflow-hidden bg-slate-800">
       <div
-        className="absolute inset-y-0 left-0 rounded transition-[width] duration-200 bg-blue-500"
+        className={cn('absolute inset-y-0 left-0 rounded transition-[width] duration-200', color)}
         style={{ width: `${pct}%` }}
       />
       <div
@@ -180,34 +189,66 @@ export default function MiniBattlePlayer() {
   const availableSpells = getPlayerSpells(knownWordIds)
 
   // ── Drag ──────────────────────────────────────────────────────────────────
+  const [miniWidth, setMiniWidth] = useState(() => clampMiniWidth(MINI_PLAYER_DEFAULT_WIDTH))
   const [pos, setPos] = useState(() => ({
-    x: Math.max(MINI_PLAYER_EDGE_GAP, window.innerWidth - MINI_PLAYER_WIDTH - MINI_PLAYER_EDGE_GAP),
+    x: Math.max(MINI_PLAYER_EDGE_GAP, window.innerWidth - MINI_PLAYER_DEFAULT_WIDTH - MINI_PLAYER_EDGE_GAP),
     y: Math.max(MINI_PLAYER_EDGE_GAP, window.innerHeight - MINI_PLAYER_SAFE_HEIGHT - MINI_PLAYER_EDGE_GAP),
   }))
   const [openQuickslots, setOpenQuickslots] = useState<'consumables' | 'spells' | null>(null)
-  const drag = useRef<{ ox: number; oy: number; px: number; py: number } | null>(null)
+  const drag = useRef<{ ox: number; oy: number; px: number; py: number; pointerId: number } | null>(null)
+  const resize = useRef<{ ox: number; ow: number; pointerId: number } | null>(null)
 
-  const onHeaderMouseDown = useCallback((e: React.MouseEvent) => {
+  const clampMiniPos = useCallback((x: number, y: number, width = miniWidth) => ({
+    x: Math.max(MINI_PLAYER_EDGE_GAP, Math.min(window.innerWidth - width - MINI_PLAYER_EDGE_GAP, x)),
+    y: Math.max(MINI_PLAYER_EDGE_GAP, Math.min(window.innerHeight - MINI_PLAYER_SAFE_HEIGHT - MINI_PLAYER_EDGE_GAP, y)),
+  }), [miniWidth])
+
+  const onHeaderPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
+    if (e.button !== undefined && e.button !== 0) return
     e.preventDefault()
-    drag.current = { ox: e.clientX, oy: e.clientY, px: pos.x, py: pos.y }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    drag.current = { ox: e.clientX, oy: e.clientY, px: pos.x, py: pos.y, pointerId: e.pointerId }
   }, [pos])
 
+  const onResizePointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (e.button !== undefined && e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    resize.current = { ox: e.clientX, ow: miniWidth, pointerId: e.pointerId }
+  }, [miniWidth])
+
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!drag.current) return
-      setPos({
-        x: Math.max(MINI_PLAYER_EDGE_GAP, Math.min(window.innerWidth - MINI_PLAYER_WIDTH - MINI_PLAYER_EDGE_GAP, drag.current.px + e.clientX - drag.current.ox)),
-        y: Math.max(MINI_PLAYER_EDGE_GAP, Math.min(window.innerHeight - MINI_PLAYER_SAFE_HEIGHT - MINI_PLAYER_EDGE_GAP, drag.current.py + e.clientY - drag.current.oy)),
-      })
+    const onMove = (e: PointerEvent) => {
+      if (resize.current && resize.current.pointerId === e.pointerId) {
+        const width = clampMiniWidth(resize.current.ow + e.clientX - resize.current.ox)
+        setMiniWidth(width)
+        setPos(p => clampMiniPos(p.x, p.y, width))
+        return
+      }
+      if (drag.current && drag.current.pointerId === e.pointerId) {
+        setPos(clampMiniPos(drag.current.px + e.clientX - drag.current.ox, drag.current.py + e.clientY - drag.current.oy))
+      }
     }
-    const onUp = () => { drag.current = null }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
+    const onUp = (e: PointerEvent) => {
+      if (drag.current?.pointerId === e.pointerId) drag.current = null
+      if (resize.current?.pointerId === e.pointerId) resize.current = null
+    }
+    const onWindowResize = () => {
+      setMiniWidth(w => clampMiniWidth(w))
+      setPos(p => clampMiniPos(p.x, p.y))
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('resize', onWindowResize)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('resize', onWindowResize)
     }
-  }, [])
+  }, [clampMiniPos])
 
   // ── Hit flash (key-based to restart animation on every hit) ───────────────
   const [playerHitKey, setPlayerHitKey] = useState(0)
@@ -412,6 +453,7 @@ export default function MiniBattlePlayer() {
   const playerLabel = player.name
   const enemyName   = isEn ? (enemy.nameEn ?? enemy.name) : (enemy.namePt ?? enemy.name)
   const enemyLabel  = `${enemyName}  ${isEn ? 'Lv.' : 'Nv.'}${enemy.level}`
+  const enemyResourceLabel = isEn ? 'FURY' : 'FURIA'
   const enemyVisual = enemyTemplate && MONSTER_PIXEL_SPRITES[enemyTemplate.id]
     ? (
       <MonsterSprite
@@ -432,14 +474,14 @@ export default function MiniBattlePlayer() {
   return createPortal(
     <div
       className="fixed z-[9999] select-none"
-      style={{ left: pos.x, top: pos.y, width: MINI_PLAYER_WIDTH }}
+      style={{ left: pos.x, top: pos.y, width: miniWidth, touchAction: 'none' }}
     >
-      <div className="rounded-xl overflow-hidden shadow-2xl ring-1 ring-slate-600/60 bg-slate-900/95 backdrop-blur-md">
+      <div className="relative rounded-xl overflow-hidden shadow-2xl ring-1 ring-slate-600/60 bg-slate-900/95 backdrop-blur-md">
 
         {/* ── Header / drag handle ──────────────────────────────────────── */}
         <div
-          className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-800/80 cursor-grab active:cursor-grabbing border-b border-slate-700/50"
-          onMouseDown={onHeaderMouseDown}
+          className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-800/80 cursor-grab active:cursor-grabbing border-b border-slate-700/50 touch-none"
+          onPointerDown={onHeaderPointerDown}
         >
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex-1 pointer-events-none">
             {scene === 'home'
@@ -453,7 +495,7 @@ export default function MiniBattlePlayer() {
           <button
             className="text-slate-500 hover:text-slate-200 text-xs leading-none px-0.5 transition-colors"
             onClick={() => setShow(false)}
-            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
           >
             ✕
           </button>
@@ -539,6 +581,7 @@ export default function MiniBattlePlayer() {
           <MiniHpBar label={playerLabel} current={player.hp} max={player.maxHp} />
           <MiniManaBar label={isEn ? 'MANA' : 'MANA'} current={mana} max={derivedStats.maxMana} />
           <MiniHpBar label={enemyLabel} current={enemy.hp} max={enemy.maxHp} />
+          <MiniManaBar label={enemyResourceLabel} current={enemy.fury} max={enemy.furyMax} color="bg-red-500" />
           <div className="grid grid-cols-2 gap-1 pt-0.5">
             <button
               type="button"
@@ -642,6 +685,15 @@ export default function MiniBattlePlayer() {
           </>
         )}
 
+        <button
+          type="button"
+          aria-label={isEn ? 'Resize mini battle' : 'Redimensionar mini batalha'}
+          title={isEn ? 'Resize mini battle' : 'Redimensionar mini batalha'}
+          onPointerDown={onResizePointerDown}
+          className="absolute bottom-0 right-0 z-20 h-6 w-6 cursor-nwse-resize touch-none rounded-tl-lg border-l border-t border-slate-600/60 bg-slate-800/80 text-slate-400 hover:text-slate-100 active:text-slate-100"
+        >
+          <span className="absolute bottom-1 right-1 h-2.5 w-2.5 border-b-2 border-r-2 border-current" />
+        </button>
       </div>
     </div>,
     document.body,

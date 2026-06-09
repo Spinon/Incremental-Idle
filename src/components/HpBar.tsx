@@ -35,7 +35,7 @@ export default function HpBar({
                  'bg-red-500 dark:bg-red-500'
 
   return (
-    <div className={cn('w-44 flex flex-col gap-0.5', side === 'enemy' ? 'items-end' : 'items-start')}>
+    <div className={cn('w-[clamp(7.25rem,34vw,11rem)] flex flex-col gap-0.5', side === 'enemy' ? 'items-end' : 'items-start')}>
       {/* Modifier/title row */}
       <div className={cn(
         'h-3 w-full px-0.5 text-[9px] font-black uppercase tracking-widest truncate',
@@ -48,7 +48,7 @@ export default function HpBar({
       {/* Name row */}
       <div className="flex w-full justify-between px-0.5 items-center">
         <span className={cn(
-          'text-xs font-bold tracking-wide truncate max-w-[9rem]',
+          'text-[clamp(0.62rem,2.5vw,0.75rem)] font-bold tracking-wide truncate max-w-full',
           side === 'enemy' && 'text-right ml-auto',
           rarityColor ?? 'text-slate-800 dark:text-slate-200',
         )}>
@@ -57,7 +57,7 @@ export default function HpBar({
       </div>
 
       {/* Bar with HP overlay */}
-      <div className="relative w-full h-4 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/70 dark:border-slate-600/60 shadow-inner">
+      <div className="relative w-full h-[clamp(0.875rem,3.4vw,1rem)] bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/70 dark:border-slate-600/60 shadow-inner">
         <div
           className={cn(
             'h-full rounded-full transition-[width] duration-300 ease-out',
@@ -71,7 +71,7 @@ export default function HpBar({
           style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%)' }} />
         {/* HP text inside bar */}
         <span className={cn(
-          'absolute inset-0 flex items-center px-2 text-[9px] font-bold tabular-nums select-none',
+          'absolute inset-0 flex items-center px-2 text-[clamp(0.48rem,2.2vw,0.56rem)] font-bold tabular-nums select-none',
           level !== undefined && level > 0 ? 'justify-between' : side === 'enemy' ? 'justify-end' : 'justify-start',
           isLow ? 'text-white drop-shadow-[0_0_3px_rgba(0,0,0,0.9)]' : 'text-white/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.7)]',
         )}>
