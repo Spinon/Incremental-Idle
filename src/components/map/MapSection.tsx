@@ -429,9 +429,9 @@ export default function MapSection() {
       </div>
 
       {/* ── Main: viewport + sidebar ── */}
-      <div className="flex gap-3 items-start">
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-start">
         {/* Left: map viewport + tile info + deck */}
-        <div className="flex-none flex flex-col gap-2">
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
           <MapViewport
             grid={grid}
             sightedCells={sightedCells}
@@ -510,7 +510,7 @@ export default function MapSection() {
         </div>
 
         {/* Right: enemy list sidebar */}
-        <div className="flex-1 min-w-0">
+        <div className="w-full lg:w-64 lg:flex-none min-w-0">
           <NearbyPanel
             grid={grid}
             playerPos={playerPos}
