@@ -296,18 +296,18 @@ export default function MapSection() {
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
         <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
           {t.map}
         </p>
-        <span className="text-[10px] text-slate-500 dark:text-slate-600 italic">
+        <span className="hidden md:inline text-[10px] text-slate-500 dark:text-slate-600 italic">
           {t.mapHint}
         </span>
         <span className="text-[10px] text-slate-400 dark:text-slate-600 tabular-nums font-medium">
           ⬛ {tilesPlaced}
         </span>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
           {/* Auto-explore toggle — cycles Manual → Auto Move → Full Auto */}
           {(() => {
             const cycle: Record<typeof autoExplore, typeof autoExplore> = {
