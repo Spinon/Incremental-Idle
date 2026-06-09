@@ -462,6 +462,11 @@ export default function MapSection() {
             onTileClick={handleTileClick}
             onCameraChange={(x, y) => setCameraPos({ x, y })}
             onZoom={dir => setZoom(z => clampZoom(z + dir * ZOOM_STEP))}
+            onZoomChange={nextZoom => {
+              const appliedZoom = clampZoom(nextZoom)
+              setZoom(appliedZoom)
+              return appliedZoom
+            }}
             onUserInteraction={handleManualMapInput}
           />
 

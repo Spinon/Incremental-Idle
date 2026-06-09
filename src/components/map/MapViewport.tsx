@@ -25,6 +25,7 @@ interface Props {
   onTileClick(x: number, y: number): void
   onCameraChange(x: number, y: number): void
   onZoom(dir: 1 | -1): void
+  onZoomChange(zoom: number): number
   onUserInteraction(): void
 }
 
@@ -59,7 +60,7 @@ function ghostBg(content: TileContent): string {
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, selectedDeckId, questMarkers, onDrop, onPlaceSelected, onTileClick, onCameraChange, onZoom, onUserInteraction,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, selectedDeckId, questMarkers, onDrop, onPlaceSelected, onTileClick, onCameraChange, onZoom, onZoomChange, onUserInteraction,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
@@ -114,16 +115,95 @@ export default function MapViewport({
 
   // Pixel-level pan — stores camera position at drag start
   const panRef = useRef<{ mx: number; my: number; cx: number; cy: number; moved: boolean } | null>(null)
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<{
+    distance: number
+    zoom: number
+    gridX: number
+    gridY: number
+  } | null>(null)
   const suppressNextClick = useRef(false)
+
+  function relativePoint(clientX: number, clientY: number) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    return {
+      x: clientX - (rect?.left ?? 0),
+      y: clientY - (rect?.top ?? 0),
+    }
+  }
+
+  function pinchPoints() {
+    const points = Array.from(pointersRef.current.values())
+    if (points.length < 2) return null
+    return [points[0], points[1]] as const
+  }
+
+  function startPinch() {
+    const points = pinchPoints()
+    if (!points) return
+
+    const [a, b] = points
+    const anchorX = (a.x + b.x) / 2
+    const anchorY = (a.y + b.y) / 2
+    const distance = Math.hypot(b.x - a.x, b.y - a.y)
+    if (distance <= 0) return
+
+    pinchRef.current = {
+      distance,
+      zoom,
+      gridX: cameraPos.x + (anchorX - vpW / 2) / tilePx,
+      gridY: cameraPos.y + (anchorY - vpH / 2) / tilePx,
+    }
+    panRef.current = null
+    suppressNextClick.current = true
+  }
+
+  function updatePinch() {
+    const pinch = pinchRef.current
+    const points = pinchPoints()
+    if (!pinch || !points) return
+
+    const [a, b] = points
+    const distance = Math.hypot(b.x - a.x, b.y - a.y)
+    if (distance <= 0) return
+    const anchorX = (a.x + b.x) / 2
+    const anchorY = (a.y + b.y) / 2
+
+    const nextZoom = onZoomChange(pinch.zoom * (distance / pinch.distance))
+    const nextTilePx = Math.round(52 * nextZoom)
+    onCameraChange(
+      pinch.gridX - (anchorX - vpW / 2) / nextTilePx,
+      pinch.gridY - (anchorY - vpH / 2) / nextTilePx,
+    )
+  }
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (draggingId !== null || e.button !== 0) return
     e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
     onUserInteraction()
+    const point = relativePoint(e.clientX, e.clientY)
+    pointersRef.current.set(e.pointerId, point)
+
+    if (pointersRef.current.size >= 2) {
+      startPinch()
+      return
+    }
+
     panRef.current = { mx: e.clientX, my: e.clientY, cx: cameraPos.x, cy: cameraPos.y, moved: false }
   }
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, relativePoint(e.clientX, e.clientY))
+    }
+
+    if (pinchRef.current) {
+      e.preventDefault()
+      updatePinch()
+      return
+    }
+
     if (!panRef.current) return
     const dx = e.clientX - panRef.current.mx
     const dy = e.clientY - panRef.current.my
@@ -132,7 +212,14 @@ export default function MapViewport({
     onCameraChange(panRef.current.cx - dx / tilePx, panRef.current.cy - dy / tilePx)
   }
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId)
+    if (pinchRef.current) {
+      suppressNextClick.current = true
+      pinchRef.current = null
+      panRef.current = null
+      return
+    }
     if (panRef.current?.moved) suppressNextClick.current = true
     panRef.current = null
   }
