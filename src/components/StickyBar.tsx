@@ -3,7 +3,7 @@ import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useSpellStore } from '../store/spellStore'
 import { useQuestStore } from '../store/questStore'
-import { useUIStore, type AppTab } from '../store/uiStore'
+import { useUIStore, APP_TABS } from '../store/uiStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, staminaDrainAt, getBaseSpeed } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
@@ -11,20 +11,7 @@ import { applySpellBuffs } from '../formulas/spells'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
-interface TabDef {
-  id: AppTab
-  label: string
-  labelEn: string
-}
-
-const TABS: TabDef[] = [
-  { id: 'battle',      label: 'Batalha',     labelEn: 'Battle'      },
-  { id: 'map',         label: 'Mapa',        labelEn: 'Map'         },
-  { id: 'equips',      label: 'Equips',      labelEn: 'Equips'      },
-  { id: 'spells',      label: 'Magias',      labelEn: 'Spells'      },
-  { id: 'consumables', label: 'Consumíveis', labelEn: 'Consumables' },
-  { id: 'quests',      label: 'Missões',     labelEn: 'Quests'      },
-]
+const TABS = APP_TABS
 
 export default function StickyBar() {
   const { speed, skipAnim, phase, setSpeed, setSkipAnim, skipBattle } = useBattleStore()
@@ -85,10 +72,10 @@ export default function StickyBar() {
   function handleSpeed(s: number) { setSkipAnim(false); setSpeed(s) }
 
   return (
-    <div className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-sm px-6 py-1.5 flex flex-col gap-1">
+    <div className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-sm px-3 sm:px-6 py-1.5 flex flex-col gap-1">
 
-      {/* ── Row 1: Nav tabs ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-0.5">
+      {/* ── Row 1: Nav tabs (top on desktop; mobile uses BottomNav) ───────── */}
+      <div className="hidden lg:flex items-center gap-0.5">
         {TABS.map(tab => {
           const active = activeTab === tab.id
           const badge  = tab.id === 'quests' && activeQuestCount > 0 ? activeQuestCount : null

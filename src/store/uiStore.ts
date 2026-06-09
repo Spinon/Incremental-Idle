@@ -3,6 +3,23 @@ import { create } from 'zustand'
 export type AppTab = 'battle' | 'map' | 'equips' | 'spells' | 'consumables' | 'quests'
 export type SceneAutoKind = 'home' | 'market' | 'tower'
 
+export interface AppTabDef {
+  id: AppTab
+  label: string
+  labelEn: string
+  icon: string
+}
+
+/** Shared nav tabs — used by StickyBar (desktop top) and BottomNav (mobile). */
+export const APP_TABS: AppTabDef[] = [
+  { id: 'battle',      label: 'Batalha',     labelEn: 'Battle',      icon: '⚔' },
+  { id: 'map',         label: 'Mapa',        labelEn: 'Map',         icon: '🗺' },
+  { id: 'equips',      label: 'Equips',      labelEn: 'Equips',      icon: '🛡' },
+  { id: 'spells',      label: 'Magias',      labelEn: 'Spells',      icon: '✨' },
+  { id: 'consumables', label: 'Consumíveis', labelEn: 'Consumables', icon: '🧪' },
+  { id: 'quests',      label: 'Missões',     labelEn: 'Quests',      icon: '📜' },
+]
+
 interface SceneAutoState {
   kind: SceneAutoKind | null
   active: boolean
