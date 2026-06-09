@@ -18,7 +18,6 @@ export default function HouseInterior() {
   const stuckPending   = useMapStore(s => s.stuckPending)
   const heroName       = useHeroStore(s => s.name)
   const heroLevel      = useHeroStore(s => s.level)
-  const queueEnemy     = useBattleStore(s => s.queueEnemy)
   const resetBattle    = useBattleStore(s => s.reset)
   const defeatSnapshot = useBattleStore(s => s.defeatSnapshot)
   const lang           = useSettingsStore(s => s.lang)
@@ -56,8 +55,6 @@ export default function HouseInterior() {
   const autoRestartSec = Math.ceil(Math.max(0, (AUTO_RESTART_MS - elapsed) / 1000))
 
   function startJourney() {
-    // Reset battle to a weak enemy so the arena doesn't keep the previous goblin
-    queueEnemy(Math.max(1, heroLevel - 5), undefined, 'normal', 0)
     resetBattle()
     resetMap(heroLevel)
     leaveScene()

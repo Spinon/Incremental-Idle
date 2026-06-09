@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useMapStore, gridKey } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
 import { useInventoryStore } from '../../store/inventoryStore'
@@ -789,17 +789,8 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
 
   const { content, level, explored, x, y } = tile
 
-  // Stable random monster for empty tiles — recomputed only when the tile changes.
-  const emptyMonster = useRef<{ template: typeof FOREST_RANDOM_MONSTERS[0]; stats: ReturnType<typeof buildMonster> } | null>(null)
-  const emptyTileKey = `${x},${y}`
-  const prevKey = useRef('')
-  if (content.type === 'empty' && prevKey.current !== emptyTileKey) {
-    prevKey.current = emptyTileKey
-    const candidates = monstersForBiome(tile.biome)
-    const pool = candidates.length > 0 ? candidates : FOREST_RANDOM_MONSTERS
-    const tpl = pool[Math.floor(Math.random() * pool.length)]
-    emptyMonster.current = { template: tpl, stats: buildMonster(tpl, level, 'normal', tilesPlaced) }
-  }
+  const emptyTemplate = content.type === 'empty' ? stableMonsterForTile(tile) : null
+  const emptyStats = emptyTemplate ? buildMonster(emptyTemplate, level, 'normal', tilesPlaced) : null
 
   const headerLabel =
     content.type === 'market'   ? (isEn ? 'Market' : 'Mercado') :
@@ -853,8 +844,9 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
         </div>
       )}
 
-      {content.type === 'empty' && emptyMonster.current && (() => {
-        const { template, stats: g } = emptyMonster.current!
+      {content.type === 'empty' && emptyTemplate && emptyStats && (() => {
+        const template = emptyTemplate
+        const g = emptyStats
         return (
           <div className="flex gap-3 text-[11px] text-slate-400">
             <span>{template.emoji} {monsterName(template, isEn)} <span className="text-red-400 font-semibold">Nv.{level}</span></span>

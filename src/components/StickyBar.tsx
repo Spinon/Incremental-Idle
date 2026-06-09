@@ -60,7 +60,7 @@ export default function StickyBar() {
   const baseSpeed  = getBaseSpeed(derived)
   const SPEEDS     = [baseSpeed, baseSpeed + 1, baseSpeed + 2, baseSpeed + 3]
 
-  const isOver       = phase === 'over'
+  const isOver       = phase === 'over' || phase === 'empty'
   const hasCharge    = skipCharges >= 1
   const skipDisabled = isOver || !hasCharge
   const wholeCharges = Math.floor(skipCharges)

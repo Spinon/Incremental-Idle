@@ -153,7 +153,7 @@ function GameRoot() {
       const statusChanged = state.enemyStatuses !== prev.enemyStatuses || state.heroStatuses !== prev.heroStatuses
       if (!hpChanged && !statusChanged) return
 
-      if (state.phase !== 'over' && state.enemy.hp > 0 && state.player.hp > 0) {
+      if ((state.phase === 'idle' || state.phase === 'attacking') && state.enemy.hp > 0 && state.player.hp > 0) {
         localStorage.setItem(KEY, JSON.stringify({
           playerHpRatio: state.player.hp / state.player.maxHp,
           enemyHpRatio:  state.enemy.hp  / state.enemy.maxHp,
@@ -174,7 +174,8 @@ function GameRoot() {
       const raw = localStorage.getItem(KEY)
       localStorage.removeItem(KEY)          // consume immediately
 
-      useBattleStore.getState().reset()     // rebuilds enemy from nextEnemy*
+      useBattleStore.getState().reset()
+      let restoredFight = false
 
       if (raw) {
         try {
@@ -196,8 +197,13 @@ function GameRoot() {
               hitsLeft,
               comboSize,
             )
+            restoredFight = true
           }
         } catch { /* malformed snapshot — ignore */ }
+      }
+
+      if (!restoredFight && useMapStore.getState().scene === 'map') {
+        useMapStore.getState().processMarketExitTile()
       }
     }
 

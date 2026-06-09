@@ -18,7 +18,7 @@ import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 export type { ActiveStatus }
 
 export type Speed = number
-export type Phase = 'idle' | 'attacking' | 'over'
+export type Phase = 'empty' | 'idle' | 'attacking' | 'over'
 export type Side = 'player' | 'enemy'
 
 export interface Unit {
@@ -124,7 +124,7 @@ interface BattleStore {
   nextEnemyRarity:  MonsterRarity
   nextTilesPlaced:  number
   /**
-   * True when the queued enemy is the "enraged" first-encounter boss
+   * True when the current enemy is the "enraged" first-encounter boss
    * (spawns at tile.level + random 1–5 above the tile's base level).
    * Cleared back to false after the fight ends or the player moves to
    * a non-enraged tile.
@@ -147,7 +147,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  queueEnemy(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean): void
+  startBattle(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean): void
   captureDefeat(playerLevel: number, tilesPlaced: number): void
   applyHit(): void
   switchAttacker(): void
@@ -278,7 +278,7 @@ export const useBattleStore = create<BattleStore>()(
   immer((set) => ({
     player: { ...INITIAL_PLAYER },
     enemy:  makeInitialEnemy(),
-    phase: 'idle',
+    phase: 'empty',
     attacker: 'player',
     speed: 1,
     skipAnim: false,
@@ -308,18 +308,51 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    queueEnemy: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc) => set((st) => {
+    startBattle: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc) => {
+      syncBattlePlayerFromStores()
+      set((st) => {
+      const resolvedTilesPlaced = tilesPlaced ?? st.nextTilesPlaced
+      const resolvedType = monsterType ?? FOREST_RANDOM_MONSTERS[Math.floor(Math.random() * FOREST_RANDOM_MONSTERS.length)].id
+      const resolvedRarity = monsterRarity ?? pickMonsterRarity(resolvedTilesPlaced)
+      const template = FOREST_MONSTER_MAP.get(resolvedType) ?? FOREST_MONSTERS[0]
+      const isEnraged = enraged ?? false
+      const resolvedBaseLevel = baseLevel ?? level
+
       st.nextEnemyLevel     = level
-      st.nextEnemyBaseLevel = baseLevel ?? level
-      st.nextEnemyType      = monsterType   ?? FOREST_RANDOM_MONSTERS[Math.floor(Math.random() * FOREST_RANDOM_MONSTERS.length)].id
-      st.nextTilesPlaced    = tilesPlaced   ?? st.nextTilesPlaced
-      st.nextEnemyRarity    = monsterRarity ?? pickMonsterRarity(st.nextTilesPlaced)
-      st.nextEnemyEnraged   = enraged       ?? false
+      st.nextEnemyBaseLevel = resolvedBaseLevel
+      st.nextEnemyType      = resolvedType
+      st.nextTilesPlaced    = resolvedTilesPlaced
+      st.nextEnemyRarity    = resolvedRarity
+      st.nextEnemyEnraged   = isEnraged
       st.nextEnemyQuestId   = questId       ?? null
       st.nextEnemyQuestName = questName     ?? null
       st.nextEnemyQuestNameEn = questNameEn ?? null
       st.nextEnemyQuestNpc  = questNpc      ?? false
-    }),
+
+      st.player.hp    = st.player.maxHp
+      st.enemy        = buildMonster(template, level, resolvedRarity, resolvedTilesPlaced)
+      st.enemy.enraged = isEnraged
+      if (questId) {
+        st.enemy.name   = questName   ?? st.enemy.name
+        st.enemy.namePt = questName   ?? st.enemy.namePt
+        st.enemy.nameEn = questNameEn ?? st.enemy.nameEn
+      }
+      st.activeEnemyQuestId = questId ?? null
+      st.phase        = 'idle'
+      st.attacker     = 'player'
+      st.winner       = null
+      st.log          = []
+      st.turn         = 0
+      st.skipAnim     = false
+      st.defeatSnapshot = null
+      st.enemyStatuses  = []
+      st.heroStatuses   = []
+      st.enemyBleedPower = 0
+      const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
+      st.hitsLeft     = hits
+        st.comboSize    = hits
+      })
+    },
 
     captureDefeat: (playerLevel, tilesPlaced) => set((st) => {
       st.defeatSnapshot = {
@@ -509,7 +542,7 @@ export const useBattleStore = create<BattleStore>()(
     }),
 
     switchAttacker: () => set((st) => {
-      if (st.phase === 'over') return
+      if (st.phase === 'over' || st.phase === 'empty') return
 
       const candidate = st.attacker === 'player' ? 'enemy' : 'player'
       st.phase = 'idle'
@@ -547,7 +580,7 @@ export const useBattleStore = create<BattleStore>()(
     skipBattle: () => {
       let guard = 2000
       syncBattlePlayerFromStores()
-      while (useBattleStore.getState().phase !== 'over' && guard-- > 0) {
+      while ((useBattleStore.getState().phase === 'idle' || useBattleStore.getState().phase === 'attacking') && guard-- > 0) {
         useBattleStore.getState().applyHit()
         const afterHit = useBattleStore.getState()
         if (afterHit.phase === 'over') break
@@ -577,7 +610,7 @@ export const useBattleStore = create<BattleStore>()(
     }),
 
     applyMagicDamage: (dmg, element) => set((st) => {
-      if (st.phase === 'over') return
+      if (st.phase === 'over' || st.phase === 'empty') return
       let effective = dmg
       if (element) {
         const mod = elementalModifier(
@@ -603,7 +636,7 @@ export const useBattleStore = create<BattleStore>()(
     }),
 
     tickStatuses: () => set((st) => {
-      if (st.phase === 'over') return
+      if (st.phase === 'over' || st.phase === 'empty') return
 
       if (st.enemyBleedPower > 0) {
         const dmg = Math.max(1, Math.round(st.enemyBleedPower))
@@ -712,6 +745,7 @@ export const useBattleStore = create<BattleStore>()(
       st.attacker      = attacker
       st.hitsLeft      = hitsLeft
       st.comboSize     = comboSize
+      st.phase         = 'idle'
     }),
 
 
@@ -730,29 +764,8 @@ export const useBattleStore = create<BattleStore>()(
     }),
 
     reset: () => set((st) => {
-      const template = FOREST_MONSTER_MAP.get(st.nextEnemyType) ?? FOREST_MONSTERS[0]
-      const wasEnraged = st.nextEnemyEnraged
-      const questId = st.nextEnemyQuestId
       st.player.hp    = st.player.maxHp
-      st.enemy        = buildMonster(template, st.nextEnemyLevel, st.nextEnemyRarity, st.nextTilesPlaced)
-      st.enemy.enraged = st.nextEnemyEnraged
-      if (questId) {
-        st.enemy.name   = st.nextEnemyQuestName   ?? st.enemy.name
-        st.enemy.namePt = st.nextEnemyQuestName   ?? st.enemy.namePt
-        st.enemy.nameEn = st.nextEnemyQuestNameEn ?? st.enemy.nameEn
-      }
-      st.activeEnemyQuestId = questId
-      st.nextEnemyEnraged  = false  // consume the flag — next reset starts fresh
-      st.nextEnemyQuestId  = null
-      st.nextEnemyQuestName = null
-      st.nextEnemyQuestNameEn = null
-      st.nextEnemyQuestNpc = false
-      if (wasEnraged) {
-        const baseLevel = Math.max(1, st.nextEnemyBaseLevel ?? st.nextEnemyLevel)
-        st.nextEnemyLevel     = baseLevel
-        st.nextEnemyBaseLevel = st.nextEnemyLevel
-      }
-      st.phase        = 'idle'
+      st.phase        = 'empty'
       st.attacker     = 'player'
       st.winner       = null
       st.log          = []
@@ -762,9 +775,14 @@ export const useBattleStore = create<BattleStore>()(
       st.enemyStatuses  = []
       st.heroStatuses   = []
       st.enemyBleedPower = 0
-      const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
-      st.hitsLeft     = hits
-      st.comboSize    = hits
+      st.activeEnemyQuestId = null
+      st.nextEnemyEnraged  = false
+      st.nextEnemyQuestId  = null
+      st.nextEnemyQuestName = null
+      st.nextEnemyQuestNameEn = null
+      st.nextEnemyQuestNpc = false
+      st.hitsLeft     = 0
+      st.comboSize    = 0
     }),
   })),
   {
@@ -774,15 +792,10 @@ export const useBattleStore = create<BattleStore>()(
     merge: mergeSave,
     partialize: (state) => ({
       speed:                state.speed,
-      nextEnemyLevel:       state.nextEnemyLevel,
-      nextEnemyBaseLevel:   state.nextEnemyBaseLevel,
-      nextEnemyType:        state.nextEnemyType,
-      nextEnemyRarity:      state.nextEnemyRarity,
-      nextTilesPlaced:      state.nextTilesPlaced,
-      nextEnemyEnraged:     state.nextEnemyEnraged,
       defeatSnapshot:       state.defeatSnapshot,
       deathHistory:         state.deathHistory,
     }),
   }
   )
 )
+

@@ -416,7 +416,9 @@ export default function BattleArena() {
         }
       }
       timerA.current = setTimeout(() => {
-        if (!cancelled) { xpGranted.current = false; store.reset() }
+        if (!cancelled && useBattleStore.getState().phase === 'over') {
+          xpGranted.current = false
+        }
       }, 1800 / store.speed)
       return () => { cancelled = true; clearTimers() }
     }

@@ -239,7 +239,7 @@ export const useSpellStore = create<SpellStore>()(
 
       // Auto-cast
       const battleState = useBattleStore.getState()
-      if (battleState.phase === 'over') return
+      if (battleState.phase === 'over' || battleState.phase === 'empty') return
 
       const { spellSlots, autoSlots, cooldowns } = get()
       const hpRatio = battleState.player.hp / battleState.player.maxHp

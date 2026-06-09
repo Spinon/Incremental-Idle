@@ -18,7 +18,7 @@ export default function SpeedControls() {
   const SPEEDS        = [baseSpeed, baseSpeed + 1, baseSpeed + 2, baseSpeed + 3]
   const effectiveSpd  = Math.max(speed, baseSpeed)
 
-  const isOver       = phase === 'over'
+  const isOver       = phase === 'over' || phase === 'empty'
   const hasCharge    = skipCharges >= 1
   const skipDisabled = isOver || !hasCharge
   const wholeCharges = Math.floor(skipCharges)

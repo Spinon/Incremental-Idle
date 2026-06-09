@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { useBattleStore } from './battleStore'
 import { useQuestStore } from './questStore'
-import { pickMonsterForBiome } from '../data/monsters'
+import { FOREST_RANDOM_MONSTERS, monstersForBiome, pickMonsterForBiome } from '../data/monsters'
 import { pickMonsterRarity } from '../formulas/monsters'
 import { generateQuest } from '../formulas/quests'
 import { rollWeaponMaterialDrop } from '../formulas/weapons'
@@ -88,6 +88,13 @@ function heroRelativeLevel(heroLevel: number): number {
 function enragedLevelBonus(tilesPlaced: number): number {
   const maxBonus = Math.max(2, Math.ceil(tilesPlaced / 100 + 1))
   return 1 + Math.floor(Math.random() * maxBonus)
+}
+
+function stableMonsterForTile(tile: PlacedTile) {
+  const hash = Math.abs((tile.x * 73856093) ^ (tile.y * 19349663) ^ (tile.level * 83492791))
+  const candidates = monstersForBiome(tile.biome)
+  const pool = candidates.length > 0 ? candidates : FOREST_RANDOM_MONSTERS
+  return pool[hash % pool.length]
 }
 
 interface TileEnemyQueue {
@@ -175,16 +182,21 @@ function reconcileActiveBounties(st: Pick<MapStore, 'bountyTiles' | 'grid'>): vo
 function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult {
   const tileKey = `${tile.x},${tile.y}`
   const bounty  = st.bountyTiles[tileKey] ?? bountyFromTileContent(tile)
+  let questTileLevel: number | null = null
 
-  if (!bounty && tile.content.type === 'market') return { enemy: null, questTileLevel: null }
+  if (!bounty && tile.content.type === 'market') {
+    st.scene = 'market'
+    if (!tile.explored) tile.explored = true
+    return { enemy: null, questTileLevel: null }
+  }
 
-  // Quest board tile — consumed on entry, generates a quest afterward
+  // Quest board tile: grant the quest, then resolve the normal tile encounter.
   if (!bounty && tile.content.type === 'quest') {
+    questTileLevel = tile.level
     if (!tile.explored) {
       tile.explored = true
       tile.content  = { type: 'empty' }
     }
-    return { enemy: null, questTileLevel: tile.level }
   }
 
   if (!bounty && tile.content.type === 'blueTower') {
@@ -219,17 +231,21 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
 
   const baseLevel        = Math.max(1, tile.level)
   const isMonster        = tile.content.type === 'monster'
+  const generatesBattle  = bounty || isMonster || tile.content.type === 'empty' || tile.content.type === 'treasure'
+  if (!generatesBattle) return { enemy: null, questTileLevel }
+
   const isFirstEncounter = isMonster && !tile.explored
+  const fallbackMonster  = stableMonsterForTile(tile)
 
   const enemyLevel = isFirstEncounter
     ? (bounty ? bounty.targetLevel : baseLevel + enragedLevelBonus(st.tilesPlaced))
     : (bounty ? bounty.targetLevel : baseLevel)
 
-  const queuedEnemy: TileEnemyQueue = {
+  const tileEnemy: TileEnemyQueue = {
     level:       enemyLevel,
     baseLevel:   baseLevel,
-    type:        bounty ? bounty.monsterType : tile.content.monsterType,
-    rarity:      bounty ? bounty.targetRarity as MonsterRarity : tile.content.monsterRarity as MonsterRarity | undefined,
+    type:        bounty ? bounty.monsterType : (tile.content.monsterType ?? fallbackMonster.id),
+    rarity:      bounty ? bounty.targetRarity as MonsterRarity : (tile.content.monsterRarity ?? 'normal') as MonsterRarity,
     tilesPlaced: st.tilesPlaced,
     enraged:     isFirstEncounter && !bounty,
     questId:     bounty?.questId,
@@ -261,12 +277,12 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
     }
   }
 
-  return { enemy: queuedEnemy, questTileLevel: null }
+  return { enemy: tileEnemy, questTileLevel }
 }
 
-function queueTileEnemy(enemy: TileEnemyQueue | null): void {
+function startTileBattle(enemy: TileEnemyQueue | null): void {
   if (!enemy) return
-  useBattleStore.getState().queueEnemy(
+  useBattleStore.getState().startBattle(
     enemy.level,
     enemy.type,
     enemy.rarity,
@@ -278,6 +294,16 @@ function queueTileEnemy(enemy: TileEnemyQueue | null): void {
     enemy.targetNameEn,
     enemy.isNpc,
   )
+}
+
+function createQuestFromTile(tileLevel: number): void {
+  const { grid, playerPos } = useMapStore.getState()
+  const quest = generateQuest(tileLevel, grid, playerPos)
+  if (!quest) return
+  if (quest.objective.type === 'bounty') {
+    useMapStore.getState().registerBountyTile(quest.id, quest.objective)
+  }
+  useQuestStore.getState().addQuest(quest)
 }
 
 export function generateContent(level: number, tilesPlaced = 0, biome: Biome = 'forest'): TileContent {
@@ -509,7 +535,7 @@ interface MapStore {
   autoExitBlueTower(): void
   /**
    * Called when the scene transitions market→map.
-   * Marks the exit tile as explored, queues first-encounter rewards and the
+   * Marks the exit tile as explored, grants first-encounter rewards and starts
    * correct enemy — fixing the bug where market exits skipped tile processing.
    */
   processMarketExitTile(): void
@@ -634,7 +660,7 @@ export const useMapStore = create<MapStore>()(
 
       // Process the tile the hero is standing on after a market exit.
       // Mirrors moveOneStep's tile-entry logic: marks explored, grants first-
-      // encounter rewards, and queues the correct enemy (with tilesPlaced so
+      // encounter rewards, and starts the correct enemy (with tilesPlaced so
       // the stealth buff is applied).
       processMarketExitTile: () => {
         let result: TileEntryResult = { enemy: null, questTileLevel: null }
@@ -642,25 +668,16 @@ export const useMapStore = create<MapStore>()(
         set((st) => {
           reconcileActiveBounties(st)
           const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
-          if (!tile || tile.content.type === 'market') return
+          if (!tile) return
           result = processTileEntry(st, tile)
         })
 
-        queueTileEnemy(result.enemy)
-        if (result.questTileLevel !== null) {
-          const { grid, playerPos } = useMapStore.getState()
-          const quest = generateQuest(result.questTileLevel, grid, playerPos)
-          if (quest) {
-            if (quest.objective.type === 'bounty') {
-              useMapStore.getState().registerBountyTile(quest.id, quest.objective)
-            }
-            useQuestStore.getState().addQuest(quest)
-          }
-        }
+        startTileBattle(result.enemy)
+        if (result.questTileLevel !== null) createQuestFromTile(result.questTileLevel)
       },
 
       // Exit market: move the player to a random connected adjacent tile and
-      // return to the map.  No enemy is queued here — the next battle starts
+      // return to the map. No enemy starts here; scene transition processing
       // naturally when moveOneStep processes the hero's first step after the
       // market.  Treasure on the exit tile is still collected (non-combat).
       exitMarket: () => {
@@ -713,31 +730,39 @@ export const useMapStore = create<MapStore>()(
 
           st.scene = 'map'
         })
-        // intentionally no queueEnemy call — battle starts on next moveOneStep
+        // intentionally no battle start here; market->map transition handles the landing tile
       },
 
       exitBlueTower: () => {
         let movedToX: number | null = null
         let movedToY: number | null = null
+        let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
         set((st) => {
+          reconcileActiveBounties(st)
           const exit = chooseTowerExit(st.grid, st.playerPos, st.blueTowerEntryFrom, null)
           if (exit) {
             st.playerPos = exit
             st.destination = null
             movedToX = exit.x
             movedToY = exit.y
+            const tile = st.grid[gridKey(exit.x, exit.y)]
+            if (tile) tileResult = processTileEntry(st, tile)
           }
-          st.scene = 'map'
+          if (st.scene === 'tower') st.scene = 'map'
           st.blueTowerAutoTarget = null
           st.blueTowerEntryFrom = null
         })
+        startTileBattle(tileResult.enemy)
+        if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
         if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
       },
 
       autoExitBlueTower: () => {
         let movedToX: number | null = null
         let movedToY: number | null = null
+        let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
         set((st) => {
+          reconcileActiveBounties(st)
           const current = st.playerPos
           const target = st.blueTowerAutoTarget ?? st.destination
           let bestTower: PlacedTile | null = null
@@ -760,7 +785,8 @@ export const useMapStore = create<MapStore>()(
               st.destination = target
               movedToX = bestTower.x
               movedToY = bestTower.y
-              st.scene = 'map'
+              const tile = st.grid[gridKey(bestTower.x, bestTower.y)]
+              if (tile) tileResult = processTileEntry(st, tile)
               st.blueTowerAutoTarget = null
               st.blueTowerEntryFrom = null
               return
@@ -773,11 +799,15 @@ export const useMapStore = create<MapStore>()(
             st.destination = target ?? null
             movedToX = exit.x
             movedToY = exit.y
+            const tile = st.grid[gridKey(exit.x, exit.y)]
+            if (tile) tileResult = processTileEntry(st, tile)
           }
-          st.scene = 'map'
+          if (st.scene === 'tower') st.scene = 'map'
           st.blueTowerAutoTarget = null
           st.blueTowerEntryFrom = null
         })
+        startTileBattle(tileResult.enemy)
+        if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
         if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
       },
 
@@ -965,21 +995,12 @@ export const useMapStore = create<MapStore>()(
           }
         })
 
-        queueTileEnemy(tileResult.enemy)
+        startTileBattle(tileResult.enemy)
         if (didMove) {
           const { x, y } = useMapStore.getState().playerPos
           useQuestStore.getState().onPlayerMove(x, y)
         }
-        if (tileResult.questTileLevel !== null) {
-          const { grid, playerPos } = useMapStore.getState()
-          const quest = generateQuest(tileResult.questTileLevel, grid, playerPos)
-          if (quest) {
-            if (quest.objective.type === 'bounty') {
-              useMapStore.getState().registerBountyTile(quest.id, quest.objective)
-            }
-            useQuestStore.getState().addQuest(quest)
-          }
-        }
+        if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
       },
 
       resetMap: (startLevel) => set((st) => {

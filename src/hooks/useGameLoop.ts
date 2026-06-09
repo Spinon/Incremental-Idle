@@ -72,7 +72,8 @@ type BlockingSystemHandler = (context: SimulationContext) => boolean
 function resolveBattleSimulation({ offline }: SimulationContext): boolean {
   if (!offline) return false
   if (useMapStore.getState().scene !== 'map') return false
-  if (useBattleStore.getState().phase === 'over') return false
+  const phase = useBattleStore.getState().phase
+  if (phase !== 'idle' && phase !== 'attacking') return false
 
   useBattleStore.getState().skipBattle()
   return true
@@ -144,6 +145,7 @@ export function useGameLoop() {
   const prevPhase     = useRef<Phase>('idle')
   const prevTurn      = useRef<number>(-1)
   const prevScene     = useRef<string>('map')
+  const battleResolveAt = useRef<number | null>(null)
   const syncSnapshot  = useRef<Record<string, string | null> | null>(null)
   const syncActive    = useRef(false)
   const syncActions   = useRef({ accept: () => {}, discard: () => {} })
@@ -175,6 +177,13 @@ export function useGameLoop() {
       for (const handler of BLOCKING_SYSTEM_HANDLERS) handler(context)
     }
 
+    function ensureCurrentTileEncounter() {
+      if (useMapStore.getState().scene !== 'map') return
+      if (useBattleStore.getState().phase !== 'empty') return
+      useMapStore.getState().processMarketExitTile()
+      prevTurn.current = -1
+    }
+
     const runStep = (deltaMs: number, options: RunStepOptions = {}) => {
       advanceBlockingSystems(options)
 
@@ -197,7 +206,8 @@ export function useGameLoop() {
 
       const turn     = useBattleStore.getState().turn
       const attacker = useBattleStore.getState().attacker
-      if (useBattleStore.getState().phase !== 'over' && turn !== prevTurn.current) {
+      const battlePhase = useBattleStore.getState().phase
+      if ((battlePhase === 'idle' || battlePhase === 'attacking') && turn !== prevTurn.current) {
         prevTurn.current = turn
         // Cooldowns only tick at the end of the player's turn
         // (switchAttacker just ran → attacker is now 'enemy')
@@ -230,22 +240,34 @@ export function useGameLoop() {
 
       // ── Market exit detection ─────────────────────────────────────────────
       // processMarketExitTile() marks the exit tile as explored, grants any
-      // first-encounter rewards, and queues the correct enemy (including the
+      // first-encounter rewards, and starts the correct enemy (including the
       // tile-based stealth buff via tilesPlaced).  This also fixes the bug
       // where market exits left the exit tile permanently unexplored.
       if (prevScene.current === 'market' && scene === 'map') {
+        useBattleStore.getState().reset()
         useMapStore.getState().processMarketExitTile()
         const tileXp2 = useMapStore.getState().drainXp()
         if (tileXp2 > 0) gainXp(tileXp2, derived.xpBonus)
         const gold2 = useMapStore.getState().drainGold()
         if (gold2 > 0) earnGold(gold2)
         collectWeaponMaterials()
-        useBattleStore.getState().reset()
         prevTurn.current = -1
       }
       prevScene.current = scene
 
+      ensureCurrentTileEncounter()
+
+      if (!options.offline && scene === 'map' && phase === 'over') {
+        if (battleResolveAt.current === null) {
+          battleResolveAt.current = performance.now() + 1800 / Math.max(0.1, useBattleStore.getState().speed)
+        }
+        if (performance.now() < battleResolveAt.current) return
+      } else if (phase !== 'over') {
+        battleResolveAt.current = null
+      }
+
       if (scene === 'map' && prevPhase.current !== 'over' && phase === 'over') {
+        battleResolveAt.current = null
         const winner = useBattleStore.getState().winner
         let resolvedBlockingSystem = false
 
@@ -264,12 +286,13 @@ export function useGameLoop() {
           }
           prevTurn.current = -1
           useSpellStore.getState().clearEnemyDebuff()
+          const defeatedEnemy = useBattleStore.getState().enemy
 
           // ── Quest progress: kill hooks (read before reset clears questId) ──
           {
             const bs          = useBattleStore.getState()
             const playerPos   = useMapStore.getState().playerPos
-            const monsterType = bs.enemy.monsterType ?? ''
+            const monsterType = defeatedEnemy.monsterType ?? bs.enemy.monsterType ?? ''
             const questId     = bs.activeEnemyQuestId
             if (questId) {
               useQuestStore.getState().onBountyDefeated(questId)
@@ -277,11 +300,6 @@ export function useGameLoop() {
               useQuestStore.getState().onBountyDefeatedAt(playerPos.x, playerPos.y)
             }
             useQuestStore.getState().onMonsterKill(monsterType, playerPos.x, playerPos.y)
-          }
-
-          const activatedBlueTower = useMapStore.getState().activatePendingBlueTower()
-          if (!activatedBlueTower) {
-            useMapStore.getState().moveOneStep(useHeroStore.getState().level)
           }
 
           // ── Auto-place tiles (Full Auto mode only) ──────────────────────
@@ -331,12 +349,9 @@ export function useGameLoop() {
             }
           }
 
-          {
-            const enemy = useBattleStore.getState().enemy
-            useInventoryStore.getState().grantWeaponXp(
-              Math.max(5, Math.round(enemy.maxHp * 0.25 + enemy.level * 8)),
-            )
-          }
+          useInventoryStore.getState().grantWeaponXp(
+            Math.max(5, Math.round(defeatedEnemy.maxHp * 0.25 + defeatedEnemy.level * 8)),
+          )
 
           // Item drop
           const heroAttrs = useHeroStore.getState().attributes
@@ -351,8 +366,7 @@ export function useGameLoop() {
             useSpellStore.getState().activeBuffs,
           )
           if (Math.random() < dropDerived.dropChance) {
-            const enemyLevel = useBattleStore.getState().enemy.level
-            const item = generateItem(Math.max(1, enemyLevel))
+            const item = generateItem(Math.max(1, defeatedEnemy.level))
             const added = useInventoryStore.getState().addItem(item)
 
             if (added) {
@@ -378,8 +392,7 @@ export function useGameLoop() {
           }
 
           // Word drop (rare+ monsters only)
-          const enemy         = useBattleStore.getState().enemy
-          const monsterRarity = enemy.rarity as MonsterRarity | undefined
+          const monsterRarity = defeatedEnemy.rarity as MonsterRarity | undefined
           const dropChance    = monsterRarity ? WORD_DROP_CHANCE[monsterRarity] : undefined
 
           if (dropChance && Math.random() < dropChance) {
@@ -414,13 +427,23 @@ export function useGameLoop() {
               })
             }
           }
+          const activatedBlueTower = useMapStore.getState().activatePendingBlueTower()
+          if (!activatedBlueTower) {
+            useMapStore.getState().moveOneStep(useHeroStore.getState().level)
+            const nextPhase = useBattleStore.getState().phase
+            const nextScene = useMapStore.getState().scene
+            if (nextScene === 'map' && nextPhase !== 'idle' && nextPhase !== 'attacking') {
+              useMapStore.getState().processMarketExitTile()
+            }
+          }
+
           resolvedBlockingSystem = true
         }
 
         if (options.offline && resolvedBlockingSystem) {
           useBattleStore.getState().reset()
           prevTurn.current = -1
-          prevPhase.current = 'idle'
+          prevPhase.current = 'empty'
           return
         }
       }
@@ -496,6 +519,7 @@ export function useGameLoop() {
         lagMs = 0
         lastTickAt = performance.now()
         writeLastActiveAt()
+        ensureCurrentTileEncounter()
         setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })
       },
       discard: () => {
