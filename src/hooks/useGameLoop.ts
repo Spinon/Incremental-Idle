@@ -554,9 +554,13 @@ export function useGameLoop(paused = false) {
         lastTickAt = performance.now()
         writeLastActiveAt()
         ensureCurrentTileEncounter()
-        if (localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY) === '1') {
+        const restoreRemoteUpdatedAt = localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+        const acceptedRemoteUpdatedAt = localStorage.getItem(CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY)
+        if (restoreRemoteUpdatedAt && restoreRemoteUpdatedAt === acceptedRemoteUpdatedAt) {
           localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
           useCloudSaveStore.getState().pushLocalSave(true)
+        } else if (restoreRemoteUpdatedAt) {
+          localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
         }
         setStartupReady(true)
         setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })

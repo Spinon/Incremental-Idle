@@ -183,6 +183,13 @@ function isAcceptedRemote(row: CloudSaveRow): boolean {
   return localStorage.getItem(CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY) === row.updated_at
 }
 
+function clearStalePendingRestore(row: CloudSaveRow) {
+  const pendingRestore = localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+  if (pendingRestore && pendingRestore !== row.updated_at) {
+    localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+  }
+}
+
 function applyRemoteSaveAndReload(row: CloudSaveRow) {
   const remoteLastActiveAt = row.save_data.lastActiveAt
     ?? Date.parse(row.local_updated_at || row.updated_at)
@@ -438,8 +445,10 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       const remoteIsNewer = compareIso(remote.local_updated_at, local.capturedAt) > 0
       const timestampGapMs = Math.abs(compareIso(local.capturedAt, remote.local_updated_at))
       const withinConflictGrace = timestampGapMs <= CLOUD_SAVE_CONFLICT_GRACE_MS
-      const restoreOfflinePending = localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY) === '1'
+      const restoreRemoteUpdatedAt = localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
+      const restoreOfflinePending = restoreRemoteUpdatedAt === remote.updated_at && acceptedRemote
       const meaningfulDifference = hasMeaningfulDifference(local, remoteSnapshot)
+      clearStalePendingRestore(remote)
 
       if (!hadLocalUpdatedAt && !meaningfulDifference) {
         applyRemoteSaveAndReload(remote)
@@ -458,14 +467,13 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         return
       }
 
-      if (localIsNewer && (restoreOfflinePending || acceptedRemote || (withinConflictGrace && !meaningfulDifference))) {
+      if (localIsNewer && (restoreOfflinePending || (acceptedRemote && !meaningfulDifference) || (withinConflictGrace && !meaningfulDifference))) {
         localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
         await get().pushLocalSave(true)
         return
       }
 
       if (acceptedRemote && !remoteIsNewer) {
-        localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
         set({
           status: 'signed-in',
           remoteUpdatedAt: remote.updated_at,
@@ -495,7 +503,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       }
 
       if (localIsNewer) {
-        if (localStorage.getItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY) === '1' || !meaningfulDifference) {
+        if (restoreOfflinePending || !meaningfulDifference) {
           localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
           await get().pushLocalSave(true)
           return
@@ -538,7 +546,8 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     if (!remote) return
     const remoteLastActiveAt = remote.save_data.lastActiveAt
       ?? Date.parse(remote.local_updated_at || remote.updated_at)
-    localStorage.setItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY, '1')
+    localStorage.removeItem(LOCAL_PLAY_KEY)
+    localStorage.setItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY, remote.updated_at)
     markAcceptedRemote(remote)
     set({
       status: 'syncing',
