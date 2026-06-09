@@ -13,6 +13,7 @@ import InventoryPanel from './components/InventoryPanel'
 import SpellbookPanel from './components/SpellbookPanel'
 import QuestPanel from './components/QuestPanel'
 import StickyBar from './components/StickyBar'
+import BottomNav from './components/BottomNav'
 import NotifToast from './components/NotifToast'
 import { SpriteGallery } from './components/icons/__SpriteGallery'
 import { useCloudSaveSync } from './hooks/useCloudSaveSync'
@@ -282,12 +283,12 @@ function GameRoot() {
         onDiscard={discardOfflineProgress}
       />
       {/* Header */}
-      <header className="border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center gap-3">
-        <span className="text-indigo-600 dark:text-indigo-400 font-black text-lg tracking-tight">
+      <header className="border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3">
+        <span className="text-indigo-600 dark:text-indigo-400 font-black text-base sm:text-lg tracking-tight">
           INCREMENTAL IDLE
         </span>
-        <span className="text-slate-300 dark:text-slate-700">|</span>
-        <span className="text-slate-400 dark:text-slate-500 text-sm">{t.build} v{__APP_VERSION__}</span>
+        <span className="hidden sm:inline text-slate-300 dark:text-slate-700">|</span>
+        <span className="hidden sm:inline text-slate-400 dark:text-slate-500 text-sm">{t.build} v{__APP_VERSION__}</span>
         <div className="ml-auto">
           <SettingsMenu />
         </div>
@@ -297,18 +298,18 @@ function GameRoot() {
       <StickyBar />
 
       {/* Main layout */}
-      <main className="w-full max-w-5xl mx-auto px-6 py-6">
+      <main className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-24 lg:pb-6">
 
         {/* Battle tab — always mounted (battle timers must keep running) */}
         <div className={activeTab !== 'battle' ? 'hidden' : undefined}>
-          <div className="grid grid-cols-[1fr_300px] gap-6 items-start">
-            <div className="flex flex-col">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 lg:gap-6 items-start">
+            <div className="flex flex-col min-w-0">
               {scene === 'home'   ? <HouseInterior /> :
                scene === 'market' ? <MarketInterior /> :
                scene === 'tower'  ? <TowerInterior /> :
                                     <BattleArena paused={gamePausedForSync} />}
             </div>
-            <aside>
+            <aside className="min-w-0">
               <HeroPanel />
             </aside>
           </div>
@@ -320,6 +321,8 @@ function GameRoot() {
         {activeTab === 'spells'      && <SpellbookPanel />}
         {activeTab === 'quests'      && <QuestPanel />}
       </main>
+
+      <BottomNav />
     </div>
   )
 }

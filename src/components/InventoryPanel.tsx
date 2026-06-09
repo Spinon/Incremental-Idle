@@ -1214,11 +1214,11 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
         onForge={forgeWeapon}
       />
 
-      {/* Main two-column layout */}
-      <div className="flex gap-5 items-start">
+      {/* Main two-column layout (stacks on mobile) */}
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
         {/* Left: Equipment silhouette */}
-        <div>
-          <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold">
+        <div className="w-full sm:w-auto flex flex-col items-center sm:items-start">
+          <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2 font-semibold self-start">
             {isEn ? 'Equipment' : 'Equipamento'}
           </p>
           <EquipmentBody

@@ -56,6 +56,7 @@ function previewEnragedLevel(baseLevel: number, tilesPlaced: number): number {
 
 export default function MapSection() {
   const [draggingId,  setDraggingId]  = useState<string | null>(null)
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null)
   const [zoom,        setZoom]        = useState(1.0)
   const [cameraPos,   setCameraPos]   = useState({ x: 0, y: 0 })
   const [selectedPos, setSelectedPos] = useState<{ x: number; y: number } | null>(null)
@@ -295,18 +296,18 @@ export default function MapSection() {
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
         <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
           {t.map}
         </p>
-        <span className="text-[10px] text-slate-500 dark:text-slate-600 italic">
+        <span className="hidden md:inline text-[10px] text-slate-500 dark:text-slate-600 italic">
           {t.mapHint}
         </span>
         <span className="text-[10px] text-slate-400 dark:text-slate-600 tabular-nums font-medium">
           ⬛ {tilesPlaced}
         </span>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
           {/* Auto-explore toggle — cycles Manual → Auto Move → Full Auto */}
           {(() => {
             const cycle: Record<typeof autoExplore, typeof autoExplore> = {
@@ -429,9 +430,9 @@ export default function MapSection() {
       </div>
 
       {/* ── Main: viewport + sidebar ── */}
-      <div className="flex gap-3 items-start">
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-start">
         {/* Left: map viewport + tile info + deck */}
-        <div className="flex-none flex flex-col gap-2">
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
           <MapViewport
             grid={grid}
             sightedCells={sightedCells}
@@ -443,11 +444,18 @@ export default function MapSection() {
             zoom={zoom}
             cameraPos={cameraPos}
             draggingId={draggingId}
-            draggedTile={deck.find(tile => tile.id === draggingId) ?? null}
+            draggedTile={deck.find(tile => tile.id === (draggingId ?? selectedDeckId)) ?? null}
+            selectedDeckId={selectedDeckId}
             questMarkers={questMarkers}
             onDrop={(tileId, x, y) => {
               placeTile(tileId, x, y)
               setDraggingId(null)
+              setSelectedDeckId(null)
+            }}
+            onPlaceSelected={(x, y) => {
+              if (!selectedDeckId) return
+              placeTile(selectedDeckId, x, y)
+              setSelectedDeckId(null)
             }}
             onTileClick={handleTileClick}
             onCameraChange={(x, y) => setCameraPos({ x, y })}
@@ -504,13 +512,15 @@ export default function MapSection() {
             moveSpeed={derived.moveSpeed}
             maxDeck={maxDeck}
             tilesPlaced={tilesPlaced}
+            selectedId={selectedDeckId}
             onDragStart={setDraggingId}
             onDragEnd={() => setDraggingId(null)}
+            onSelect={(id) => setSelectedDeckId(prev => (prev === id ? null : id))}
           />
         </div>
 
         {/* Right: enemy list sidebar */}
-        <div className="flex-1 min-w-0">
+        <div className="w-full lg:w-64 lg:flex-none min-w-0">
           <NearbyPanel
             grid={grid}
             playerPos={playerPos}

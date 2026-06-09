@@ -1,13 +1,10 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import type { MapTile, PlacedTile, TileContent } from '../../types/map'
 import { gridKey, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
 import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 import type { QuestMapMarker, QuestDifficulty } from '../../types/quest'
-
-const VP_W = 676
-const VP_H = 468
 
 interface Props {
   grid: Record<string, PlacedTile>
@@ -21,8 +18,10 @@ interface Props {
   cameraPos: { x: number; y: number }  // grid units (float); camera centre
   draggingId: string | null
   draggedTile: MapTile | null
+  selectedDeckId: string | null
   questMarkers: QuestMapMarker[]
   onDrop(tileId: string, x: number, y: number): void
+  onPlaceSelected(x: number, y: number): void
   onTileClick(x: number, y: number): void
   onCameraChange(x: number, y: number): void
   onZoom(dir: 1 | -1): void
@@ -60,29 +59,33 @@ function ghostBg(content: TileContent): string {
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, questMarkers, onDrop, onTileClick, onCameraChange, onZoom, onUserInteraction,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, selectedDeckId, questMarkers, onDrop, onPlaceSelected, onTileClick, onCameraChange, onZoom, onUserInteraction,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
   const visRadius = Math.max(2, Math.round(vision / 38))
+
+  // Viewport size — fluid: fills the available width, height clamped by ratio.
+  const [vpW, setVpW] = useState(676)
+  const [vpH, setVpH] = useState(468)
 
   // Camera is stored directly in grid units — no rounding, no player follow
   const camX = cameraPos.x
   const camY = cameraPos.y
 
   // Pixel position of tile (gx, gy)
-  const tileLeft = (gx: number) => (gx - camX) * tilePx + VP_W / 2 - tilePx / 2
-  const tileTop  = (gy: number) => (gy - camY) * tilePx + VP_H / 2 - tilePx / 2
+  const tileLeft = (gx: number) => (gx - camX) * tilePx + vpW / 2 - tilePx / 2
+  const tileTop  = (gy: number) => (gy - camY) * tilePx + vpH / 2 - tilePx / 2
 
   // Range of grid cells to render
-  const gxMin = Math.floor(camX - VP_W / (2 * tilePx)) - 1
-  const gxMax = Math.ceil( camX + VP_W / (2 * tilePx)) + 1
-  const gyMin = Math.floor(camY - VP_H / (2 * tilePx)) - 1
-  const gyMax = Math.ceil( camY + VP_H / (2 * tilePx)) + 1
+  const gxMin = Math.floor(camX - vpW / (2 * tilePx)) - 1
+  const gxMax = Math.ceil( camX + vpW / (2 * tilePx)) + 1
+  const gyMin = Math.floor(camY - vpH / (2 * tilePx)) - 1
+  const gyMax = Math.ceil( camY + vpH / (2 * tilePx)) + 1
 
   // Background offset — derived from camera position in grid units
-  const bgX = (((VP_W / 2 - tilePx / 2) - cameraPos.x * tilePx) % tilePx + tilePx) % tilePx
-  const bgY = (((VP_H / 2 - tilePx / 2) - cameraPos.y * tilePx) % tilePx + tilePx) % tilePx
+  const bgX = (((vpW / 2 - tilePx / 2) - cameraPos.x * tilePx) % tilePx + tilePx) % tilePx
+  const bgY = (((vpH / 2 - tilePx / 2) - cameraPos.y * tilePx) % tilePx + tilePx) % tilePx
 
   // Block page scroll
   const containerRef = useRef<HTMLDivElement>(null)
@@ -94,18 +97,33 @@ export default function MapViewport({
     return () => el.removeEventListener('wheel', block)
   }, [])
 
+  // Responsive sizing — measure available width, derive a clamped height.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const w = el.clientWidth || 676
+      setVpW(w)
+      setVpH(Math.max(300, Math.min(468, Math.round(w * 0.62))))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // Pixel-level pan — stores camera position at drag start
   const panRef = useRef<{ mx: number; my: number; cx: number; cy: number; moved: boolean } | null>(null)
   const suppressNextClick = useRef(false)
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (draggingId !== null || e.button !== 0) return
     e.preventDefault()
     onUserInteraction()
     panRef.current = { mx: e.clientX, my: e.clientY, cx: cameraPos.x, cy: cameraPos.y, moved: false }
   }
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!panRef.current) return
     const dx = e.clientX - panRef.current.mx
     const dy = e.clientY - panRef.current.my
@@ -114,7 +132,7 @@ export default function MapViewport({
     onCameraChange(panRef.current.cx - dx / tilePx, panRef.current.cy - dy / tilePx)
   }
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     if (panRef.current?.moved) suppressNextClick.current = true
     panRef.current = null
   }
@@ -189,11 +207,11 @@ export default function MapViewport({
         'relative rounded-xl border border-slate-200 dark:border-slate-800 select-none',
         draggingId === null ? 'cursor-grab active:cursor-grabbing' : '',
       )}
-      style={{ width: VP_W, height: VP_H, overflow: 'hidden' }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      style={{ width: '100%', height: vpH, overflow: 'hidden', touchAction: 'none' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
       onWheel={e => {
         onUserInteraction()
         onZoom(e.deltaY > 0 ? -1 : 1)
@@ -215,7 +233,7 @@ export default function MapViewport({
       {questMarkers.filter(m => m.kind === 'extermination_area').map(m => {
         const left = tileLeft(m.x)
         const top  = tileTop(m.y)
-        if (left < -tilePx || left > VP_W || top < -tilePx || top > VP_H) return null
+        if (left < -tilePx || left > vpW || top < -tilePx || top > vpH) return null
         return (
           <div
             key={`qa-${m.x},${m.y}`}
@@ -253,13 +271,14 @@ export default function MapViewport({
               className={cn(
                 'w-full h-full rounded relative overflow-hidden transition-colors cursor-pointer hover:bg-slate-800/30',
                 sight ? ghostBg(sight) : '',
-                draggingId && placement === 'valid' && 'border-2 border-dashed border-emerald-400/70 bg-emerald-900/20 hover:bg-emerald-900/35 cursor-copy',
-                draggingId && placement === 'invalid' && 'border-2 border-dashed border-red-500/60 bg-red-950/25 hover:bg-red-950/35 cursor-not-allowed',
-                draggingId && placement === 'none' && isValidTarget && 'border-2 border-dashed border-slate-500/35 bg-slate-900/15 cursor-help',
+                (draggingId || selectedDeckId) && placement === 'valid' && 'border-2 border-dashed border-emerald-400/70 bg-emerald-900/20 hover:bg-emerald-900/35 cursor-copy',
+                (draggingId || selectedDeckId) && placement === 'invalid' && 'border-2 border-dashed border-red-500/60 bg-red-950/25 hover:bg-red-950/35 cursor-not-allowed',
+                (draggingId || selectedDeckId) && placement === 'none' && isValidTarget && 'border-2 border-dashed border-slate-500/35 bg-slate-900/15 cursor-help',
               )}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
                 onUserInteraction()
+                if (selectedDeckId) { onPlaceSelected(gx, gy); return }
                 onTileClick(gx, gy)
               }}
               onPointerUp={e => {
@@ -321,7 +340,7 @@ export default function MapViewport({
       {questMarkers.filter(m => m.kind !== 'extermination_area').map((m, i) => {
         const left = tileLeft(m.x)
         const top  = tileTop(m.y)
-        if (left < -tilePx || left > VP_W || top < -tilePx || top > VP_H) return null
+        if (left < -tilePx || left > vpW || top < -tilePx || top > vpH) return null
         const pinSize = Math.max(18, Math.min(28, Math.round(tilePx * 0.48)))
         const isBounty = m.kind === 'bounty'
         return (
