@@ -101,8 +101,8 @@ export default function StickyBar() {
         })}
       </div>
 
-      {/* ── Row 2: Controls + Stamina + Gold + XP ───────────────────────── */}
-      <div className="flex items-center gap-2">
+      {/* ── Row 2: Controls + Stamina + Gold + XP (wraps on mobile) ──────── */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
 
         {/* Skip button */}
         <button
@@ -139,7 +139,7 @@ export default function StickyBar() {
         </button>
 
         <div className="w-px h-4 bg-slate-300 dark:bg-slate-700" />
-        <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest">{t.speed}</span>
+        <span className="hidden sm:inline text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest">{t.speed}</span>
 
         {/* Speed buttons */}
         {SPEEDS.map(s => {
@@ -181,7 +181,10 @@ export default function StickyBar() {
           )
         })}
 
-        <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+        <div className="hidden lg:block w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+        {/* Stamina + Gold + XP — own full-width row on mobile, inline on desktop */}
+        <div className="w-full lg:w-auto lg:flex-1 flex items-center gap-2 min-w-0">
 
         {/* Stamina — flex-1 fills space between speed controls and gold */}
         <div className="flex-1 flex items-center gap-1.5 min-w-0">
@@ -256,6 +259,7 @@ export default function StickyBar() {
               +{freePoints} pts
             </span>
           )}
+        </div>
         </div>
       </div>
 
