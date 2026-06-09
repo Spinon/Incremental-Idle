@@ -27,6 +27,7 @@ import { useSpellStore } from './store/spellStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useNotifStore } from './store/notifStore'
 import { useUIStore } from './store/uiStore'
+import { LOCAL_PLAY_KEY } from './store/save'
 import { getBaseSpeed } from './formulas/derived'
 import { getEquipmentBonuses } from './formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from './formulas/effectiveStats'
@@ -147,12 +148,17 @@ function CloudSyncOverlay({ isEn }: { isEn: boolean }) {
 }
 
 function GameRoot() {
+  const cloudConfigured = useCloudSaveStore(s => s.configured)
   const cloudStatus = useCloudSaveStore(s => s.status)
   const cloudUser = useCloudSaveStore(s => s.user)
   const cloudRemoteChecked = useCloudSaveStore(s => s.remoteChecked)
   const cloudPendingRemote = useCloudSaveStore(s => s.pendingRemote)
-  const gamePausedForCloudSave = !!cloudPendingRemote
-    || cloudStatus === 'loading'
+  const localPlay = localStorage.getItem(LOCAL_PLAY_KEY) === '1'
+  const cloudInitialCheckPending = cloudConfigured && !localPlay && cloudStatus === 'idle'
+  const cloudRemoteCheckPending = (cloudStatus === 'loading' || cloudStatus === 'syncing') && !cloudRemoteChecked
+  const gamePausedForCloudSave = cloudInitialCheckPending
+    || !!cloudPendingRemote
+    || cloudRemoteCheckPending
     || (!!cloudUser && !cloudRemoteChecked)
 
   const { offlineSync, startupReady, acceptOfflineProgress, discardOfflineProgress } = useGameLoop(gamePausedForCloudSave)

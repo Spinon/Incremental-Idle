@@ -184,10 +184,10 @@ export default function StickyBar() {
         <div className="hidden lg:block w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
 
         {/* Stamina + Gold + XP — own full-width row on mobile, inline on desktop */}
-        <div className="w-full lg:w-auto lg:flex-1 flex items-center gap-2 min-w-0">
+        <div className="w-full lg:w-auto lg:flex-1 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 min-w-0">
 
         {/* Stamina — flex-1 fills space between speed controls and gold */}
-        <div className="flex-1 flex items-center gap-1.5 min-w-0">
+        <div className="w-full sm:flex-1 flex items-center gap-1.5 min-w-0">
           <span className="text-[9px] font-bold text-amber-500 dark:text-amber-400/80 uppercase tracking-wider shrink-0">
             {t.stamina}
           </span>
@@ -213,8 +213,9 @@ export default function StickyBar() {
           )}
         </div>
 
+        <div className="flex w-full sm:w-auto items-center gap-2 min-w-0">
         {/* Gold */}
-        <div className="relative flex items-center ml-auto">
+        <div className="relative flex items-center shrink-0">
           {goldGainVersion > 0 && (
             <span
               key={goldGainVersion}
@@ -228,10 +229,10 @@ export default function StickyBar() {
           </span>
         </div>
 
-        <div className="w-px h-4 bg-slate-300 dark:bg-slate-700" />
+        <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 shrink-0" />
 
         {/* Level + XP */}
-        <div className="relative flex items-center gap-2.5">
+        <div className="relative flex flex-1 items-center justify-end gap-1.5 sm:gap-2.5 min-w-0">
           {xpGainVersion > 0 && (
             <span
               key={xpGainVersion}
@@ -243,14 +244,14 @@ export default function StickyBar() {
           <span className="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
             {t.level} {level}
           </span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-24 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-14 min-[420px]:w-20 sm:w-24 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-indigo-500 rounded-full transition-[width] duration-300"
                 style={{ width: `${xpPct}%` }}
               />
             </div>
-            <span className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap">
+            <span className="hidden min-[420px]:inline text-[10px] text-slate-400 tabular-nums whitespace-nowrap">
               {xp}/{xpToNext} {t.xp}
             </span>
           </div>
@@ -259,6 +260,7 @@ export default function StickyBar() {
               +{freePoints} pts
             </span>
           )}
+        </div>
         </div>
         </div>
       </div>
