@@ -49,6 +49,7 @@ export interface Unit {
   resVital:   number
   rarity?: MonsterRarity
   monsterType?: string
+  monsterVariant?: 'golden'
   /** True for the first-encounter boss version of a monster tile
    *  (spawned at tile.level + random 1–5 above normal). */
   enraged: boolean
@@ -122,6 +123,7 @@ interface BattleStore {
   nextEnemyBaseLevel: number
   nextEnemyType: string
   nextEnemyRarity:  MonsterRarity
+  nextEnemyVariant: 'golden' | null
   nextTilesPlaced:  number
   /**
    * True when the current enemy is the "enraged" first-encounter boss
@@ -142,12 +144,13 @@ interface BattleStore {
   enemyStatuses: ActiveStatus[]
   heroStatuses:  ActiveStatus[]
   enemyBleedPower: number
+  heroShield: number
 
   setSpeed(s: Speed): void
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  startBattle(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean): void
+  startBattle(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean, monsterVariant?: 'golden' | null): void
   captureDefeat(playerLevel: number, tilesPlaced: number): void
   applyHit(): void
   switchAttacker(): void
@@ -156,6 +159,9 @@ interface BattleStore {
   logSpell(data: SpellLogData & { casterName: string }): void
   applyMagicDamage(dmg: number, element?: ElementType): void
   healPlayer(hp: number): void
+  addHeroShield(amount: number): void
+  applyConsumablePhysicalDamage(dmg: number): void
+  applyConsumableEnemyDebuff(power: number, turns: number): void
   applyElementalStatus(status: ActiveStatus, target: 'enemy' | 'hero'): void
   tickStatuses(): void
   clearStatuses(): void
@@ -289,6 +295,7 @@ export const useBattleStore = create<BattleStore>()(
     nextEnemyBaseLevel: 1,
     nextEnemyType: 'goblin',
     nextEnemyRarity: 'normal' as MonsterRarity,
+    nextEnemyVariant: null,
     nextTilesPlaced: 0,
     nextEnemyEnraged: false,
     nextEnemyQuestId: null,
@@ -303,12 +310,13 @@ export const useBattleStore = create<BattleStore>()(
     enemyStatuses: [],
     heroStatuses:  [],
     enemyBleedPower: 0,
+    heroShield: 0,
 
     setSpeed:    (s) => set((st) => { st.speed    = s }),
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    startBattle: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc) => {
+    startBattle: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc, monsterVariant) => {
       syncBattlePlayerFromStores()
       set((st) => {
       const resolvedTilesPlaced = tilesPlaced ?? st.nextTilesPlaced
@@ -323,6 +331,7 @@ export const useBattleStore = create<BattleStore>()(
       st.nextEnemyType      = resolvedType
       st.nextTilesPlaced    = resolvedTilesPlaced
       st.nextEnemyRarity    = resolvedRarity
+      st.nextEnemyVariant   = monsterVariant ?? null
       st.nextEnemyEnraged   = isEnraged
       st.nextEnemyQuestId   = questId       ?? null
       st.nextEnemyQuestName = questName     ?? null
@@ -332,6 +341,12 @@ export const useBattleStore = create<BattleStore>()(
       st.player.hp    = st.player.maxHp
       st.enemy        = buildMonster(template, level, resolvedRarity, resolvedTilesPlaced)
       st.enemy.enraged = isEnraged
+      st.enemy.monsterVariant = monsterVariant ?? undefined
+      if (monsterVariant === 'golden') {
+        st.enemy.name = 'Demon Dourado'
+        st.enemy.namePt = 'Demon Dourado'
+        st.enemy.nameEn = 'Golden Demon'
+      }
       if (questId) {
         st.enemy.name   = questName   ?? st.enemy.name
         st.enemy.namePt = questName   ?? st.enemy.namePt
@@ -348,6 +363,7 @@ export const useBattleStore = create<BattleStore>()(
       st.enemyStatuses  = []
       st.heroStatuses   = []
       st.enemyBleedPower = 0
+      st.heroShield = 0
       const hits      = calcHits(st.player.atkSpeed, st.enemy.atkSpeed)
       st.hitsLeft     = hits
         st.comboSize    = hits
@@ -462,6 +478,12 @@ export const useBattleStore = create<BattleStore>()(
         weaponEffect = weaponLog('shield')
         const perfect = Math.random() < weaponProfile.shieldPerfectBlockChance
         dmg = perfect ? 0 : Math.max(1, Math.round(dmg * (1 - weaponProfile.shieldBlockReduction)))
+      }
+      if (st.attacker === 'enemy' && st.heroShield > 0 && dmg > 0) {
+        const absorbed = Math.min(st.heroShield, dmg)
+        st.heroShield -= absorbed
+        dmg -= absorbed
+        blocked = true
       }
 
       const newHp = Math.max(0, defUnit.hp - dmg)
@@ -762,6 +784,53 @@ export const useBattleStore = create<BattleStore>()(
       st.player.hp = Math.min(st.player.maxHp, st.player.hp + hp)
     }),
 
+    addHeroShield: (amount) => set((st) => {
+      if (st.phase === 'empty' || st.phase === 'over') return
+      st.heroShield += Math.max(1, Math.round(amount))
+      st.log.unshift({
+        attacker: st.player.name,
+        defender: st.player.name,
+        dmg: 0,
+        spell: { name: 'Escudo', nameEn: 'Shield', icon: 'S', effectType: 'buff', value: 0 },
+      })
+    }),
+
+    applyConsumablePhysicalDamage: (dmg) => set((st) => {
+      if (st.phase === 'empty' || st.phase === 'over') return
+      const effective = Math.max(1, Math.round(dmg))
+      st.enemy.hp = Math.max(0, st.enemy.hp - effective)
+      st.log.unshift({
+        attacker: st.player.name,
+        defender: st.enemy.name,
+        dmg: effective,
+        spell: { name: 'Item', nameEn: 'Item', icon: 'D', effectType: 'damage', value: effective },
+      })
+      if (st.enemy.hp === 0) { st.winner = 'player'; st.phase = 'over' }
+    }),
+
+    applyConsumableEnemyDebuff: (power, turns) => set((st) => {
+      if (st.phase === 'empty' || st.phase === 'over') return
+      const status: ActiveStatus = {
+        element: 'umbra',
+        type: 'curse',
+        power: Math.max(0.01, power),
+        turnsLeft: Math.max(1, Math.round(turns)),
+      }
+      const idx = st.enemyStatuses.findIndex(s => s.type === status.type)
+      if (idx >= 0) {
+        st.enemyStatuses[idx].power = Math.max(st.enemyStatuses[idx].power, status.power)
+        st.enemyStatuses[idx].turnsLeft = Math.max(st.enemyStatuses[idx].turnsLeft, status.turnsLeft)
+      } else {
+        st.enemyStatuses.push(status)
+      }
+      st.log.unshift({
+        attacker: st.player.name,
+        defender: st.enemy.name,
+        dmg: 0,
+        spell: { name: 'Debilitar', nameEn: 'Weaken', icon: '!', effectType: 'debuff', value: 0 },
+      })
+    }),
+
     applyEnemyDebuff: (atkMult, atkSpeedMult) => set((st) => {
       st.enemy.atk      = Math.max(1, Math.round(st.enemy.atk      * atkMult))
       st.enemy.atkSpeed = Math.max(0.1, st.enemy.atkSpeed * atkSpeedMult)
@@ -784,6 +853,7 @@ export const useBattleStore = create<BattleStore>()(
       st.enemyStatuses  = []
       st.heroStatuses   = []
       st.enemyBleedPower = 0
+      st.heroShield = 0
       st.activeEnemyQuestId = null
       st.nextEnemyEnraged  = false
       st.nextEnemyQuestId  = null
@@ -831,4 +901,3 @@ export const useBattleStore = create<BattleStore>()(
   }
   )
 )
-

@@ -11,7 +11,7 @@ const RARITY_MULT: Record<ItemRarity, number> = {
   unique:   12.0,   // orange — top tier
 }
 
-function pickRarity(level: number): ItemRarity {
+export function pickItemRarity(level: number): ItemRarity {
   const uniqueChance   = Math.min(1.5,  0.1  + level * 0.06)
   const setChance      = Math.min(4,    0.3  + level * 0.12)
   const epicChance     = Math.min(12,   1    + level * 0.4)
@@ -171,7 +171,7 @@ const ITEM_PRICE_MULT: Record<ItemRarity, number> = {
 
 export function generateItem(level: number, forMarket = false): Item {
   const slot   = ALL_SLOTS[Math.floor(Math.random() * ALL_SLOTS.length)]
-  const rarity = pickRarity(level)
+  const rarity = pickItemRarity(level)
   const mult   = RARITY_MULT[rarity]
   const chosen = pickStats(slot, rarity)
 
@@ -274,10 +274,12 @@ const CONSUMABLE_RARITY_MULT: Record<ItemRarity, number> = {
   common: 1, uncommon: 1.6, rare: 2.8, epic: 5.0, set: 5.0, unique: 5.0,
 }
 const CONSUMABLE_PRICE_BASE: Record<ConsumableEffect, number> = {
-  stamina: 12, mana: 10, skip: 28, xp: 18,
+  stamina: 14, mana: 12, skip: 32, xp: 20,
+  resetAttrs: 95, normalizeTile: 70, shield: 38, statBuff: 45,
+  physicalDamage: 34, enemyDebuff: 42,
 }
 
-const CONSUMABLE_NAMES: Record<ConsumableEffect, Record<string, [string, string]>> = {
+const CONSUMABLE_NAMES: Partial<Record<ConsumableEffect, Record<string, [string, string]>>> = {
   stamina: {
     common:   ['Poção de Vigor',   'Stamina Potion'],
     uncommon: ['Elixir de Vigor',  'Vigor Elixir'],
@@ -312,42 +314,92 @@ const CONSUMABLE_NAMES: Record<ConsumableEffect, Record<string, [string, string]
   },
 }
 
-const CONSUMABLE_ICONS: Record<ConsumableEffect, string> = {
+const CONSUMABLE_ICONS: Partial<Record<ConsumableEffect, string>> = {
   stamina: '💪', mana: '🔷', skip: '⏩', xp: '📖',
 }
 
-const ALL_EFFECTS: ConsumableEffect[] = ['stamina', 'mana', 'skip', 'xp']
+const ALL_EFFECTS: ConsumableEffect[] = [
+  'stamina', 'mana', 'skip', 'xp',
+  'shield', 'statBuff', 'physicalDamage', 'enemyDebuff',
+  'normalizeTile', 'resetAttrs',
+]
+
+const BUFF_STATS: (keyof ItemStats)[] = ['atk', 'def', 'atkSpeed', 'magicDamage', 'dropChance', 'xpBonus']
+const PERCENT_STATS = new Set<keyof ItemStats>(['atkSpeed', 'dropChance', 'xpBonus'])
+
+const CONSUMABLE_FALLBACK_NAMES: Record<ConsumableEffect, [string, string]> = {
+  stamina: ['Pocao de Vigor', 'Stamina Potion'],
+  mana: ['Pocao de Mana', 'Mana Potion'],
+  skip: ['Turbo Charge', 'Turbo Charge'],
+  xp: ['Tomo de XP', 'XP Tome'],
+  resetAttrs: ['Orbe de Reaprendizado', 'Respec Orb'],
+  normalizeTile: ['Marca de Sincronia', 'Sync Mark'],
+  shield: ['Ampola de Escudo', 'Shield Vial'],
+  statBuff: ['Tonico de Combate', 'Combat Tonic'],
+  physicalDamage: ['Bomba de Impacto', 'Impact Bomb'],
+  enemyDebuff: ['Frasco Debilitante', 'Weakening Flask'],
+}
 
 export function generateConsumable(level: number): Consumable {
   // consumables only use common-epic rarity logic
-  const rarity = pickRarity(level) === 'unique' ? 'epic' : pickRarity(level) === 'set' ? 'epic' : pickRarity(level)
+  const rolled = pickItemRarity(level)
+  const rarity = rolled === 'unique' || rolled === 'set' ? 'epic' : rolled
   const mult   = CONSUMABLE_RARITY_MULT[rarity]
   const effect = ALL_EFFECTS[Math.floor(Math.random() * ALL_EFFECTS.length)]
 
   let magnitude: number
+  let stat: keyof ItemStats | undefined
+  let durationTurns: number | undefined
+  let cooldownTurns: number | undefined
   switch (effect) {
     case 'stamina':
     case 'mana':
-      magnitude = Math.min(1.0, parseFloat(((0.2 + level * 0.025) * mult).toFixed(3)))
+      magnitude = Math.min(1.0, parseFloat(((0.16 + level * 0.018) * mult).toFixed(3)))
       break
     case 'skip':
-      magnitude = rarity === 'epic' ? 3 : rarity === 'rare' ? 2 : 1
+      magnitude = rarity === 'epic' || rarity === 'rare' ? 2 : 1
       break
     case 'xp':
-      magnitude = Math.round((25 + level * 12) * mult)
+      magnitude = Math.round((18 + level * 8) * mult)
+      break
+    case 'resetAttrs':
+    case 'normalizeTile':
+      magnitude = 1
+      break
+    case 'shield':
+      magnitude = Math.round((18 + level * 8) * mult)
+      durationTurns = 1
+      break
+    case 'statBuff': {
+      stat = BUFF_STATS[Math.floor(Math.random() * BUFF_STATS.length)]
+      const scalar = 1 + level * 0.04
+      magnitude = PERCENT_STATS.has(stat)
+        ? parseFloat((0.03 * mult * scalar).toFixed(3))
+        : Math.round(3 * mult * scalar)
+      durationTurns = 1
+      break
+    }
+    case 'physicalDamage':
+      magnitude = Math.round((14 + level * 7) * mult)
+      cooldownTurns = Math.max(2, 5 - Math.min(3, Math.floor(level / 12)))
+      break
+    case 'enemyDebuff':
+      magnitude = parseFloat((0.08 + Math.min(0.32, level * 0.006) + (mult - 1) * 0.04).toFixed(3))
+      durationTurns = rarity === 'epic' ? 4 : rarity === 'rare' ? 3 : 2
+      cooldownTurns = 4
       break
     default:
       magnitude = 1
   }
 
-  const [name, nameEn] = CONSUMABLE_NAMES[effect][rarity]
+  const [name, nameEn] = CONSUMABLE_NAMES[effect]?.[rarity] ?? CONSUMABLE_FALLBACK_NAMES[effect]
   const price = Math.round(CONSUMABLE_PRICE_BASE[effect] * mult * (1 + level * 0.15))
 
   return {
     id:        `con_${Date.now()}_${_idSeq++}`,
     name, nameEn,
-    icon:      CONSUMABLE_ICONS[effect],
-    effect, magnitude, rarity, level, price,
+    icon:      CONSUMABLE_ICONS[effect] ?? '*',
+    effect, magnitude, stat, durationTurns, cooldownTurns, rarity, level, price,
   }
 }
 

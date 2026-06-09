@@ -9,6 +9,7 @@ import { useQuestStore } from '../store/questStore'
 import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
+import { tryAutoUseConsumable } from '../lib/consumables'
 import { getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
@@ -178,6 +179,19 @@ export function useGameLoop(paused = false) {
           actions:  [{ label: 'Ver Armas', labelEn: 'View Weapons', kind: 'scroll', payload: 'equips' }],
         })
       }
+      const chests = useMapStore.getState().drainChests()
+      for (const chest of chests) {
+        useInventoryStore.getState().addChest(chest)
+        useNotifStore.getState().push({
+          title:    'Baú encontrado!',
+          titleEn:  'Chest found!',
+          body:     `Baú Lv.${chest.level} (${chest.rarity})`,
+          bodyEn:   `Chest Lv.${chest.level} (${chest.rarity})`,
+          rarity:   chest.rarity,
+          scrollTo: 'equips',
+          actions:  [{ label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'equips' }],
+        })
+      }
     }
 
     function advanceBlockingSystems(options: RunStepOptions) {
@@ -212,6 +226,7 @@ export function useGameLoop(paused = false) {
 
       tickResources(deltaMs, speed, derived)
       useSpellStore.getState().tick(deltaMs / 1000)
+      if (!options.offline) tryAutoUseConsumable()
 
       const turn     = useBattleStore.getState().turn
       const attacker = useBattleStore.getState().attacker

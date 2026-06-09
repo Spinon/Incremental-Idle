@@ -6,11 +6,11 @@ import { useQuestStore } from './questStore'
 import { FOREST_RANDOM_MONSTERS, monstersForBiome, pickMonsterForBiome } from '../data/monsters'
 import { pickMonsterRarity } from '../formulas/monsters'
 import { generateQuest } from '../formulas/quests'
-import { rollWeaponMaterialDrop } from '../formulas/weapons'
+import { createTreasureChest } from '../formulas/chests'
 import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
 import type { Biome, Direction, MapTile, PlacedTile, TileContent } from '../types/map'
-import type { MarketOffer } from '../types/item'
+import type { MarketOffer, TreasureChest } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 import type { QuestObjectiveBounty } from '../types/quest'
@@ -108,6 +108,7 @@ interface TileEnemyQueue {
   targetName?: string
   targetNameEn?: string
   isNpc?: boolean
+  variant?: 'golden'
 }
 
 interface TileEntryResult {
@@ -115,7 +116,7 @@ interface TileEntryResult {
   questTileLevel: number | null
 }
 
-type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'pendingChests' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
 
 function contentFromBounty(bounty: BountyTileEntry): TileContent {
   return {
@@ -231,6 +232,7 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
 
   const baseLevel        = Math.max(1, tile.level)
   const isMonster        = tile.content.type === 'monster'
+  const isTreasure       = tile.content.type === 'treasure'
   const generatesBattle  = bounty || isMonster || tile.content.type === 'empty' || tile.content.type === 'treasure'
   if (!generatesBattle) return { enemy: null, questTileLevel }
 
@@ -244,15 +246,17 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
   const tileEnemy: TileEnemyQueue = {
     level:       enemyLevel,
     baseLevel:   baseLevel,
-    type:        bounty ? bounty.monsterType : (tile.content.monsterType ?? fallbackMonster.id),
-    rarity:      bounty ? bounty.targetRarity as MonsterRarity : (tile.content.monsterRarity ?? 'normal') as MonsterRarity,
+    type:        isTreasure ? 'demon' : bounty ? bounty.monsterType : (tile.content.monsterType ?? fallbackMonster.id),
+    rarity:      isTreasure ? 'normal' : bounty ? bounty.targetRarity as MonsterRarity : (tile.content.monsterRarity ?? 'normal') as MonsterRarity,
     tilesPlaced: st.tilesPlaced,
     enraged:     isFirstEncounter && !bounty,
     questId:     bounty?.questId,
     targetName:  bounty?.targetName,
     targetNameEn: bounty?.targetNameEn,
     isNpc:       bounty?.isNpc,
+    variant:     isTreasure ? 'golden' : undefined,
   }
+  if (isTreasure) tileEnemy.enraged = false
 
   if (bounty) {
     delete st.bountyTiles[tileKey]
@@ -269,10 +273,8 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
 
   if (!tile.explored) {
     tile.explored = true
-    if (tile.content.type === 'treasure' && tile.content.xpAmount) {
-      st.pendingXp += tile.content.xpAmount
-      const weaponMaterial = rollWeaponMaterialDrop(tile.level)
-      if (weaponMaterial) st.pendingWeaponMaterials.push(weaponMaterial)
+    if (tile.content.type === 'treasure') {
+      st.pendingChests.push(createTreasureChest(tile.level))
       tile.content  = { type: 'empty' }
     }
   }
@@ -293,6 +295,7 @@ function startTileBattle(enemy: TileEnemyQueue | null): void {
     enemy.targetName,
     enemy.targetNameEn,
     enemy.isNpc,
+    enemy.variant,
   )
 }
 
@@ -311,12 +314,7 @@ export function generateContent(level: number, tilesPlaced = 0, biome: Biome = '
   if (r < 0.008) return { type: 'quest' }
   if (r < 0.016) return { type: 'market' }
   if (r < 0.022) return { type: 'blueTower' }
-  if (r < 0.047) {
-    return {
-      type: 'treasure',
-      xpAmount: Math.round((8 + level * 4) * (0.8 + Math.random() * 0.4)),
-    }
-  }
+  if (r < 0.047) return { type: 'treasure' }
   if (r < 0.10) {
     return {
       type: 'monster',
@@ -342,6 +340,14 @@ export function generateTile(level: number): MapTile {
     level,
     content: { type: 'empty' },
   }
+}
+
+function normalizeTileToLevel(tile: MapTile | PlacedTile | undefined, heroLevel: number): boolean {
+  if (!tile) return false
+  const nextLevel = Math.max(1, Math.round(heroLevel))
+  tile.level = nextLevel
+  if (tile.content.type === 'monster') tile.content.monsterLevel = nextLevel
+  return true
 }
 
 // ms to generate one tile at moveSpeed 1.0 (after early-game factor normalises)
@@ -476,6 +482,7 @@ interface MapStore {
   pendingXp: number
   pendingGold: number
   pendingWeaponMaterials: WeaponMaterialDrop[]
+  pendingChests: TreasureChest[]
   /** Monster-specific XP kept separate so a hero-level range check can be applied. */
   pendingMonsterXp: { xp: number; monsterLevel: number } | null
   sightedCells: Record<string, TileContent>
@@ -520,6 +527,8 @@ interface MapStore {
   bountyTiles: Record<string, BountyTileEntry>
 
   placeTile(tileId: string, x: number, y: number): boolean
+  normalizePlacedTileLevel(x: number, y: number, heroLevel: number): boolean
+  normalizeDeckTileLevel(tileId: string, heroLevel: number): boolean
   saveMarketOffer(key: string, offer: MarketOffer): void
   setDestination(x: number, y: number): void
   setAutoExplore(v: 'manual' | 'move' | 'full'): void
@@ -527,6 +536,7 @@ interface MapStore {
   drainXp(): number
   drainGold(): number
   drainWeaponMaterials(): WeaponMaterialDrop[]
+  drainChests(): TreasureChest[]
   drainMonsterXp(): { xp: number; monsterLevel: number } | null
   goHome(): void
   leaveScene(): void
@@ -582,6 +592,7 @@ export const useMapStore = create<MapStore>()(
       pendingXp: 0,
       pendingGold: 0,
       pendingWeaponMaterials: [],
+      pendingChests: [],
       pendingMonsterXp: null,
       sightedCells: {},
       blueTowerBossPending: {},
@@ -601,6 +612,20 @@ export const useMapStore = create<MapStore>()(
       setAutoExplore:  (v) => set((st) => { st.autoExplore = v }),
       toggleRiskMode:  ()  => set((st) => { st.riskMode = !st.riskMode }),
       saveMarketOffer: (key, offer) => set((st) => { st.marketOffers[key] = offer }),
+      normalizePlacedTileLevel: (x, y, heroLevel): boolean => {
+        let changed = false
+        set((st) => {
+          changed = normalizeTileToLevel(st.grid[gridKey(x, y)], heroLevel)
+        })
+        return changed
+      },
+      normalizeDeckTileLevel: (tileId, heroLevel): boolean => {
+        let changed = false
+        set((st) => {
+          changed = normalizeTileToLevel(st.deck.find(t => t.id === tileId), heroLevel)
+        })
+        return changed
+      },
 
       goHome:     () => set((st) => { st.scene = 'home'; st.destination = null }),
       leaveScene: () => set((st) => {
@@ -716,16 +741,6 @@ export const useMapStore = create<MapStore>()(
 
             // Collect treasure on exit tile (non-combat pickup) but do NOT
             // queue a monster fight — that happens via the normal moveOneStep.
-            const exitTile = st.grid[gridKey(chosenExit.x, chosenExit.y)]
-            if (exitTile && !exitTile.explored && exitTile.content.type === 'treasure') {
-              exitTile.explored = true
-              if (exitTile.content.xpAmount) {
-                st.pendingXp       += exitTile.content.xpAmount
-                const weaponMaterial = rollWeaponMaterialDrop(exitTile.level)
-                if (weaponMaterial) st.pendingWeaponMaterials.push(weaponMaterial)
-                exitTile.content    = { type: 'empty' }
-              }
-            }
           }
 
           st.scene = 'map'
@@ -896,7 +911,7 @@ export const useMapStore = create<MapStore>()(
 
         // Preserve the content TYPE shown in the fog (monster/treasure/market) so
         // what the player saw in the preview matches what they get — but recalculate
-        // any level-dependent values (monsterLevel, xpAmount) from tileLevel so
+        // any level-dependent values from tileLevel so
         // the difficulty is always consistent with the tile's badge.
         const bounty = st.bountyTiles[key]
         const tileLevel = bounty ? Math.max(tile.level, bounty.targetLevel) : tile.level
@@ -913,7 +928,7 @@ export const useMapStore = create<MapStore>()(
               monsterRarity: sighted.monsterRarity ?? pickMonsterRarity(st.tilesPlaced),
             }
           } else if (sighted.type === 'treasure') {
-            content = { type: 'treasure', xpAmount: Math.round((20 + tileLevel * 10) * (0.8 + Math.random() * 0.4)) }
+            content = { type: 'treasure' }
           } else {
             content = { type: sighted.type } as TileContent   // market, blue tower or empty — level-independent
           }
@@ -946,6 +961,12 @@ export const useMapStore = create<MapStore>()(
         const drops = get().pendingWeaponMaterials
         if (drops.length > 0) set((st) => { st.pendingWeaponMaterials = [] })
         return drops
+      },
+
+      drainChests: () => {
+        const chests = get().pendingChests
+        if (chests.length > 0) set((st) => { st.pendingChests = [] })
+        return chests
       },
 
       drainMonsterXp: () => {
@@ -1014,6 +1035,7 @@ export const useMapStore = create<MapStore>()(
         st.pendingXp          = 0
         st.pendingGold        = 0
         st.pendingWeaponMaterials = []
+        st.pendingChests      = []
         st.pendingMonsterXp   = null
         st.sightedCells       = {}
         st.blueTowerBossPending = {}

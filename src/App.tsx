@@ -15,7 +15,6 @@ import QuestPanel from './components/QuestPanel'
 import StickyBar from './components/StickyBar'
 import BottomNav from './components/BottomNav'
 import NotifToast from './components/NotifToast'
-import { SpriteGallery } from './components/icons/__SpriteGallery'
 import { useCloudSaveSync } from './hooks/useCloudSaveSync'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useCloudSaveStore } from './store/cloudSaveStore'
@@ -269,10 +268,6 @@ function GameRoot() {
     prevLevel.current = heroLevel
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gamePausedForSync, heroLevel])
-
-  if (typeof window !== 'undefined' && window.location.hash === '#gallery') {
-    return <SpriteGallery />
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">

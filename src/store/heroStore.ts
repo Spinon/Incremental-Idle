@@ -30,6 +30,7 @@ interface HeroStore {
   setHeroConfig(config: HeroConfig): void
   optimizePoints(): void
   applyPreset(preset: 'combat' | 'explorer' | 'mage'): void
+  resetAttributes(): void
   gainXp(amount: number, xpBonusOverride?: number): void
   earnGold(amount: number): void
   spendGold(amount: number): boolean
@@ -165,6 +166,15 @@ export const useHeroStore = create<HeroStore>()(
       const derived = getDerivedStats(st.attributes, undefined, st.level)
       if (st.stamina > derived.maxStamina) st.stamina = derived.maxStamina
       if (st.mana > derived.maxMana) st.mana = derived.maxMana
+    }),
+
+    resetAttributes: () => set((st) => {
+      const spent = Object.values(st.attributes).reduce((sum, value) => sum + value, 0)
+      st.attributes = { ...INITIAL_ATTRS }
+      st.freePoints += spent
+      const derived = getDerivedStats(st.attributes, undefined, st.level)
+      st.stamina = Math.min(st.stamina, derived.maxStamina)
+      st.mana = Math.min(st.mana, derived.maxMana)
     }),
 
     earnGold: (amount) => set((st) => {

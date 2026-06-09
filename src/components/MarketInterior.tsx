@@ -57,6 +57,18 @@ function consumableDesc(c: Consumable, isEn: boolean): string {
         : `+${c.magnitude} Turbo Charge${c.magnitude > 1 ? 's' : ''}`
     case 'xp':
       return `+${Math.round(c.magnitude)} XP`
+    case 'resetAttrs':
+      return isEn ? 'Refunds spent attributes' : 'Devolve atributos gastos'
+    case 'normalizeTile':
+      return isEn ? 'Sets a map or deck tile to hero level' : 'Iguala um tile do mapa ou deck ao nivel do heroi'
+    case 'shield':
+      return `${isEn ? 'Shield' : 'Escudo'} ${Math.round(c.magnitude)}`
+    case 'statBuff':
+      return `+${c.magnitude}${c.stat ? ` ${c.stat}` : ''} (${c.durationTurns ?? 1} ${isEn ? 'turn' : 'turno'})`
+    case 'physicalDamage':
+      return `${Math.round(c.magnitude)} ${isEn ? 'physical damage' : 'dano fisico'}`
+    case 'enemyDebuff':
+      return `${isEn ? 'Weakens enemy' : 'Enfraquece inimigo'} (${c.durationTurns ?? 2} ${isEn ? 'turns' : 'turnos'})`
   }
 }
 

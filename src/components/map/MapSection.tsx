@@ -95,6 +95,8 @@ export default function MapSection() {
   const riskMode       = useMapStore(s => s.riskMode)
   const tilesPlaced    = useMapStore(s => s.tilesPlaced)
   const placeTile      = useMapStore(s => s.placeTile)
+  const normalizePlacedTileLevel = useMapStore(s => s.normalizePlacedTileLevel)
+  const normalizeDeckTileLevel = useMapStore(s => s.normalizeDeckTileLevel)
   const setDestination = useMapStore(s => s.setDestination)
   const teleportToBlueTower = useMapStore(s => s.teleportToBlueTower)
   const setAutoExplore = useMapStore(s => s.setAutoExplore)
@@ -104,6 +106,9 @@ export default function MapSection() {
   const teleportOrigin = useUIStore(s => s.blueTowerTeleportOrigin)
   const setTeleportSelecting = useUIStore(s => s.setBlueTowerTeleportSelecting)
   const setTeleportOrigin = useUIStore(s => s.setBlueTowerTeleportOrigin)
+  const pendingNormalizeId = useUIStore(s => s.pendingTileNormalizeConsumableId)
+  const setPendingNormalizeId = useUIStore(s => s.setPendingTileNormalizeConsumableId)
+  const removeConsumable = useInventoryStore(s => s.removeConsumable)
 
   const followZoom = useMemo(() => adaptiveFollowZoom(tilesPlaced), [tilesPlaced])
   const isFollowActive = cameraMode === 'follow' && !followInterrupted
@@ -256,6 +261,15 @@ export default function MapSection() {
   const visRadius = Math.max(2, Math.round(derived.vision / 38))
 
   function handleTileClick(x: number, y: number) {
+    if (pendingNormalizeId) {
+      if (normalizePlacedTileLevel(x, y, heroLevel)) {
+        removeConsumable(pendingNormalizeId)
+        setPendingNormalizeId(null)
+        setSelectedPos({ x, y })
+      }
+      return
+    }
+
     if (teleportSelecting) {
       const tile = grid[gridKey(x, y)]
       const isOrigin = teleportOrigin?.x === x && teleportOrigin.y === y
@@ -513,6 +527,20 @@ export default function MapSection() {
             </div>
           )}
 
+          {pendingNormalizeId && (
+            <div className="rounded-xl border border-amber-400/40 bg-amber-950/10 dark:bg-amber-950/25 p-3 flex items-center gap-3">
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-300">
+                {lang === 'en' ? 'Waiting for tile to normalize.' : 'Aguardando tile a ser normalizado.'}
+              </p>
+              <button
+                onClick={() => setPendingNormalizeId(null)}
+                className="ml-auto rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border border-slate-300/60 dark:border-slate-600 text-slate-500 hover:bg-slate-500/10 transition-colors"
+              >
+                {lang === 'en' ? 'Cancel' : 'Cancelar'}
+              </button>
+            </div>
+          )}
+
           <TileDeck
             deck={deck}
             deckAccum={deckAccum}
@@ -522,7 +550,17 @@ export default function MapSection() {
             selectedId={selectedDeckId}
             onDragStart={setDraggingId}
             onDragEnd={() => setDraggingId(null)}
-            onSelect={(id) => setSelectedDeckId(prev => (prev === id ? null : id))}
+            onSelect={(id) => {
+              if (pendingNormalizeId) {
+                if (normalizeDeckTileLevel(id, heroLevel)) {
+                  removeConsumable(pendingNormalizeId)
+                  setPendingNormalizeId(null)
+                  setSelectedDeckId(null)
+                }
+                return
+              }
+              setSelectedDeckId(prev => (prev === id ? null : id))
+            }}
           />
         </div>
 
@@ -905,7 +943,7 @@ function ActiveTileInfoPanel({
         <div className="text-[11px] text-slate-400">
           {explored
             ? <span className="text-green-700">{isEn ? 'Collected' : 'Coletado'}</span>
-            : <span>{isEn ? 'Reward' : 'Recompensa'}: <span className="text-yellow-400 font-semibold">+{content.xpAmount} XP</span></span>
+            : <span>{isEn ? 'Defeat the Golden Demon to claim a chest.' : 'Derrote o Demon Dourado para receber um baú.'}</span>
           }
         </div>
       )}
@@ -975,7 +1013,7 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
         <div className="text-[11px] text-slate-400">
           {explored
             ? <span className="text-green-700">{isEn ? 'Collected' : 'Coletado'}</span>
-            : <span>{isEn ? 'Reward' : 'Recompensa'}: <span className="text-yellow-400 font-semibold">+{content.xpAmount} XP</span></span>
+            : <span>{isEn ? 'Defeat the Golden Demon to claim a chest.' : 'Derrote o Demon Dourado para receber um baú.'}</span>
           }
         </div>
       )}

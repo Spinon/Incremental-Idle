@@ -16,6 +16,7 @@ import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
+import { useConsumableById } from '../lib/consumables'
 import type { Consumable } from '../types/item'
 
 const MINI_RARITY_BORDER: Record<string, string> = {
@@ -154,17 +155,13 @@ export default function MiniBattlePlayer() {
   const heroLevel = useHeroStore(s => s.level)
   const attrs = useHeroStore(s => s.attributes)
   const mana = useHeroStore(s => s.mana)
-  const restoreStamina = useHeroStore(s => s.restoreStamina)
-  const restoreMana = useHeroStore(s => s.restoreMana)
-  const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
-  const gainXp = useHeroStore(s => s.gainXp)
   const gold = useHeroStore(s => s.gold)
   const equipment = useInventoryStore(s => s.equipment)
   const weaponProgress = useInventoryStore(s => s.weaponProgress)
   const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const consumables = useInventoryStore(s => s.consumables)
   const quickslots = useInventoryStore(s => s.quickslots)
-  const removeConsumable = useInventoryStore(s => s.removeConsumable)
+  const consumableAutoSlots = useInventoryStore(s => s.consumableAutoSlots)
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
   const spellSlots = useSpellStore(s => s.spellSlots)
   const cooldowns = useSpellStore(s => s.cooldowns)
@@ -332,21 +329,7 @@ export default function MiniBattlePlayer() {
   }
 
   function useMiniConsumable(c: Consumable) {
-    removeConsumable(c.id)
-    switch (c.effect) {
-      case 'stamina':
-        restoreStamina(derivedStats.maxStamina * c.magnitude, derivedStats.maxStamina)
-        break
-      case 'mana':
-        restoreMana(derivedStats.maxMana * c.magnitude, derivedStats.maxMana)
-        break
-      case 'skip':
-        for (let i = 0; i < c.magnitude; i++) gainSkipCharge()
-        break
-      case 'xp':
-        gainXp(Math.round(c.magnitude))
-        break
-    }
+    useConsumableById(c.id)
   }
 
   function renderSceneMini() {
@@ -460,6 +443,7 @@ export default function MiniBattlePlayer() {
         monsterId={enemyTemplate.id}
         rarity={enemy.rarity}
         enraged={enemy.enraged}
+        variant={enemy.monsterVariant}
         size={44}
       />
     )
@@ -612,6 +596,7 @@ export default function MiniBattlePlayer() {
             <div className="grid grid-cols-4 gap-1 pt-0.5">
               {quickslots.map((qid, slot) => {
                 const c = qid ? consumables.find(x => x.id === qid) : null
+                const itemAuto = !!(c && consumableAutoSlots[slot]?.enabled)
                 return (
                   <button
                     key={slot}
@@ -622,11 +607,14 @@ export default function MiniBattlePlayer() {
                     className={cn(
                       'h-8 rounded border flex items-center justify-center transition',
                       c
-                        ? cn(MINI_RARITY_BORDER[c.rarity], 'bg-slate-800 hover:bg-slate-700 active:scale-95')
+                        ? cn(MINI_RARITY_BORDER[c.rarity], 'relative bg-slate-800 hover:bg-slate-700 active:scale-95')
                         : 'border-dashed border-slate-700 bg-slate-800/40 opacity-45 cursor-not-allowed',
                     )}
                   >
                     <span className="text-base leading-none">{c ? c.icon : slot + 1}</span>
+                    {itemAuto && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-slate-900" />
+                    )}
                   </button>
                 )
               })}

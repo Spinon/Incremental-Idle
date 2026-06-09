@@ -43,6 +43,13 @@ export interface Item {
   attrBonus?: Partial<Record<AttributeKey, number>>
 }
 
+export interface TreasureChest {
+  id: string
+  level: number
+  rarity: ItemRarity
+  qty: number
+}
+
 // The 9 named equipment slots (acc items occupy acc1/acc2/acc3)
 export interface EquipmentSlots {
   head?: Item
@@ -60,7 +67,18 @@ export type EquipmentKey = keyof EquipmentSlots
 
 // ─── Consumables ─────────────────────────────────────────────────────────────
 
-export type ConsumableEffect = 'stamina' | 'mana' | 'skip' | 'xp'
+export type ConsumableEffect =
+  | 'stamina'
+  | 'mana'
+  | 'skip'
+  | 'xp'
+  | 'resetAttrs'
+  | 'normalizeTile'
+  | 'shield'
+  | 'statBuff'
+  | 'physicalDamage'
+  | 'enemyDebuff'
+;
 
 export interface Consumable {
   id:        string
@@ -70,9 +88,18 @@ export interface Consumable {
   effect:    ConsumableEffect
   /** stamina/mana → fraction of max (0–1); skip → charge count; xp → flat amount */
   magnitude: number
+  stat?: keyof ItemStats
+  durationTurns?: number
+  cooldownTurns?: number
   rarity:    ItemRarity
   level:     number
   price:     number
+}
+
+export interface AutoConsumableConfig {
+  enabled: boolean
+  /** Resource/HP/enemy HP threshold as a 0-1 ratio, depending on the item effect. */
+  threshold: number
 }
 
 export interface WordOffer {

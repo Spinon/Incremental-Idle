@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useUIStore } from '../store/uiStore'
 import { getEquipmentBonuses, ATTR_LABEL_PT, ATTR_LABEL_EN, getItemDisplayName } from '../formulas/items'
+import { chestOpenSeconds, rollChestLoot } from '../formulas/chests'
 import { getDerivedStats } from '../formulas/derived'
 import {
   canEquipWeapon,
@@ -20,7 +21,8 @@ import {
   WEAPON_TYPES,
 } from '../formulas/weapons'
 import { cn } from '../lib/utils'
-import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, Consumable } from '../types/item'
+import { useConsumableById } from '../lib/consumables'
+import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, AutoConsumableConfig, Consumable, ConsumableEffect, TreasureChest } from '../types/item'
 import type { EquippedWeapons, WeaponMaterials, WeaponProgress, WeaponType } from '../types/weapon'
 import SpellbookPanel from './SpellbookPanel'
 import {
@@ -29,11 +31,32 @@ import {
 } from './icons/EquipIcons'
 
 const ALL_RARITIES: ItemRarity[] = ['common', 'uncommon', 'rare', 'epic', 'set', 'unique']
+const CONSUMABLE_EFFECTS: ConsumableEffect[] = [
+  'stamina', 'mana', 'skip', 'xp',
+  'shield', 'statBuff', 'physicalDamage', 'enemyDebuff',
+  'normalizeTile', 'resetAttrs',
+]
 
 // ─── Sell price (mirrors inventoryStore logic) ────────────────────────────────
 const SELL_MULT_LOCAL: Record<ItemRarity, number> = { common: 1, uncommon: 3, rare: 8, epic: 20, set: 35, unique: 60 }
 function localSellPrice(item: Item): number {
   return Math.max(1, Math.floor(item.level * SELL_MULT_LOCAL[item.rarity]))
+}
+
+function consumableEffectLabel(effect: ConsumableEffect, isEn: boolean): string {
+  const labels: Record<ConsumableEffect, [string, string]> = {
+    stamina: ['Stamina', 'Stamina'],
+    mana: ['Mana', 'Mana'],
+    skip: ['Turbo', 'Skip'],
+    xp: ['XP', 'XP'],
+    resetAttrs: ['Reset atributos', 'Respec'],
+    normalizeTile: ['Normalizar tile', 'Normalize tile'],
+    shield: ['Escudo', 'Shield'],
+    statBuff: ['Buff', 'Buff'],
+    physicalDamage: ['Dano fisico', 'Physical damage'],
+    enemyDebuff: ['Debuff', 'Debuff'],
+  }
+  return isEn ? labels[effect][1] : labels[effect][0]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1015,6 +1038,111 @@ function AutoSellPanel({ isEn }: { isEn: boolean }) {
 
 // ─── Main InventoryPanel ──────────────────────────────────────────────────────
 
+function ChestOpeningPanel({
+  chests,
+  openingChest,
+  progressMs,
+  openSeconds,
+  isEn,
+  onStart,
+  onCancel,
+}: {
+  chests: TreasureChest[]
+  openingChest: TreasureChest | null
+  progressMs: number
+  openSeconds: number
+  isEn: boolean
+  onStart(id: string): void
+  onCancel(): void
+}) {
+  const pct = openingChest ? Math.min(100, (progressMs / (openSeconds * 1000)) * 100) : 0
+  const remaining = openingChest ? Math.max(0, Math.ceil(openSeconds - progressMs / 1000)) : 0
+
+  return (
+    <div className="mt-3 rounded-xl border border-yellow-300/40 dark:border-yellow-700/50 bg-yellow-50/60 dark:bg-yellow-950/15 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-[9px] text-yellow-700 dark:text-yellow-300 uppercase tracking-widest font-black">
+          {isEn ? 'Chest Opening' : 'Abertura de Baús'}
+        </p>
+        <span className="ml-auto text-[9px] text-slate-500 dark:text-slate-500">
+          {isEn ? 'Drag or click a chest' : 'Arraste ou clique em um baú'}
+        </span>
+      </div>
+
+      <div
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => {
+          e.preventDefault()
+          const id = e.dataTransfer.getData('chestId')
+          if (id) onStart(id)
+        }}
+        className={cn(
+          'rounded-lg border-2 border-dashed p-2 min-h-[64px] transition-colors',
+          openingChest
+            ? RARITY_BORDER[openingChest.rarity] + ' bg-slate-50 dark:bg-slate-900/50'
+            : 'border-yellow-300/60 dark:border-yellow-700/60 bg-white/60 dark:bg-slate-900/40',
+        )}
+      >
+        {openingChest ? (
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎁</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={cn('text-[11px] font-black', RARITY_TEXT[openingChest.rarity])}>
+                  {isEn ? 'Chest' : 'Baú'} Lv.{openingChest.level}
+                </span>
+                <span className="text-[9px] text-slate-400">{remaining}s</span>
+              </div>
+              <div className="mt-1 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                <div className="h-full rounded-full bg-yellow-400 transition-[width] duration-200" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+            <button
+              onClick={onCancel}
+              className="px-2 py-1 rounded text-[9px] font-bold border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500"
+            >
+              {isEn ? 'Cancel' : 'Cancelar'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-12 text-[10px] text-yellow-700/70 dark:text-yellow-300/70 font-semibold">
+            {isEn ? 'Empty opening slot' : 'Slot de abertura vazio'}
+          </div>
+        )}
+      </div>
+
+      {chests.length > 0 && (
+        <div className="mt-2 grid grid-cols-2 min-[460px]:grid-cols-3 gap-2">
+          {chests.map(chest => (
+            <button
+              key={chest.id}
+              draggable
+              onDragStart={e => e.dataTransfer.setData('chestId', chest.id)}
+              onClick={() => onStart(chest.id)}
+              disabled={!!openingChest}
+              className={cn(
+                'rounded-lg border p-2 text-left transition-colors disabled:opacity-50',
+                RARITY_BORDER[chest.rarity],
+                RARITY_BG[chest.rarity],
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎁</span>
+                <div className="min-w-0">
+                  <p className={cn('text-[10px] font-black truncate', RARITY_TEXT[chest.rarity])}>
+                    {isEn ? 'Chest' : 'Baú'} Lv.{chest.level}
+                  </p>
+                  <p className="text-[8px] text-slate-400">x{chest.qty}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function InventoryPanel({ section }: { section?: 'equips' | 'consumables' } = {}) {
   const inventory          = useInventoryStore(s => s.inventory)
   const equipment          = useInventoryStore(s => s.equipment)
@@ -1027,14 +1155,25 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const optimizeEquipment  = useInventoryStore(s => s.optimizeEquipment)
   const autoSell           = useInventoryStore(s => s.autoSell)
   const consumables        = useInventoryStore(s => s.consumables)
+  const chests             = useInventoryStore(s => s.chests)
+  const openingChest       = useInventoryStore(s => s.openingChest)
+  const chestProgressMs    = useInventoryStore(s => s.chestProgressMs)
   const quickslots         = useInventoryStore(s => s.quickslots)
+  const consumableAutoSlots = useInventoryStore(s => s.consumableAutoSlots)
   const weaponProgress     = useInventoryStore(s => s.weaponProgress)
   const equippedWeapons    = useInventoryStore(s => s.equippedWeapons)
   const weaponMaterials    = useInventoryStore(s => s.weaponMaterials)
   const equipWeapon        = useInventoryStore(s => s.equipWeapon)
   const forgeWeapon        = useInventoryStore(s => s.forgeWeapon)
-  const removeConsumable   = useInventoryStore(s => s.removeConsumable)
   const assignQuickslot    = useInventoryStore(s => s.assignQuickslot)
+  const setConsumableAutoSlot = useInventoryStore(s => s.setConsumableAutoSlot)
+  const startOpeningChest  = useInventoryStore(s => s.startOpeningChest)
+  const cancelOpeningChest = useInventoryStore(s => s.cancelOpeningChest)
+  const advanceOpeningChest = useInventoryStore(s => s.advanceOpeningChest)
+  const clearOpenedChest   = useInventoryStore(s => s.clearOpenedChest)
+  const addItemToInventory = useInventoryStore(s => s.addItem)
+  const addConsumableToBag = useInventoryStore(s => s.addConsumable)
+  const addWeaponMaterial  = useInventoryStore(s => s.addWeaponMaterial)
   const sellMode           = useInventoryStore(s => s.sellMode)
   const selectedForSale    = useInventoryStore(s => s.selectedForSale)
   const setSellMode        = useInventoryStore(s => s.setSellMode)
@@ -1045,10 +1184,6 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const gold           = useHeroStore(s => s.gold)
   const spendGold      = useHeroStore(s => s.spendGold)
   const earnGold       = useHeroStore(s => s.earnGold)
-  const restoreStamina = useHeroStore(s => s.restoreStamina)
-  const restoreMana    = useHeroStore(s => s.restoreMana)
-  const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
-  const gainXp         = useHeroStore(s => s.gainXp)
   const heroLevel      = useHeroStore(s => s.level)
   const setActiveTab   = useUIStore(s => s.setActiveTab)
   const lang           = useSettingsStore(s => s.lang)
@@ -1057,6 +1192,10 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const [selected, setSelected]           = useState<Selection>(null)
   const [autoSellOpen, setAutoSellOpen]   = useState(false)
   const [selectedCon, setSelectedCon]     = useState<string | null>(null)
+  const [consumableQuery, setConsumableQuery] = useState('')
+  const [consumableEffectFilter, setConsumableEffectFilter] = useState<'all' | ConsumableEffect>('all')
+  const [consumableRarityFilter, setConsumableRarityFilter] = useState<'all' | ItemRarity>('all')
+  const [consumableAutoOpen, setConsumableAutoOpen] = useState(false)
 
   const expandCost = getExpandCost()
 
@@ -1088,7 +1227,43 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
     Object.entries(equipBonuses).some(([k, v]) => k !== 'attrBonus' && (v as number) !== 0) ||
     Object.keys(equipBonuses.attrBonus).length > 0
 
+  const filteredConsumables = consumables.filter(c => {
+    const q = consumableQuery.trim().toLowerCase()
+    const queryMatch = !q || [
+      c.name,
+      c.nameEn,
+      c.effect,
+      c.stat ?? '',
+      consumableEffectLabel(c.effect, false),
+      consumableEffectLabel(c.effect, true),
+    ].join(' ').toLowerCase().includes(q)
+    const effectMatch = consumableEffectFilter === 'all' || c.effect === consumableEffectFilter
+    const rarityMatch = consumableRarityFilter === 'all' || c.rarity === consumableRarityFilter
+    return queryMatch && effectMatch && rarityMatch
+  })
+
   // ── Handlers ──
+  const derivedForChest = getDerivedStats(attrs, equipBonuses, heroLevel)
+  const openSeconds = openingChest
+    ? chestOpenSeconds(openingChest, derivedForChest.goldEfficiency, derivedForChest.dropChance)
+    : 0
+
+  useEffect(() => {
+    if (!openingChest) return
+    const id = window.setInterval(() => advanceOpeningChest(250), 250)
+    return () => window.clearInterval(id)
+  }, [advanceOpeningChest, openingChest])
+
+  useEffect(() => {
+    if (!openingChest || openSeconds <= 0 || chestProgressMs < openSeconds * 1000) return
+    const loot = rollChestLoot(openingChest)
+    clearOpenedChest()
+    if (loot.gold > 0) earnGold(loot.gold)
+    for (const item of loot.items) addItemToInventory(item)
+    for (const consumable of loot.consumables) addConsumableToBag(consumable)
+    for (const material of loot.materials) addWeaponMaterial(material.tier, material.count)
+  }, [addConsumableToBag, addItemToInventory, addWeaponMaterial, chestProgressMs, clearOpenedChest, earnGold, openSeconds, openingChest])
+
   function handleInventoryClick(item: Item) {
     if (sellMode) {
       toggleSellSelection(item.id)
@@ -1166,19 +1341,9 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const canUnequip = inventory.length < maxSlots
 
   // ── Consumable helpers ──
-  function applyConsumable(c: Consumable) {
-    const derived = getDerivedStats(attrs, equipBonuses, heroLevel)
-    switch (c.effect) {
-      case 'stamina': restoreStamina(derived.maxStamina * c.magnitude, derived.maxStamina); break
-      case 'mana':    restoreMana(derived.maxMana * c.magnitude, derived.maxMana);           break
-      case 'skip':    for (let i = 0; i < c.magnitude; i++) gainSkipCharge(); break
-      case 'xp':      gainXp(Math.round(c.magnitude));                  break
-    }
-  }
-
   function handleUseConsumable(id: string) {
-    const c = removeConsumable(id)
-    if (c) { applyConsumable(c); setSelectedCon(null) }
+    const result = useConsumableById(id)
+    if (result !== 'blocked') setSelectedCon(null)
   }
 
   function consumableEffectDesc(c: Consumable): string {
@@ -1187,6 +1352,35 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
       case 'mana':    return `${isEn ? 'Restore' : 'Restaura'} ${Math.round(c.magnitude * 100)}% Mana`
       case 'skip':    return `+${c.magnitude} ${isEn ? 'Skip Charge' : 'Turbo Charge'}${c.magnitude > 1 ? 's' : ''}`
       case 'xp':      return `+${Math.round(c.magnitude)} XP`
+      case 'resetAttrs': return isEn ? 'Refunds spent attributes' : 'Devolve atributos gastos'
+      case 'normalizeTile': return isEn ? 'Sets a map or deck tile to hero level' : 'Iguala um tile do mapa ou deck ao nivel do heroi'
+      case 'shield': return `${isEn ? 'Shield' : 'Escudo'} ${Math.round(c.magnitude)}`
+      case 'statBuff': return `+${c.magnitude}${c.stat ? ` ${c.stat}` : ''} (${c.durationTurns ?? 1} ${isEn ? 'turn' : 'turno'})`
+      case 'physicalDamage': return `${Math.round(c.magnitude)} ${isEn ? 'physical damage' : 'dano fisico'}`
+      case 'enemyDebuff': return `${isEn ? 'Weakens enemy' : 'Enfraquece inimigo'} (${c.durationTurns ?? 2} ${isEn ? 'turns' : 'turnos'})`
+    }
+  }
+
+  function canAutoUseConsumable(c: Consumable | null): boolean {
+    if (!c) return false
+    return !['skip', 'xp', 'resetAttrs', 'normalizeTile'].includes(c.effect)
+  }
+
+  function autoThresholdLabel(c: Consumable | null, cfg: AutoConsumableConfig): string {
+    if (!c) return ''
+    const pct = Math.round(cfg.threshold * 100)
+    switch (c.effect) {
+      case 'stamina': return `Stamina < ${pct}%`
+      case 'mana': return `Mana < ${pct}%`
+      case 'shield': return `HP < ${Math.max(pct, 65)}%`
+      case 'physicalDamage': return `${isEn ? 'Enemy HP' : 'HP inimigo'} < ${pct}%`
+      case 'statBuff': return isEn ? 'Start of fight' : 'Inicio da luta'
+      case 'enemyDebuff': return isEn ? 'Start of fight' : 'Inicio da luta'
+      case 'skip':
+      case 'xp':
+      case 'resetAttrs':
+      case 'normalizeTile':
+        return isEn ? 'Manual only' : 'Manual'
     }
   }
 
@@ -1288,6 +1482,16 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
             onExpand={handleExpand}
             sellMode={sellMode}
             sellSelected={sellSelectedSet}
+          />
+
+          <ChestOpeningPanel
+            chests={chests}
+            openingChest={openingChest}
+            progressMs={chestProgressMs}
+            openSeconds={openSeconds}
+            isEn={isEn}
+            onStart={startOpeningChest}
+            onCancel={cancelOpeningChest}
           />
 
           {/* Sell mode confirm/cancel footer */}
@@ -1415,6 +1619,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
             {quickslots.map((qid, slot) => {
               const qcon = qid ? consumables.find(c => c.id === qid) : null
               const isSelecting = selectedCon !== null
+              const itemAuto = !!(qcon && consumableAutoSlots[slot]?.enabled)
               return (
                 <button
                   key={slot}
@@ -1436,7 +1641,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                   )}
                 >
                   {qcon
-                    ? <><span className="text-base leading-none">{qcon.icon}</span><span className={cn('text-[7px]', RARITY_TEXT[qcon.rarity])}>{slot + 1}</span></>
+                    ? <><span className="text-base leading-none">{qcon.icon}</span><span className={cn('text-[7px]', RARITY_TEXT[qcon.rarity])}>{slot + 1}</span>{itemAuto && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-white dark:border-slate-800" />}</>
                     : <span className="text-slate-400 dark:text-slate-600">{slot + 1}</span>
                   }
                 </button>
@@ -1450,14 +1655,128 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
           </div>
         </div>
 
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="text-[9px] text-slate-400 dark:text-slate-600">
+            {isEn ? 'Filters and automation' : 'Filtros e automacao'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setConsumableAutoOpen(v => !v)}
+            title={isEn ? 'Configure consumable auto-use' : 'Configurar auto-uso de consumiveis'}
+            className={cn(
+              'h-7 rounded-full px-2 flex items-center gap-1 text-[10px] font-black transition-colors',
+              consumableAutoOpen
+                ? 'bg-amber-500 text-white'
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700',
+            )}
+          >
+            <span>âš™</span>
+            <span>Auto</span>
+          </button>
+        </div>
+
+        {consumableAutoOpen && (
+          <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3">
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+              {isEn ? 'Consumable Auto-use' : 'Auto-uso de Consumiveis'}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {quickslots.map((qid, slot) => {
+                const c = qid ? consumables.find(x => x.id === qid) ?? null : null
+                const cfg = consumableAutoSlots[slot] ?? { enabled: false, threshold: 0.35 }
+                const canAuto = canAutoUseConsumable(c)
+                return (
+                  <div key={slot} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-slate-400 w-4">{slot + 1}</span>
+                      <span className="text-base leading-none">{c?.icon ?? '-'}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                        {c ? (isEn ? c.nameEn : c.name) : (isEn ? 'Empty' : 'Vazio')}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={!canAuto}
+                        onClick={() => setConsumableAutoSlot(slot, { ...cfg, enabled: !cfg.enabled })}
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-[9px] font-black transition-colors',
+                          cfg.enabled && canAuto
+                            ? 'bg-amber-500 text-white'
+                            : canAuto
+                              ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed',
+                        )}
+                      >
+                        Auto
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 flex-1">
+                        {autoThresholdLabel(c, cfg)}
+                      </span>
+                      {(c?.effect === 'stamina' || c?.effect === 'mana' || c?.effect === 'physicalDamage') && (
+                        <select
+                          value={cfg.threshold}
+                          disabled={!canAuto || !cfg.enabled}
+                          onChange={e => setConsumableAutoSlot(slot, { ...cfg, threshold: Number(e.target.value) })}
+                          className="h-6 rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-1 text-[9px] text-slate-600 dark:text-slate-300 disabled:opacity-40"
+                        >
+                          <option value={0.25}>25%</option>
+                          <option value={0.35}>35%</option>
+                          <option value={0.5}>50%</option>
+                          <option value={0.7}>70%</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-3 flex flex-col sm:flex-row gap-2">
+          <input
+            value={consumableQuery}
+            onChange={e => setConsumableQuery(e.target.value)}
+            placeholder={isEn ? 'Search consumables' : 'Buscar consumiveis'}
+            className="h-8 flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-[11px] text-slate-600 dark:text-slate-300 outline-none focus:border-indigo-400 dark:focus:border-indigo-500"
+          />
+          <div className="flex gap-2">
+            <select
+              value={consumableEffectFilter}
+              onChange={e => setConsumableEffectFilter(e.target.value as 'all' | ConsumableEffect)}
+              className="h-8 min-w-0 flex-1 sm:w-40 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-[10px] text-slate-600 dark:text-slate-300 outline-none"
+            >
+              <option value="all">{isEn ? 'Effect: All' : 'Efeito: Todos'}</option>
+              {CONSUMABLE_EFFECTS.map(effect => (
+                <option key={effect} value={effect}>{consumableEffectLabel(effect, isEn)}</option>
+              ))}
+            </select>
+            <select
+              value={consumableRarityFilter}
+              onChange={e => setConsumableRarityFilter(e.target.value as 'all' | ItemRarity)}
+              className="h-8 min-w-0 flex-1 sm:w-36 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-[10px] text-slate-600 dark:text-slate-300 outline-none"
+            >
+              <option value="all">{isEn ? 'Rarity: All' : 'Raridade: Todas'}</option>
+              {ALL_RARITIES.map(rarity => (
+                <option key={rarity} value={rarity}>{RARITY_LABEL[rarity][isEn ? 1 : 0]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {/* Consumable cards */}
         {consumables.length === 0 ? (
           <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 italic py-3">
             {isEn ? 'No consumables — buy some at the market!' : 'Sem consumíveis — compre no mercado!'}
           </p>
+        ) : filteredConsumables.length === 0 ? (
+          <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 italic py-3">
+            {isEn ? 'No consumables match the filters.' : 'Nenhum consumivel bate com os filtros.'}
+          </p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {consumables.map(c => {
+            {filteredConsumables.map(c => {
               const isSel     = selectedCon === c.id
               const qslot     = quickslots.indexOf(c.id)
               return (

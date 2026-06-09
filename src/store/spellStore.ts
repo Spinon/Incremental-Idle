@@ -44,6 +44,7 @@ interface SpellStore {
   setSpellSlot(slotIndex: number, spellId: string | null): void
   setAutoSlot(slotIndex: number, config: AutoCastConfig): void
   castSpell(spellId: string): void
+  addConsumableBuff(statAdds: ActiveBuff['statAdds'], durationTurns: number): void
   onBattleTurn(): void       // called each time battleStore.turn increments
   clearEnemyDebuff(): void   // called when a new enemy spawns
   tick(deltaS: number): void // only for buff/debuff durations (seconds)
@@ -213,6 +214,16 @@ export const useSpellStore = create<SpellStore>()(
         }
       })
     },
+
+    addConsumableBuff: (statAdds, durationTurns) => set((st) => {
+      const id = `consumable_${Date.now()}`
+      st.activeBuffs = st.activeBuffs.filter(b => !b.spellId.startsWith('consumable_'))
+      st.activeBuffs.push({
+        spellId: id,
+        statAdds,
+        remaining: Math.max(1, durationTurns),
+      })
+    }),
 
     // Decrement cooldowns + buff/debuff durations by 1 turn, then process auto-cast
     onBattleTurn: () => {

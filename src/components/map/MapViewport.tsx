@@ -180,12 +180,15 @@ export default function MapViewport({
   const handlePointerDown = (e: React.PointerEvent) => {
     if (draggingId !== null || e.button !== 0) return
     e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
     onUserInteraction()
     const point = relativePoint(e.clientX, e.clientY)
     pointersRef.current.set(e.pointerId, point)
 
     if (pointersRef.current.size >= 2) {
+      // Entering pinch mode — capture this pointer so we track it even if
+      // it leaves the viewport. Single-pointer clicks/pans do NOT capture
+      // so that onClick on child tiles still fires normally.
+      e.currentTarget.setPointerCapture(e.pointerId)
       startPinch()
       return
     }

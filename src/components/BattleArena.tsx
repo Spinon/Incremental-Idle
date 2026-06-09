@@ -12,6 +12,7 @@ import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
+import { useConsumableById } from '../lib/consumables'
 import { useSettingsStore } from '../store/settingsStore'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import UnitSprite from './UnitSprite'
@@ -235,15 +236,12 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
 
   // Consumable quickslots
   const attrs          = useHeroStore(s => s.attributes)
-  const restoreStamina = useHeroStore(s => s.restoreStamina)
-  const restoreMana    = useHeroStore(s => s.restoreMana)
-  const gainSkipCharge = useHeroStore(s => s.gainSkipCharge)
   const consumables    = useInventoryStore(s => s.consumables)
   const equipment      = useInventoryStore(s => s.equipment)
   const weaponProgress = useInventoryStore(s => s.weaponProgress)
   const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const quickslots     = useInventoryStore(s => s.quickslots)
-  const removeConsumable = useInventoryStore(s => s.removeConsumable)
+  const consumableAutoSlots = useInventoryStore(s => s.consumableAutoSlots)
 
   // Spell quickslots
   const level           = useHeroStore(s => s.level)
@@ -269,13 +267,14 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const statusLabels = isEn ? STATUS_LABEL_EN : STATUS_LABEL_PT
   const currentEnemyTemplate = FOREST_MONSTER_MAP.get(store.enemy.monsterType ?? '')
   const enemyDisplayName = isEn
-    ? (currentEnemyTemplate?.nameEn ?? store.enemy.nameEn ?? store.enemy.name)
-    : (currentEnemyTemplate?.namePt ?? store.enemy.namePt ?? store.enemy.name)
+    ? (store.enemy.monsterVariant === 'golden' ? (store.enemy.nameEn ?? store.enemy.name) : (currentEnemyTemplate?.nameEn ?? store.enemy.nameEn ?? store.enemy.name))
+    : (store.enemy.monsterVariant === 'golden' ? (store.enemy.namePt ?? store.enemy.name) : (currentEnemyTemplate?.namePt ?? store.enemy.namePt ?? store.enemy.name))
   const enemyRarityLabel = store.enemy.rarity && store.enemy.rarity !== 'normal'
     ? (isEn ? DEATH_RARITY_LABEL_EN[store.enemy.rarity] : DEATH_RARITY_LABEL_PT[store.enemy.rarity])
     : null
   const enemyModifierText = [
     enemyRarityLabel,
+    store.enemy.monsterVariant === 'golden' ? (isEn ? 'Golden' : 'Dourado') : null,
     store.enemy.enraged ? (isEn ? 'Enraged' : 'Furioso') : null,
   ].filter(Boolean).join(' · ')
   const heroModifierText = isEn ? 'Adventurer' : 'Aventureiro'
@@ -345,13 +344,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   }, [showDeathLog, markDeathsSeen])
 
   function useQuickslot(c: Consumable) {
-    removeConsumable(c.id)
-    switch (c.effect) {
-      case 'stamina': restoreStamina(derivedStats.maxStamina * c.magnitude, derivedStats.maxStamina); break
-      case 'mana':    restoreMana(derivedStats.maxMana * c.magnitude, derivedStats.maxMana);           break
-      case 'skip':    for (let i = 0; i < c.magnitude; i++) gainSkipCharge(); break
-      case 'xp':      gainXp(Math.round(c.magnitude));                  break
-    }
+    useConsumableById(c.id)
   }
   const timerA     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timerB     = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -701,6 +694,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
               monsterType={store.enemy.monsterType}
               monsterRarity={store.enemy.rarity}
               enraged={store.enemy.enraged}
+              monsterVariant={store.enemy.monsterVariant}
             />
           </div>
         </div>
@@ -769,6 +763,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
       <div className="mt-2 flex items-center gap-2 justify-center">
         {quickslots.map((qid, slot) => {
           const c = qid ? consumables.find(x => x.id === qid) : null
+          const itemAuto = !!(c && consumableAutoSlots[slot]?.enabled)
           return (
             <button
               key={slot}
@@ -787,6 +782,9 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
                 <>
                   <span className="text-lg leading-none">{c.icon}</span>
                   <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500">{slot + 1}</span>
+                  {itemAuto && (
+                    <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white dark:border-slate-800" />
+                  )}
                 </>
               ) : (
                 <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600">{slot + 1}</span>

@@ -38,6 +38,8 @@ interface UIStore {
   blueTowerTeleportOrigin: { x: number; y: number } | null
   setBlueTowerTeleportSelecting(v: boolean): void
   setBlueTowerTeleportOrigin(pos: { x: number; y: number } | null): void
+  pendingTileNormalizeConsumableId: string | null
+  setPendingTileNormalizeConsumableId(id: string | null): void
   sceneAuto: SceneAutoState
   configureSceneAuto(kind: SceneAutoKind, durationMs: number, active: boolean): void
   setSceneAutoElapsed(elapsedMs: number): void
@@ -55,6 +57,8 @@ export const useUIStore = create<UIStore>()((set) => ({
   blueTowerTeleportOrigin: null,
   setBlueTowerTeleportSelecting: (v) => set({ blueTowerTeleportSelecting: v }),
   setBlueTowerTeleportOrigin: (pos) => set({ blueTowerTeleportOrigin: pos }),
+  pendingTileNormalizeConsumableId: null,
+  setPendingTileNormalizeConsumableId: (id) => set({ pendingTileNormalizeConsumableId: id }),
   sceneAuto: {
     kind: null,
     active: false,

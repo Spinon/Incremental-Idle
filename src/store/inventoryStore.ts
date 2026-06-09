@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import type { Item, ItemRarity, EquipSlot, EquipmentSlots, EquipmentKey, Consumable } from '../types/item'
+import type { Item, ItemRarity, EquipSlot, EquipmentSlots, EquipmentKey, AutoConsumableConfig, Consumable, TreasureChest } from '../types/item'
 import type { EquippedWeapons, WeaponHand, WeaponMaterials, WeaponProgress, WeaponType } from '../types/weapon'
 import {
   canEquipWeapon,
@@ -76,6 +76,11 @@ const DEFAULT_AUTO_SELL: AutoSellConfig = {
   maxLevel: 0,
 }
 
+const DEFAULT_CONSUMABLE_AUTO: AutoConsumableConfig = {
+  enabled: false,
+  threshold: 0.35,
+}
+
 interface InventoryStore {
   inventory:    Item[]
   equipment:    EquipmentSlots
@@ -83,8 +88,12 @@ interface InventoryStore {
   expansions:   number
   autoSell:     AutoSellConfig
   consumables:  Consumable[]
+  chests:       TreasureChest[]
+  openingChest: TreasureChest | null
+  chestProgressMs: number
   /** IDs of consumables assigned to quickslots 0-3 (null = empty slot). */
   quickslots:   (string | null)[]
+  consumableAutoSlots: AutoConsumableConfig[]
   weaponProgress: Record<WeaponType, WeaponProgress>
   equippedWeapons: EquippedWeapons
   weaponMaterials: WeaponMaterials
@@ -118,6 +127,12 @@ interface InventoryStore {
   removeConsumable(id: string): Consumable | null
   /** Assigns or clears a quickslot. Moves any duplicate assignment first. */
   assignQuickslot(slot: number, id: string | null): void
+  setConsumableAutoSlot(slot: number, config: AutoConsumableConfig): void
+  addChest(chest: TreasureChest): void
+  startOpeningChest(chestId: string): boolean
+  cancelOpeningChest(): void
+  advanceOpeningChest(deltaMs: number): void
+  clearOpenedChest(): void
   equipWeapon(hand: WeaponHand, type: WeaponType): void
   grantWeaponXp(amount: number): void
   addWeaponMaterial(tier: number, count?: number): void
@@ -148,7 +163,11 @@ export const useInventoryStore = create<InventoryStore>()(
       expansions:      0,
       autoSell:        { ...DEFAULT_AUTO_SELL },
       consumables:     [],
+      chests:          [],
+      openingChest:    null,
+      chestProgressMs: 0,
       quickslots:      Array(QUICKSLOT_COUNT).fill(null) as (string | null)[],
+      consumableAutoSlots: Array.from({ length: QUICKSLOT_COUNT }, () => ({ ...DEFAULT_CONSUMABLE_AUTO })),
       weaponProgress:  Object.fromEntries(WEAPON_TYPES.map(t => [t, createWeaponProgress(t)])) as Record<WeaponType, WeaponProgress>,
       equippedWeapons: { mainHand: 'sword', offHand: 'shield' },
       weaponMaterials: {},
@@ -270,7 +289,64 @@ export const useInventoryStore = create<InventoryStore>()(
         st.quickslots[slot] = id
       }),
 
+      setConsumableAutoSlot: (slot, config) => set((st) => {
+        st.consumableAutoSlots[slot] = {
+          enabled: config.enabled,
+          threshold: Math.min(1, Math.max(0.05, config.threshold)),
+        }
+      }),
+
       // ── Manual sell mode ────────────────────────────────────────────────────
+
+      addChest: (chest) => {
+        set((st) => {
+          const existing = st.chests.find(c => c.level === chest.level && c.rarity === chest.rarity)
+          if (existing) existing.qty += Math.max(1, chest.qty)
+          else st.chests.push({ ...chest, qty: Math.max(1, chest.qty) })
+        })
+        requestCriticalCloudSave()
+      },
+
+      startOpeningChest: (chestId) => {
+        let started = false
+        set((st) => {
+          if (st.openingChest) return
+          const idx = st.chests.findIndex(c => c.id === chestId)
+          if (idx === -1) return
+          const chest = st.chests[idx]
+          st.openingChest = { ...chest, id: `${chest.id}_open_${Date.now()}`, qty: 1 }
+          st.chestProgressMs = 0
+          chest.qty -= 1
+          if (chest.qty <= 0) st.chests.splice(idx, 1)
+          started = true
+        })
+        if (started) requestCriticalCloudSave()
+        return started
+      },
+
+      cancelOpeningChest: () => {
+        let cancelled: TreasureChest | null = null
+        set((st) => {
+          if (!st.openingChest) return
+          cancelled = st.openingChest
+          st.openingChest = null
+          st.chestProgressMs = 0
+          const existing = st.chests.find(c => c.level === cancelled!.level && c.rarity === cancelled!.rarity)
+          if (existing) existing.qty += 1
+          else st.chests.push({ ...cancelled!, id: `chest_${Date.now()}`, qty: 1 })
+        })
+        if (cancelled) requestCriticalCloudSave()
+      },
+
+      advanceOpeningChest: (deltaMs) => set((st) => {
+        if (!st.openingChest) return
+        st.chestProgressMs += Math.max(0, deltaMs)
+      }),
+
+      clearOpenedChest: () => set((st) => {
+        st.openingChest = null
+        st.chestProgressMs = 0
+      }),
 
       equipWeapon: (hand, type) => set((st) => {
         st.weaponProgress = normalizeWeaponProgress(st.weaponProgress)

@@ -12,6 +12,7 @@ interface Props {
   monsterType?: string
   monsterRarity?: MonsterRarity
   enraged?: boolean
+  monsterVariant?: 'golden'
 }
 
 // ─── Player sprite — reads heroConfig from store ──────────────────────────────
@@ -36,7 +37,7 @@ function EnemyEmoji({ emoji }: { emoji: string }) {
   )
 }
 
-export default function UnitSprite({ side, isHit, hitDuration, monsterType, monsterRarity, enraged }: Props) {
+export default function UnitSprite({ side, isHit, hitDuration, monsterType, monsterRarity, enraged, monsterVariant }: Props) {
   function renderSprite() {
     if (side === 'player') return <HeroSvg />
 
@@ -49,6 +50,7 @@ export default function UnitSprite({ side, isHit, hitDuration, monsterType, mons
           monsterId={template.id}
           rarity={monsterRarity}
           enraged={enraged}
+          variant={monsterVariant}
           size={94}
         />
       )

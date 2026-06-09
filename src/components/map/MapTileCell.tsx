@@ -76,7 +76,7 @@ function buildTitle(tile: PlacedTile): string {
     const g        = buildMonster(template, lvl, 'normal')
     return `${base} — ${template.name} Nv.${lvl}\nHP ${g.hp}  ATK ${g.atk}  DEF ${g.def}`
   }
-  if (tile.content.type === 'treasure') return `${base} — Tesouro: ${tile.content.xpAmount} XP`
+  if (tile.content.type === 'treasure') return `${base} — Tesouro: Demon Dourado e baú`
   if (tile.content.type === 'market')   return `${base} — Mercado`
   if (tile.content.type === 'blueTower') return `${base} — Torre Azul`
   return base

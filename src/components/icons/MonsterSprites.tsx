@@ -31,6 +31,7 @@ export interface MonsterSpriteProps {
   monsterId: string
   rarity?: MonsterRarity
   enraged?: boolean
+  variant?: 'golden'
   size?: number
 }
 
@@ -114,6 +115,7 @@ export function MonsterSprite({
   monsterId,
   rarity = 'normal',
   enraged = false,
+  variant,
   size = 80,
 }: MonsterSpriteProps) {
   const spriteSet = SPRITES[monsterId]
@@ -124,7 +126,9 @@ export function MonsterSprite({
     spriteSet.flipToFaceLeft ? 'scaleX(-1)' : null,
     spriteSet.visualScale ? `scale(${spriteSet.visualScale})` : null,
   ].filter(Boolean).join(' ') || undefined
-  const glow = enraged
+  const glow = variant === 'golden'
+    ? 'drop-shadow(0 0 9px rgba(250, 204, 21, 0.85))'
+    : enraged
     ? 'drop-shadow(0 0 8px rgba(248, 80, 36, 0.75))'
     : RARITY_GLOW[rarity]
 
@@ -153,6 +157,12 @@ export function MonsterSprite({
         <span
           className="pointer-events-none absolute inset-0 rounded-full border border-red-400/45 bg-red-500/10"
           style={{ boxShadow: '0 0 14px rgba(248, 80, 36, 0.35) inset' }}
+        />
+      )}
+      {variant === 'golden' && (
+        <span
+          className="pointer-events-none absolute inset-0 rounded-full border border-yellow-300/50 bg-yellow-300/15 mix-blend-screen"
+          style={{ boxShadow: '0 0 16px rgba(250, 204, 21, 0.45) inset' }}
         />
       )}
     </span>
