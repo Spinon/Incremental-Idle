@@ -2,10 +2,10 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import SettingsMenu from './SettingsMenu'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { LOCAL_PLAY_KEY } from '../store/save'
 import { cn } from '../lib/utils'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const LOCAL_PLAY_KEY = 'incremental-idle-local-play'
 
 function validateEmail(email: string, isEn: boolean): string | null {
   if (!emailPattern.test(email)) return isEn ? 'Enter a valid email.' : 'Informe um e-mail válido.'
@@ -45,8 +45,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [localPlay, setLocalPlay] = useState(() => localStorage.getItem(LOCAL_PLAY_KEY) === '1')
 
   useEffect(() => {
+    if (localPlay) return
     initCloudSave()
-  }, [initCloudSave])
+  }, [initCloudSave, localPlay])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')

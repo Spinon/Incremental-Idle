@@ -5,7 +5,7 @@ import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useMapStore } from '../store/mapStore'
 import { useQuestStore } from '../store/questStore'
-import { markLocalSaveChanged } from '../store/save'
+import { LOCAL_PLAY_KEY, markLocalSaveChanged } from '../store/save'
 import { useSpellStore } from '../store/spellStore'
 
 const SYNC_DEBOUNCE_MS = 5000
@@ -26,6 +26,7 @@ export function useCloudSaveSync(paused = false) {
   useEffect(() => {
     function schedule() {
       if (pausedRef.current) return
+      if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
       const cloud = useCloudSaveStore.getState()
       if (!cloud.user || cloud.pendingRemote || cloud.status === 'syncing') return
       if (!cloud.remoteChecked) return
@@ -54,6 +55,10 @@ export function useCloudSaveSync(paused = false) {
 
   useEffect(() => {
     if (wasPaused.current && !paused) {
+      if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') {
+        wasPaused.current = paused
+        return
+      }
       const cloud = useCloudSaveStore.getState()
       if (cloud.user && !cloud.pendingRemote && cloud.status !== 'syncing' && cloud.remoteChecked) {
         markLocalSaveChanged()

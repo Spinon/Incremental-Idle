@@ -26,6 +26,7 @@ interface Props {
   onTileClick(x: number, y: number): void
   onCameraChange(x: number, y: number): void
   onZoom(dir: 1 | -1): void
+  onUserInteraction(): void
 }
 
 // ── Marker colours by difficulty ──────────────────────────────────────────────
@@ -59,7 +60,7 @@ function ghostBg(content: TileContent): string {
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, questMarkers, onDrop, onTileClick, onCameraChange, onZoom,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, questMarkers, onDrop, onTileClick, onCameraChange, onZoom, onUserInteraction,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
@@ -100,6 +101,7 @@ export default function MapViewport({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (draggingId !== null || e.button !== 0) return
     e.preventDefault()
+    onUserInteraction()
     panRef.current = { mx: e.clientX, my: e.clientY, cx: cameraPos.x, cy: cameraPos.y, moved: false }
   }
 
@@ -192,7 +194,10 @@ export default function MapViewport({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={e => onZoom(e.deltaY > 0 ? -1 : 1)}
+      onWheel={e => {
+        onUserInteraction()
+        onZoom(e.deltaY > 0 ? -1 : 1)
+      }}
     >
       {/* Grid background */}
       <div
@@ -239,6 +244,7 @@ export default function MapViewport({
               tileSize={tilePx}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
+                onUserInteraction()
                 onTileClick(gx, gy)
               }}
             />
@@ -253,6 +259,7 @@ export default function MapViewport({
               )}
               onClick={() => {
                 if (suppressNextClick.current) { suppressNextClick.current = false; return }
+                onUserInteraction()
                 onTileClick(gx, gy)
               }}
               onPointerUp={e => {
@@ -260,6 +267,7 @@ export default function MapViewport({
                 e.preventDefault()
                 e.stopPropagation()
                 suppressNextClick.current = true
+                onUserInteraction()
                 onDrop(draggingId, gx, gy)
               }}
               onDragOver={e => {
@@ -272,7 +280,10 @@ export default function MapViewport({
               onDrop={e => {
                 e.preventDefault()
                 const id = e.dataTransfer.getData('tileId') || e.dataTransfer.getData('text/plain') || draggingId
-                if (id) onDrop(id, gx, gy)
+                if (id) {
+                  onUserInteraction()
+                  onDrop(id, gx, gy)
+                }
               }}
             >
               {sight && sight.type !== 'empty' && (

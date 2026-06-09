@@ -137,7 +137,7 @@ function restoreInterruptedOfflineTransaction(): boolean {
   }
 }
 
-export function useGameLoop() {
+export function useGameLoop(paused = false) {
   const setSpeed      = useBattleStore((s) => s.setSpeed)
   const tickResources = useHeroStore((s) => s.tickResources)
   const gainXp        = useHeroStore((s) => s.gainXp)
@@ -149,11 +149,16 @@ export function useGameLoop() {
   const syncSnapshot  = useRef<Record<string, string | null> | null>(null)
   const syncActive    = useRef(false)
   const syncActions   = useRef({ accept: () => {}, discard: () => {} })
+  const pausedRef     = useRef(paused)
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
     status: 'idle',
     elapsedMs: 0,
     processedMs: 0,
   })
+
+  useEffect(() => {
+    pausedRef.current = paused
+  }, [paused])
 
   useEffect(() => {
     function collectWeaponMaterials() {
@@ -185,6 +190,7 @@ export function useGameLoop() {
     }
 
     const runStep = (deltaMs: number, options: RunStepOptions = {}) => {
+      if (pausedRef.current && !options.offline) return
       advanceBlockingSystems(options)
 
       const speed    = useBattleStore.getState().speed
@@ -537,6 +543,11 @@ export function useGameLoop() {
       if (document.hidden) return
 
       const now = performance.now()
+      if (pausedRef.current) {
+        lastTickAt = now
+        lagMs = 0
+        return
+      }
       const elapsedMs = now - lastTickAt
       lastTickAt = now
 
