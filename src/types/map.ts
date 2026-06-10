@@ -1,8 +1,10 @@
 export type Direction = 'N' | 'S' | 'E' | 'W'
 export type Biome = 'forest'
 
+import type { PartyNpc } from './party'
+
 export interface TileContent {
-  type: 'empty' | 'monster' | 'treasure' | 'market' | 'quest' | 'blueTower'
+  type: 'empty' | 'monster' | 'treasure' | 'market' | 'quest' | 'blueTower' | 'npcRescue'
   xpAmount?: number
   monsterLevel?: number
   /** Monster template ID (e.g. 'goblin', 'wolf') */
@@ -14,6 +16,7 @@ export interface TileContent {
   bountyTargetName?: string
   bountyTargetNameEn?: string
   bountyIsNpc?: boolean
+  rescueNpc?: PartyNpc
 }
 
 export interface MapTile {

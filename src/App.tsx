@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import MiniBattlePlayer from './components/MiniBattlePlayer'
 import BattleArena from './components/BattleArena'
 import AuthGate from './components/AuthGate'
@@ -12,6 +12,7 @@ import MapSection from './components/map/MapSection'
 import InventoryPanel from './components/InventoryPanel'
 import SpellbookPanel from './components/SpellbookPanel'
 import QuestPanel from './components/QuestPanel'
+import PartyPanel from './components/PartyPanel'
 import StickyBar from './components/StickyBar'
 import BottomNav from './components/BottomNav'
 import NotifToast from './components/NotifToast'
@@ -26,10 +27,12 @@ import { useSpellStore } from './store/spellStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useNotifStore } from './store/notifStore'
 import { useUIStore } from './store/uiStore'
+import { usePartyStore } from './store/partyStore'
 import { LOCAL_PLAY_KEY } from './store/save'
 import { getBaseSpeed } from './formulas/derived'
 import { getEquipmentBonuses } from './formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from './formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from './lib/partyBonuses'
 import { useT } from './i18n/useT'
 import type { OfflineSyncState } from './hooks/useGameLoop'
 
@@ -178,9 +181,18 @@ function GameRoot() {
   const activeTab    = useUIStore((s) => s.activeTab)
   const setShowMini  = useUIStore((s) => s.setShowMiniPlayer)
   const pushNotif    = useNotifStore((s) => s.push)
+  const ensureStarterNpcs = usePartyStore((s) => s.ensureStarterNpcs)
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
   const startupInitialized = useRef(false)
+  const partyAttributes = useMemo(
+    () => getPartyEffectiveAttributes(attributes, heroLevel),
+    [attributes, heroLevel],
+  )
+
+  useEffect(() => {
+    ensureStarterNpcs(heroLevel)
+  }, [ensureStarterNpcs, heroLevel])
 
   useEffect(() => {
     if (startupInitialized.current || gamePausedForSync) return
@@ -207,7 +219,7 @@ function GameRoot() {
     if (scene !== 'map') {
       const equip = getEquipmentBonuses(equipment)
       const d = getEffectiveDerivedStatsFromBonuses(
-        attributes,
+        partyAttributes,
         equip,
         heroLevel,
         weaponProgress,
@@ -216,7 +228,7 @@ function GameRoot() {
       )
       setSpeed(getBaseSpeed(d))
     }
-  }, [activeBuffs, attributes, equipment, equippedWeapons, gamePausedForSync, heroLevel, scene, setSpeed, weaponProgress])
+  }, [activeBuffs, partyAttributes, equipment, equippedWeapons, gamePausedForSync, heroLevel, scene, setSpeed, weaponProgress])
 
   // Interior scenes live inside the battle tab; expose them through
   // the mini player when the user is currently looking at another tab.
@@ -233,7 +245,7 @@ function GameRoot() {
     if (gamePausedForSync) return
     const equip = getEquipmentBonuses(equipment)
     const d = getEffectiveDerivedStatsFromBonuses(
-      attributes,
+      partyAttributes,
       equip,
       heroLevel,
       weaponProgress,
@@ -248,7 +260,7 @@ function GameRoot() {
       resIgnea: d.resIgnea, resGlacial: d.resGlacial,
       resSombria: d.resSombria, resVital: d.resVital,
     })
-  }, [activeBuffs, attributes, equipment, equippedWeapons, gamePausedForSync, heroLevel, syncFromHero, weaponProgress])
+  }, [activeBuffs, partyAttributes, equipment, equippedWeapons, gamePausedForSync, heroLevel, syncFromHero, weaponProgress])
 
   // Level-up notification
   useEffect(() => {
@@ -317,6 +329,7 @@ function GameRoot() {
         </div>
 
         {activeTab === 'map'         && <MapSection />}
+        {activeTab === 'party'       && <PartyPanel />}
         {activeTab === 'equips'      && <InventoryPanel section="equips" />}
         {activeTab === 'consumables' && <InventoryPanel section="consumables" />}
         {activeTab === 'spells'      && <SpellbookPanel />}

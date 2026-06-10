@@ -13,6 +13,7 @@ import { getSpellManaCost } from '../formulas/spells'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
@@ -174,15 +175,16 @@ export default function MiniBattlePlayer() {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
   const equipBonuses = getEquipmentBonuses(equipment)
+  const partyAttributes = getPartyEffectiveAttributes(attrs, heroLevel)
   const derivedStats = getEffectiveDerivedStatsFromBonuses(
-    attrs,
+    partyAttributes,
     equipBonuses,
     heroLevel,
     weaponProgress,
     equippedWeapons,
     activeBuffs,
   )
-  const knownWordIds = getKnownWordIds(heroLevel, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
+  const knownWordIds = getKnownWordIds(heroLevel, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
 
   // ── Drag ──────────────────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ function tileBg(content: PlacedTile['content'], explored: boolean): string {
   if (content.type === 'treasure') return explored ? '#100f08' : '#14130a'
   if (content.type === 'quest')    return explored ? '#0f0d08' : '#141008'
   if (content.type === 'blueTower') return explored ? '#06192d' : '#07111f'
+  if (content.type === 'npcRescue') return explored ? '#13091f' : '#1b0b2e'
   return explored ? '#0b160b' : '#0d1a0d'
 }
 
@@ -40,6 +41,7 @@ function nodeColor(content: PlacedTile['content']): string {
   if (content.type === 'treasure') return '#5a5035'
   if (content.type === 'quest')    return '#5a4a20'
   if (content.type === 'blueTower') return '#1e4c78'
+  if (content.type === 'npcRescue') return '#6d3aa0'
   return '#4a4035'
 }
 
@@ -58,6 +60,7 @@ function levelBadgeBg(content: PlacedTile['content']): string {
   if (content.type === 'treasure') return 'rgba(26, 24, 8, 0.62)'
   if (content.type === 'quest')    return 'rgba(26, 20, 5, 0.62)'
   if (content.type === 'blueTower') return 'rgba(5, 18, 40, 0.68)'
+  if (content.type === 'npcRescue') return 'rgba(35, 12, 58, 0.7)'
   return 'rgba(10, 26, 10, 0.62)'
 }
 
@@ -79,6 +82,11 @@ function buildTitle(tile: PlacedTile): string {
   if (tile.content.type === 'treasure') return `${base} — Tesouro: Demon Dourado e baú`
   if (tile.content.type === 'market')   return `${base} — Mercado`
   if (tile.content.type === 'blueTower') return `${base} — Torre Azul`
+  if (tile.content.type === 'npcRescue') {
+    const lvl      = tile.content.monsterLevel ?? tile.level + 3
+    const template = FOREST_MONSTER_MAP.get(tile.content.monsterType ?? '') ?? FOREST_MONSTERS[0]
+    return base + ' - Predador ' + template.name + ' Nv.' + lvl + '\nNPC: ' + (tile.content.rescueNpc?.name ?? 'Desconhecido')
+  }
   return base
 }
 
@@ -96,7 +104,7 @@ export default function MapTileCell({
   const showContentIcon =
     visibility === 'clear' &&
     content.type !== 'empty' &&
-    (!tile.explored || content.type === 'market' || content.type === 'quest' || content.type === 'blueTower')
+    (!tile.explored || content.type === 'market' || content.type === 'quest' || content.type === 'blueTower' || content.type === 'npcRescue')
 
   // Icon opacity: explored service tiles are dimmed; active towers keep their glow.
   const iconOpacity = tile.explored && content.type !== 'blueTower' ? 0.45 : 1
@@ -141,6 +149,7 @@ export default function MapTileCell({
           {content.type === 'market'   && <MarketIcon   size={contentIconSize} />}
           {content.type === 'quest'    && <QuestIcon    size={contentIconSize} />}
           {content.type === 'blueTower' && <BlueTowerIcon size={contentIconSize} />}
+          {content.type === 'npcRescue' && <MonsterIcon size={contentIconSize} />}
         </div>
       )}
 
@@ -163,6 +172,8 @@ export default function MapTileCell({
                 ? '#5a5aaa'
                 : content.type === 'blueTower'
                   ? '#60a5fa'
+                : content.type === 'npcRescue'
+                  ? '#c084fc'
                 : levelColor(tile.level, heroLevel),
               fontFamily: 'monospace',
             }}
@@ -201,3 +212,4 @@ export default function MapTileCell({
     </div>
   )
 }
+

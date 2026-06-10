@@ -1,6 +1,7 @@
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { getDerivedStats, staminaDrainAt, getBaseSpeed } from '../formulas/derived'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
@@ -8,11 +9,13 @@ export default function SpeedControls() {
   const { speed, skipAnim, phase, setSpeed, setSkipAnim, skipBattle } = useBattleStore()
   const stamina           = useHeroStore((s) => s.stamina)
   const attrs             = useHeroStore((s) => s.attributes)
+  const heroLevel         = useHeroStore((s) => s.level)
   const skipCharges       = useHeroStore((s) => s.skipCharges)
   const maxSkipCharges    = useHeroStore((s) => s.maxSkipCharges)
   const consumeSkipCharge = useHeroStore((s) => s.consumeSkipCharge)
 
-  const derived       = getDerivedStats(attrs)
+  const partyAttributes = getPartyEffectiveAttributes(attrs, heroLevel)
+  const derived       = getDerivedStats(partyAttributes, undefined, heroLevel)
   const t             = useT()
   const baseSpeed     = getBaseSpeed(derived)
   const SPEEDS        = [baseSpeed, baseSpeed + 1, baseSpeed + 2, baseSpeed + 3]

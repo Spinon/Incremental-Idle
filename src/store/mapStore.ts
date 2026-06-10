@@ -7,11 +7,13 @@ import { FOREST_RANDOM_MONSTERS, monstersForBiome, pickMonsterForBiome } from '.
 import { pickMonsterRarity } from '../formulas/monsters'
 import { generateQuest } from '../formulas/quests'
 import { createTreasureChest } from '../formulas/chests'
+import { generateNpc } from '../formulas/npcs'
 import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
 import type { Biome, Direction, MapTile, PlacedTile, TileContent } from '../types/map'
 import type { MarketOffer, TreasureChest } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
+import type { PartyNpc } from '../types/party'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 import type { QuestObjectiveBounty } from '../types/quest'
 
@@ -108,7 +110,8 @@ interface TileEnemyQueue {
   targetName?: string
   targetNameEn?: string
   isNpc?: boolean
-  variant?: 'golden'
+  variant?: 'golden' | 'predator'
+  rescueNpc?: PartyNpc
 }
 
 interface TileEntryResult {
@@ -116,7 +119,33 @@ interface TileEntryResult {
   questTileLevel: number | null
 }
 
-type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingXp' | 'pendingWeaponMaterials' | 'pendingChests' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingNpcRecruit' | 'pendingXp' | 'pendingWeaponMaterials' | 'pendingChests' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
+
+function pickPredatorRarity(tilesPlaced = 0): MonsterRarity {
+  const unlocked: MonsterRarity[] = ['uncommon']
+  if (tilesPlaced >= 40) unlocked.push('rare')
+  if (tilesPlaced >= 70) unlocked.push('epic')
+  if (tilesPlaced >= 100) unlocked.push('unique')
+  const weights = unlocked.map(r => r === 'uncommon' ? 74 : r === 'rare' ? 20 : r === 'epic' ? 5 : 1)
+  const total = weights.reduce((sum, value) => sum + value, 0)
+  let roll = Math.random() * total
+  for (let i = 0; i < unlocked.length; i++) {
+    roll -= weights[i]
+    if (roll <= 0) return unlocked[i]
+  }
+  return unlocked[0]
+}
+
+function makeRescueContent(tileLevel: number, tilesPlaced: number): TileContent {
+  const monster = pickMonsterForBiome('forest')
+  return {
+    type: 'npcRescue',
+    monsterLevel: tileLevel + 3 + Math.floor(Math.random() * 3),
+    monsterType: monster.id,
+    monsterRarity: pickPredatorRarity(tilesPlaced),
+    rescueNpc: generateNpc(`npc_rescue_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, tileLevel + 3),
+  }
+}
 
 function contentFromBounty(bounty: BountyTileEntry): TileContent {
   return {
@@ -225,6 +254,29 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
         rarity:      'unique',
         tilesPlaced: st.tilesPlaced,
         enraged:     true,
+      },
+      questTileLevel: null,
+    }
+  }
+
+  if (!bounty && tile.content.type === 'npcRescue') {
+    if (tile.explored) return { enemy: null, questTileLevel: null }
+
+    const baseLevel = Math.max(1, tile.level)
+    const enemyLevel = Math.max(baseLevel + 3, tile.content.monsterLevel ?? baseLevel + 3)
+    st.pendingNpcRecruit = tile.content.rescueNpc ?? null
+    if (!tile.explored) tile.explored = true
+
+    return {
+      enemy: {
+        level: enemyLevel,
+        baseLevel,
+        type: tile.content.monsterType ?? pickMonsterForBiome(tile.biome).id,
+        rarity: (tile.content.monsterRarity ?? 'uncommon') as MonsterRarity,
+        tilesPlaced: st.tilesPlaced,
+        enraged: false,
+        variant: 'predator',
+        rescueNpc: tile.content.rescueNpc,
       },
       questTileLevel: null,
     }
@@ -488,6 +540,7 @@ interface MapStore {
   pendingChests: TreasureChest[]
   /** Monster-specific XP kept separate so a hero-level range check can be applied. */
   pendingMonsterXp: { xp: number; monsterLevel: number } | null
+  pendingNpcRecruit: PartyNpc | null
   sightedCells: Record<string, TileContent>
   blueTowerBossPending: Record<string, boolean>
   blueTowerAutoTarget: { x: number; y: number } | null
@@ -547,6 +600,7 @@ interface MapStore {
   drainWeaponMaterials(): WeaponMaterialDrop[]
   drainChests(): TreasureChest[]
   drainMonsterXp(): { xp: number; monsterLevel: number } | null
+  drainNpcRecruit(): PartyNpc | null
   goHome(): void
   leaveScene(): void
   exitMarket(): void
@@ -603,6 +657,7 @@ export const useMapStore = create<MapStore>()(
       pendingWeaponMaterials: [],
       pendingChests: [],
       pendingMonsterXp: null,
+      pendingNpcRecruit: null,
       sightedCells: {},
       blueTowerBossPending: {},
       blueTowerAutoTarget: null,
@@ -840,6 +895,7 @@ export const useMapStore = create<MapStore>()(
           st.scene         = 'home'
           st.destination   = null
           st.defeatPending = true
+          st.pendingNpcRecruit = null
         })
         useQuestStore.getState().failAllQuests()
       },
@@ -938,11 +994,22 @@ export const useMapStore = create<MapStore>()(
             }
           } else if (sighted.type === 'treasure') {
             content = { type: 'treasure' }
+          } else if (sighted.type === 'npcRescue') {
+            content = {
+              type: 'npcRescue',
+              monsterLevel: tileLevel + 3 + Math.floor(Math.random() * 3),
+              monsterType: sighted.monsterType ?? pickMonsterForBiome(tile.biome).id,
+              monsterRarity: sighted.monsterRarity ?? pickPredatorRarity(st.tilesPlaced),
+              rescueNpc: sighted.rescueNpc ?? generateNpc(`npc_rescue_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, tileLevel + 3),
+            }
           } else {
             content = { type: sighted.type } as TileContent   // market, blue tower or empty — level-independent
           }
         } else {
           content = generateContent(tileLevel, st.tilesPlaced, tile.biome)
+        }
+        if (!bounty && !sighted && content.type === 'empty' && Math.random() < 0.01) {
+          content = makeRescueContent(tileLevel, st.tilesPlaced)
         }
         delete st.sightedCells[key]
 
@@ -994,6 +1061,12 @@ export const useMapStore = create<MapStore>()(
         const m = get().pendingMonsterXp
         if (m) set((st) => { st.pendingMonsterXp = null })
         return m
+      },
+
+      drainNpcRecruit: () => {
+        const npc = get().pendingNpcRecruit
+        if (npc) set((st) => { st.pendingNpcRecruit = null })
+        return npc
       },
 
       moveOneStep: (heroLevel?: number) => {
@@ -1058,6 +1131,7 @@ export const useMapStore = create<MapStore>()(
         st.pendingWeaponMaterials = []
         st.pendingChests      = []
         st.pendingMonsterXp   = null
+        st.pendingNpcRecruit  = null
         st.sightedCells       = {}
         st.blueTowerBossPending = {}
         st.blueTowerAutoTarget = null

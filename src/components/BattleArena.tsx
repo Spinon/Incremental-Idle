@@ -10,13 +10,17 @@ import { getSpellManaCost } from '../formulas/spells'
 import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { partySlotColor } from '../lib/partySlots'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 import { useConsumableById } from '../lib/consumables'
 import { useSettingsStore } from '../store/settingsStore'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
+import { usePartyStore } from '../store/partyStore'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
+import PartyNpcSprite from './icons/party/PartyNpcSprite'
 import type { DeathRecord } from '../store/battleStore'
 import type { Consumable, ItemRarity } from '../types/item'
 import type { SpellRarity, AutoCastConfig } from '../types/spell'
@@ -252,15 +256,16 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const activeDebuff    = useSpellStore(s => s.activeDebuff)
   const setAutoSlot     = useSpellStore(s => s.setAutoSlot)
   const mana            = useHeroStore(s => s.mana)
+  const partyAttributes = getPartyEffectiveAttributes(attrs, heroLevel)
   const derivedStats    = getEffectiveDerivedStatsFromBonuses(
-    attrs,
+    partyAttributes,
     getEquipmentBonuses(equipment),
     heroLevel,
     weaponProgress,
     equippedWeapons,
     activeBuffs,
   )
-  const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
+  const knownWordIds    = getKnownWordIds(level, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
   const statusLabels = isEn ? STATUS_LABEL_EN : STATUS_LABEL_PT
   const currentEnemyTemplate = FOREST_MONSTER_MAP.get(store.enemy.monsterType ?? '')
@@ -273,6 +278,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const enemyModifierText = [
     enemyRarityLabel,
     store.enemy.monsterVariant === 'golden' ? (isEn ? 'Golden' : 'Dourado') : null,
+    store.enemy.monsterVariant === 'predator' ? (isEn ? 'Predator' : 'Predador') : null,
     store.enemy.enraged ? (isEn ? 'Enraged' : 'Furioso') : null,
   ].filter(Boolean).join(' · ')
   const heroModifierText = isEn ? 'Adventurer' : 'Aventureiro'
@@ -452,6 +458,14 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const isEnemyAttacking  = store.attacker === 'enemy'  && store.phase === 'attacking'
   const playerHit = store.attacker === 'enemy'  && impact
   const enemyHit  = store.attacker === 'player' && impact
+  const partySlots = usePartyStore(s => s.slots)
+  const knownPartyNpcs = usePartyStore(s => s.knownNpcs)
+  const partyFollowers = partySlots
+    .filter(slot => slot.mode === 'follow' && slot.memberId)
+    .flatMap(slot => {
+      const npc = knownPartyNpcs.find(n => n.id === slot.memberId)
+      return npc ? [{ npc, slotId: slot.id }] : []
+    })
 
   const attackDur = `${ATTACK_MS / store.speed}ms`
   const hitDur    = `${(ATTACK_MS / store.speed) * 0.22}ms`
@@ -492,9 +506,23 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         {/* Ground */}
         <div className="absolute bottom-0 left-0 right-0 h-24 arena-ground" />
         <div className="absolute bottom-20 left-0 right-0 h-px arena-ground-line" />
+        {partyFollowers.length > 0 && (
+          <div className="absolute left-1/2 top-[174px] z-[5] flex -translate-x-1/2 items-end justify-center gap-3 pointer-events-none">
+            {partyFollowers.slice(0, 3).map(({ npc, slotId }, index) => (
+              <PartyNpcSprite
+                key={npc.id}
+                seed={npc.id}
+                accent={partySlotColor(slotId)}
+                size={index === 1 ? 48 : 44}
+                title={isEn ? npc.nameEn : npc.name}
+                className={cn(index === 1 ? 'translate-y-1' : 'translate-y-2 opacity-90')}
+              />
+            ))}
+          </div>
+        )}
 
         {/* VS divider */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-10 pointer-events-none flex flex-col items-center gap-1">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-16 pointer-events-none flex flex-col items-center gap-1">
           <div className="h-10 w-px bg-slate-300/20 dark:bg-slate-600/30" />
           <span className="text-slate-400/25 dark:text-slate-500/40 font-black text-xl tracking-widest">VS</span>
           <div className="h-10 w-px bg-slate-300/20 dark:bg-slate-600/30" />
@@ -720,7 +748,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         {/* Battle over overlay */}
         {store.phase === 'over' && (
           <div className={cn(
-            'absolute inset-0 flex flex-col items-center justify-center backdrop-blur-[2px]',
+            'absolute inset-0 z-30 flex flex-col items-center justify-center backdrop-blur-[2px]',
             store.winner === 'player'
               ? 'bg-amber-50/80 dark:bg-amber-950/60'
               : 'bg-red-50/80 dark:bg-red-950/60',

@@ -52,7 +52,7 @@ export interface Unit {
   resVital:   number
   rarity?: MonsterRarity
   monsterType?: string
-  monsterVariant?: 'golden'
+  monsterVariant?: 'golden' | 'predator'
   /** True for the first-encounter boss version of a monster tile
    *  (spawned at tile.level + random 1–5 above normal). */
   enraged: boolean
@@ -117,7 +117,7 @@ export interface StartBattleOptions {
   questName?: string
   questNameEn?: string
   questNpc?: boolean
-  monsterVariant?: 'golden' | null
+  monsterVariant?: 'golden' | 'predator' | null
 }
 
 interface HeroSync {
@@ -140,7 +140,7 @@ interface BattleStore {
   nextEnemyBaseLevel: number
   nextEnemyType: string
   nextEnemyRarity:  MonsterRarity
-  nextEnemyVariant: 'golden' | null
+  nextEnemyVariant: 'golden' | 'predator' | null
   nextTilesPlaced:  number
   /**
    * True when the current enemy is the "enraged" first-encounter boss
@@ -353,6 +353,17 @@ export const useBattleStore = create<BattleStore>()(
         st.enemy.name = 'Demon Dourado'
         st.enemy.namePt = 'Demon Dourado'
         st.enemy.nameEn = 'Golden Demon'
+      }
+      if (monsterVariant === 'predator') {
+        st.enemy.name = `[Predador] ${st.enemy.name}`
+        st.enemy.namePt = `[Predador] ${st.enemy.namePt ?? st.enemy.name}`
+        st.enemy.nameEn = `[Predator] ${st.enemy.nameEn ?? st.enemy.name}`
+        st.enemy.maxHp = Math.round(st.enemy.maxHp * 1.22)
+        st.enemy.hp = st.enemy.maxHp
+        st.enemy.atk = Math.round(st.enemy.atk * 1.16)
+        st.enemy.def = Math.round(st.enemy.def * 1.12)
+        st.enemy.atkSpeed = Math.round(st.enemy.atkSpeed * 1.08 * 100) / 100
+        st.enemy.accuracy = Math.min(0.55, st.enemy.accuracy + 0.04)
       }
       if (questId) {
         st.enemy.name   = questName   ?? st.enemy.name

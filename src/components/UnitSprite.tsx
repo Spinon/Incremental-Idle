@@ -12,7 +12,7 @@ interface Props {
   monsterType?: string
   monsterRarity?: MonsterRarity
   enraged?: boolean
-  monsterVariant?: 'golden'
+  monsterVariant?: 'golden' | 'predator'
 }
 
 // ─── Player sprite — reads heroConfig from store ──────────────────────────────

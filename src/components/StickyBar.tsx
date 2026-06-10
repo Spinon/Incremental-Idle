@@ -8,6 +8,7 @@ import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, staminaDrainAt, getBaseSpeed } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
 import { applySpellBuffs } from '../formulas/spells'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
@@ -43,9 +44,10 @@ export default function StickyBar() {
   const activeBuffs       = useSpellStore(s => s.activeBuffs)
 
   const activeQuestCount = useQuestStore(s => s.quests.filter(q => q.status === 'active').length)
+  const partyAttributes = getPartyEffectiveAttributes(attrs, level)
 
   const derived    = applySpellBuffs(
-    getDerivedStats(attrs, getEquipmentBonuses(equipment), level),
+    getDerivedStats(partyAttributes, getEquipmentBonuses(equipment), level),
     activeBuffs,
   )
   const t          = useT()

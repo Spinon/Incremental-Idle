@@ -13,6 +13,7 @@ import { tickChestOpening } from '../lib/chestOpening'
 import { getHeroDerived } from '../lib/heroDerived'
 import { grantVictoryRewards } from '../lib/victoryRewards'
 import { getBaseSpeed } from '../formulas/derived'
+import { usePartyStore } from '../store/partyStore'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import type { Phase } from '../store/battleStore'
 
@@ -275,6 +276,8 @@ export function useGameLoop(paused = false) {
           }
           prevTurn.current = -1
           useSpellStore.getState().clearEnemyDebuff()
+          const rescuedNpc = useMapStore.getState().drainNpcRecruit()
+          if (rescuedNpc) usePartyStore.getState().addRecruitOffer(rescuedNpc)
 
           // Chest claim, quest kill hooks, tile/monster XP, weapon XP,
           // item drop and word drop all live in the rewards pipeline.
@@ -305,6 +308,7 @@ export function useGameLoop(paused = false) {
             }
           }
 
+          usePartyStore.getState().simulateExplorersAfterPlayerVictory()
           const activatedBlueTower = useMapStore.getState().activatePendingBlueTower()
           if (!activatedBlueTower) {
             useMapStore.getState().moveOneStep(useHeroStore.getState().level)
