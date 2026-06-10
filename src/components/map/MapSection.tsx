@@ -109,6 +109,7 @@ export default function MapSection() {
   const teleportOrigin = useUIStore(s => s.blueTowerTeleportOrigin)
   const setTeleportSelecting = useUIStore(s => s.setBlueTowerTeleportSelecting)
   const setTeleportOrigin = useUIStore(s => s.setBlueTowerTeleportOrigin)
+  const pauseSceneAuto = useUIStore(s => s.pauseSceneAuto)
   const pendingNormalizeId = useUIStore(s => s.pendingTileNormalizeConsumableId)
   const setPendingNormalizeId = useUIStore(s => s.setPendingTileNormalizeConsumableId)
   const removeConsumable = useInventoryStore(s => s.removeConsumable)
@@ -321,6 +322,27 @@ export default function MapSection() {
     setDestination(selectedPos.x, selectedPos.y)
   }
 
+  function startBlueTowerTeleportSelection() {
+    if (!playerIsOnBlueTower) return
+    pauseSceneAuto()
+    useMapStore.getState().holdBlueTower()
+    const origin = { x: playerPos.x, y: playerPos.y }
+    setTeleportOrigin(origin)
+    setTeleportSelecting(true)
+    setSelectedPos(origin)
+    setCameraPos(origin)
+  }
+
+  function cancelBlueTowerTeleportSelection() {
+    pauseSceneAuto()
+    useMapStore.getState().holdBlueTower()
+    setTeleportSelecting(false)
+    setTeleportOrigin(null)
+    const origin = teleportOrigin ?? { x: playerPos.x, y: playerPos.y }
+    setSelectedPos(origin)
+    setCameraPos(origin)
+  }
+
   function handleEnemySelect(x: number, y: number) {
     if (!grid[gridKey(x, y)]) return
     handleManualMapInput()
@@ -522,13 +544,9 @@ export default function MapSection() {
                 teleportSelecting={teleportSelecting}
                 onTeleport={() => {
                   if (!playerIsOnBlueTower || selectedPos.x !== playerPos.x || selectedPos.y !== playerPos.y) return
-                  setTeleportOrigin(selectedPos)
-                  setTeleportSelecting(true)
+                  startBlueTowerTeleportSelection()
                 }}
-                onCancelTeleport={() => {
-                  setTeleportSelecting(false)
-                  setTeleportOrigin(null)
-                }}
+                onCancelTeleport={cancelBlueTowerTeleportSelection}
               />
             </div>
           )}
@@ -539,10 +557,7 @@ export default function MapSection() {
                 {lang === 'en' ? 'Select another Blue Tower.' : 'Selecione outra torre Azul.'}
               </p>
               <button
-                onClick={() => {
-                  setTeleportSelecting(false)
-                  setTeleportOrigin(null)
-                }}
+                onClick={cancelBlueTowerTeleportSelection}
                 className="ml-auto rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider border border-slate-300/60 dark:border-slate-600 text-slate-500 hover:bg-slate-500/10 transition-colors"
               >
                 {lang === 'en' ? 'Cancel' : 'Cancelar'}

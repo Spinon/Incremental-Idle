@@ -8,6 +8,7 @@ const AUTO_TELEPORT_MS = 6000
 export default function TowerInterior() {
   const exitBlueTower = useMapStore(s => s.exitBlueTower)
   const autoExitBlueTower = useMapStore(s => s.autoExitBlueTower)
+  const holdBlueTower = useMapStore(s => s.holdBlueTower)
   const blueTowerAutoTarget = useMapStore(s => s.blueTowerAutoTarget)
   const playerPos = useMapStore(s => s.playerPos)
   const grid = useMapStore(s => s.grid)
@@ -41,8 +42,9 @@ export default function TowerInterior() {
   }
 
   function startTeleportSelection() {
+    pauseSceneAuto()
+    holdBlueTower()
     setBlueTowerTeleportOrigin({ x: playerPos.x, y: playerPos.y })
-    exitBlueTower()
     setBlueTowerTeleportSelecting(true)
     setActiveTab('map')
   }

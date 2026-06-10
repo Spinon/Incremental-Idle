@@ -606,6 +606,7 @@ interface MapStore {
   exitMarket(): void
   exitBlueTower(): void
   autoExitBlueTower(): void
+  holdBlueTower(): void
   /**
    * Called when the scene transitions market→map.
    * Marks the exit tile as explored, grants first-encounter rewards and starts
@@ -835,6 +836,15 @@ export const useMapStore = create<MapStore>()(
         if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
         if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
       },
+
+      holdBlueTower: () => set((st) => {
+        const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
+        if (tile?.content.type !== 'blueTower' || !tile.explored) return
+        st.scene = 'tower'
+        st.destination = null
+        st.blueTowerAutoTarget = null
+        st.blueTowerEntryFrom = null
+      }),
 
       autoExitBlueTower: () => {
         let movedToX: number | null = null
