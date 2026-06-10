@@ -15,6 +15,42 @@
     linear-gradient(180deg, #050810 0%, #0c1230 35%, #0f1a20 65%, #0a1a08 100%);
 }
 
+.arena-bg--forest {
+  background-color: #07140f;
+  image-rendering: pixelated;
+}
+
+.dark .arena-bg--forest {
+  background-color: #07140f;
+}
+
+.arena-forest-frame {
+  position: absolute;
+  inset: 0;
+  background-position: center bottom;
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: forest-frame-cycle 1.89s steps(1) infinite;
+}
+
+.arena-forest-foreground-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(3, 7, 18, 0.22) 0%, rgba(4, 12, 10, 0.18) 52%, rgba(8, 13, 6, 0.26) 100%),
+    rgba(15, 23, 42, 0.08);
+  backdrop-filter: saturate(0.72) brightness(0.88);
+  pointer-events: none;
+}
+
+@keyframes forest-frame-cycle {
+  0%, 11.1% { opacity: 1; }
+  11.2%, 100% { opacity: 0; }
+}
+
 /* Subtle vignette */
 .arena-bg::after {
   content: '';

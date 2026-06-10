@@ -241,10 +241,10 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
 
     st.blueTowerBossPending[tileKey] = true
     st.pendingGold += Math.round((25 + enemyLevel * 10) * tileMult * (0.8 + Math.random() * 0.4))
-    st.pendingMonsterXp = {
+    st.pendingMonsterXp.push({
       xp:           Math.round((18 + enemyLevel * 5) * tileMult * (0.8 + Math.random() * 0.4)),
       monsterLevel: enemyLevel,
-    }
+    })
 
     return {
       enemy: {
@@ -317,10 +317,10 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
   if (isFirstEncounter) {
     const tileMult = 1 + Math.floor(st.tilesPlaced / 10) * 0.05
     st.pendingGold += Math.round((15 + enemyLevel * 8) * tileMult * (0.8 + Math.random() * 0.4))
-    st.pendingMonsterXp = {
+    st.pendingMonsterXp.push({
       xp:           Math.round((10 + enemyLevel * 4) * tileMult * (0.8 + Math.random() * 0.4)),
       monsterLevel: enemyLevel,
-    }
+    })
   }
 
   if (!tile.explored) {
@@ -538,8 +538,8 @@ interface MapStore {
   pendingGold: number
   pendingWeaponMaterials: WeaponMaterialDrop[]
   pendingChests: TreasureChest[]
-  /** Monster-specific XP kept separate so a hero-level range check can be applied. */
-  pendingMonsterXp: { xp: number; monsterLevel: number } | null
+  /** Monster-specific XP kept separate so a hero-level range check can be applied (per entry). */
+  pendingMonsterXp: { xp: number; monsterLevel: number }[]
   pendingNpcRecruit: PartyNpc | null
   sightedCells: Record<string, TileContent>
   blueTowerBossPending: Record<string, boolean>
@@ -599,7 +599,7 @@ interface MapStore {
   drainGold(): number
   drainWeaponMaterials(): WeaponMaterialDrop[]
   drainChests(): TreasureChest[]
-  drainMonsterXp(): { xp: number; monsterLevel: number } | null
+  drainMonsterXp(): { xp: number; monsterLevel: number }[]
   drainNpcRecruit(): PartyNpc | null
   goHome(): void
   leaveScene(): void
@@ -656,7 +656,7 @@ export const useMapStore = create<MapStore>()(
       pendingGold: 0,
       pendingWeaponMaterials: [],
       pendingChests: [],
-      pendingMonsterXp: null,
+      pendingMonsterXp: [],
       pendingNpcRecruit: null,
       sightedCells: {},
       blueTowerBossPending: {},
@@ -1059,7 +1059,7 @@ export const useMapStore = create<MapStore>()(
 
       drainMonsterXp: () => {
         const m = get().pendingMonsterXp
-        if (m) set((st) => { st.pendingMonsterXp = null })
+        if (m.length > 0) set((st) => { st.pendingMonsterXp = [] })
         return m
       },
 
@@ -1130,7 +1130,7 @@ export const useMapStore = create<MapStore>()(
         st.pendingGold        = 0
         st.pendingWeaponMaterials = []
         st.pendingChests      = []
-        st.pendingMonsterXp   = null
+        st.pendingMonsterXp   = []
         st.pendingNpcRecruit  = null
         st.sightedCells       = {}
         st.blueTowerBossPending = {}
@@ -1193,7 +1193,14 @@ export const useMapStore = create<MapStore>()(
     {
       name: SAVE_KEYS.map,
       version: SAVE_SCHEMA_VERSION,
-      merge: mergeSave,
+      // mergeSave + normalization: pendingMonsterXp was `object | null` in old
+      // saves (and migrate only runs on version bumps), so coerce to array here.
+      merge: (persisted, current) => {
+        const merged = mergeSave(persisted, current) as MapStore
+        const pmx = merged.pendingMonsterXp as unknown
+        merged.pendingMonsterXp = Array.isArray(pmx) ? pmx : pmx ? [pmx as { xp: number; monsterLevel: number }] : []
+        return merged
+      },
       migrate: (raw, version) => {
         const s = migrateSave<Record<string, unknown>>(raw)
         // v0 stored autoExplore as boolean — migrate to the 3-state string

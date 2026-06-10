@@ -18,6 +18,15 @@ import { useConsumableById } from '../lib/consumables'
 import { useSettingsStore } from '../store/settingsStore'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { usePartyStore } from '../store/partyStore'
+import forestFrame000 from '../assets/backgrounds/forest/frame_000.png'
+import forestFrame001 from '../assets/backgrounds/forest/frame_001.png'
+import forestFrame002 from '../assets/backgrounds/forest/frame_002.png'
+import forestFrame003 from '../assets/backgrounds/forest/frame_003.png'
+import forestFrame004 from '../assets/backgrounds/forest/frame_004.png'
+import forestFrame005 from '../assets/backgrounds/forest/frame_005.png'
+import forestFrame006 from '../assets/backgrounds/forest/frame_006.png'
+import forestFrame007 from '../assets/backgrounds/forest/frame_007.png'
+import forestFrame008 from '../assets/backgrounds/forest/frame_008.png'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
 import PartyNpcSprite from './icons/party/PartyNpcSprite'
@@ -115,6 +124,28 @@ const DEATH_RARITY_COLOR = {
 } as const
 
 const SEEN_DEATH_KEY = 'incremental_idle_seen_death_id'
+const FOREST_ARENA_FRAMES = [
+  forestFrame000,
+  forestFrame001,
+  forestFrame002,
+  forestFrame003,
+  forestFrame004,
+  forestFrame005,
+  forestFrame006,
+  forestFrame007,
+  forestFrame008,
+]
+const FOREST_ARENA_FRAME_MS = 210
+const ARENA_PANEL_TOP = 'clamp(0.5rem, 3vw, 2.5rem)'
+const FOREST_GROUND_Y = 278
+const PLAYER_SPRITE_SIZE = 114
+const ENEMY_SPRITE_SIZE = 100
+const ENEMY_GROUND_OFFSET = 8
+const PARTY_SPRITE_SIZE = 68
+const PARTY_GROUND_OFFSET = -10
+const MONSTER_GROUND_OFFSETS: Record<string, number> = {
+  slime: 8,
+}
 
 function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean }) {
   return (
@@ -469,6 +500,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
 
   const attackDur = `${ATTACK_MS / store.speed}ms`
   const hitDur    = `${(ATTACK_MS / store.speed) * 0.22}ms`
+  const enemyGroundOffset = ENEMY_GROUND_OFFSET + (MONSTER_GROUND_OFFSETS[store.enemy.monsterType ?? ''] ?? 0)
 
   // Combo indicator dots
   const showCombo = store.comboSize > 1 && store.phase !== 'over'
@@ -477,7 +509,18 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   return (
     <div className="w-full" ref={arenaRef}>
       {/* ── Arena ─────────────────────────────────────────── */}
-      <div className="relative h-80 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xl select-none arena-bg">
+      <div className="relative h-80 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-xl select-none arena-bg arena-bg--forest">
+        {FOREST_ARENA_FRAMES.map((frame, index) => (
+          <div
+            key={frame}
+            className="arena-forest-frame"
+            style={{
+              backgroundImage: `url(${frame})`,
+              animationDelay: `${index * FOREST_ARENA_FRAME_MS}ms`,
+            }}
+          />
+        ))}
+        <div className="arena-forest-foreground-overlay" />
 
         {/* Mini-player toggle */}
         <button
@@ -493,36 +536,26 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
           ⊞
         </button>
 
-        {/* Stars (dark only) */}
-        {([
-          [8,6],[22,3],[38,9],[55,4],[72,7],[88,2],[15,14],[45,11],[65,15],[80,8],
-          [5,22],[30,18],[50,20],[78,17],[92,24],[20,28],[60,25],[35,5],[95,12],[12,32],
-        ] as [number,number][]).map(([x,y],i) => (
-          <div key={i} className="absolute rounded-full bg-white hidden dark:block"
-            style={{ left:`${x}%`, top:`${y}%`, width: i%3===0?2:1, height: i%3===0?2:1, opacity: 0.4+(i%4)*0.15 }}
-          />
-        ))}
-
-        {/* Ground */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 arena-ground" />
-        <div className="absolute bottom-20 left-0 right-0 h-px arena-ground-line" />
         {partyFollowers.length > 0 && (
-          <div className="absolute left-1/2 top-[174px] z-[5] flex -translate-x-1/2 items-end justify-center gap-3 pointer-events-none">
+          <div
+            className="absolute left-1/2 z-[6] flex -translate-x-1/2 items-end justify-center gap-3 pointer-events-none"
+            style={{ top: `${FOREST_GROUND_Y + PARTY_GROUND_OFFSET - PARTY_SPRITE_SIZE}px` }}
+          >
             {partyFollowers.slice(0, 3).map(({ npc, slotId }, index) => (
               <PartyNpcSprite
                 key={npc.id}
                 seed={npc.id}
                 accent={partySlotColor(slotId)}
-                size={index === 1 ? 48 : 44}
+                size={PARTY_SPRITE_SIZE}
                 title={isEn ? npc.nameEn : npc.name}
-                className={cn(index === 1 ? 'translate-y-1' : 'translate-y-2 opacity-90')}
+                className={cn(index === 1 ? 'opacity-95' : 'opacity-85')}
               />
             ))}
           </div>
         )}
 
         {/* VS divider */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-16 pointer-events-none flex flex-col items-center gap-1">
+        <div className="absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-16 pointer-events-none flex flex-col items-center gap-1">
           <div className="h-10 w-px bg-slate-300/20 dark:bg-slate-600/30" />
           <span className="text-slate-400/25 dark:text-slate-500/40 font-black text-xl tracking-widest">VS</span>
           <div className="h-10 w-px bg-slate-300/20 dark:bg-slate-600/30" />
@@ -530,7 +563,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
 
         {/* Combo dots — shown above the attacker when comboSize > 1 */}
         {showCombo && (
-          <div className={`absolute bottom-[148px] flex gap-1 ${comboAttacker === 'player' ? 'left-10' : 'right-10'}`}>
+          <div className={`absolute bottom-[148px] z-10 flex gap-1 ${comboAttacker === 'player' ? 'left-10' : 'right-10'}`}>
             {Array.from({ length: store.comboSize }).map((_, i) => (
               <div
                 key={i}
@@ -545,7 +578,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         )}
 
         {/* Player */}
-        <div className="absolute left-[clamp(0.5rem,5vw,2.5rem)] top-[clamp(0.5rem,3vw,2.5rem)] flex flex-col items-start gap-1">
+        <div className="absolute left-[clamp(0.5rem,5vw,2.5rem)] top-[clamp(0.5rem,3vw,2.5rem)] z-10 flex flex-col items-start gap-1">
           <div className="flex flex-col gap-0.5 items-start">
             <HpBar
               name={store.player.name}
@@ -605,14 +638,17 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
           <div
             key={`player-${store.turn}`}
             className={cn('absolute left-0 top-[128px] z-10', isPlayerAttacking && 'anim-attack-right')}
-            style={isPlayerAttacking ? { animationDuration: attackDur } : undefined}
+            style={{
+              top: `calc(${FOREST_GROUND_Y}px - ${ARENA_PANEL_TOP} - ${PLAYER_SPRITE_SIZE}px)`,
+              ...(isPlayerAttacking ? { animationDuration: attackDur } : undefined),
+            }}
           >
             <UnitSprite side="player" isHit={playerHit} hitDuration={hitDur} />
           </div>
         </div>
 
         {/* Enemy */}
-        <div className="absolute right-[clamp(0.5rem,5vw,2.5rem)] top-[clamp(0.5rem,3vw,2.5rem)] flex flex-col items-end gap-1">
+        <div className="absolute right-[clamp(0.5rem,5vw,2.5rem)] top-[clamp(0.5rem,3vw,2.5rem)] z-10 flex flex-col items-end gap-1">
           <div className="flex flex-col gap-0.5 items-end">
             <HpBar
               name={enemyDisplayName}
@@ -699,7 +735,10 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
           <div
             key={`enemy-${store.turn}`}
             className={cn('absolute right-0 top-[142px] z-10', isEnemyAttacking && 'anim-attack-left')}
-            style={isEnemyAttacking ? { animationDuration: attackDur } : undefined}
+            style={{
+              top: `calc(${FOREST_GROUND_Y + enemyGroundOffset}px - ${ARENA_PANEL_TOP} - ${ENEMY_SPRITE_SIZE}px)`,
+              ...(isEnemyAttacking ? { animationDuration: attackDur } : undefined),
+            }}
           >
             <UnitSprite
               side="enemy"

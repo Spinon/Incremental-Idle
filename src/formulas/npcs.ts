@@ -112,7 +112,6 @@ export function generateNpc(id: string, playerLevel: number, npcClass?: NpcClass
     color: classDef.color,
     discoveredAt: Date.now(),
     explorerPos: { x: 0, y: 0 },
-    explorerDestination: null,
     explorerWins: 0,
     explorerLosses: 0,
     lastRewardText: null,

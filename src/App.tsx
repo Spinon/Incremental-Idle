@@ -182,12 +182,15 @@ function GameRoot() {
   const setShowMini  = useUIStore((s) => s.setShowMiniPlayer)
   const pushNotif    = useNotifStore((s) => s.push)
   const ensureStarterNpcs = usePartyStore((s) => s.ensureStarterNpcs)
+  // Subscriptions so partyAttributes recomputes when the party changes
+  const partySlots = usePartyStore((s) => s.slots)
+  const partyKnownNpcs = usePartyStore((s) => s.knownNpcs)
   const t            = useT()
   const prevLevel    = useRef(heroLevel)
   const startupInitialized = useRef(false)
   const partyAttributes = useMemo(
     () => getPartyEffectiveAttributes(attributes, heroLevel),
-    [attributes, heroLevel],
+    [attributes, heroLevel, partySlots, partyKnownNpcs],
   )
 
   useEffect(() => {

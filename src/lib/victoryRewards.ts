@@ -84,11 +84,13 @@ export function grantVictoryRewards(derived: DerivedStats): void {
   // Monster boss XP — anti-farm gate: no XP for monsters more than 5 levels
   // BELOW the hero. Beating a stronger monster always rewards XP (an upset
   // win 6+ levels up used to grant nothing, which punished skilled play).
-  const monsterReward = useMapStore.getState().drainMonsterXp()
-  if (monsterReward) {
+  const monsterRewards = useMapStore.getState().drainMonsterXp()
+  if (monsterRewards.length > 0) {
     const heroLevel = useHeroStore.getState().level
-    if (monsterReward.monsterLevel >= heroLevel - 5) {
-      gainXp(monsterReward.xp, derived.xpBonus)
+    for (const reward of monsterRewards) {
+      if (reward.monsterLevel >= heroLevel - 5) {
+        gainXp(reward.xp, derived.xpBonus)
+      }
     }
   }
 

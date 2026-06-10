@@ -18,7 +18,6 @@ export interface PartyNpc {
   color: string
   discoveredAt: number
   explorerPos: { x: number; y: number }
-  explorerDestination: { x: number; y: number } | null
   explorerWins: number
   explorerLosses: number
   lastRewardText: string | null

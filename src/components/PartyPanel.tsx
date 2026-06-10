@@ -3,7 +3,7 @@ import { useHeroStore } from '../store/heroStore'
 import { usePartyStore } from '../store/partyStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { npcClassLabel, npcLevel, npcRaceLabel } from '../formulas/npcs'
-import { getPartyAttributeBonus, hasAttributeBonus } from '../lib/partyBonuses'
+import { usePartyAttributeBonus, hasAttributeBonus } from '../lib/partyBonuses'
 import { partySlotColor } from '../lib/partySlots'
 import { cn } from '../lib/utils'
 import PartyNpcSprite from './icons/party/PartyNpcSprite'
@@ -61,7 +61,7 @@ export default function PartyPanel() {
   const acceptRecruit = usePartyStore(s => s.acceptRecruit)
   const dismissRecruit = usePartyStore(s => s.dismissRecruit)
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null)
-  const partyBonus = getPartyAttributeBonus(heroLevel)
+  const partyBonus = usePartyAttributeBonus(heroLevel)
   const attrLabels = isEn ? ATTR_LABEL_EN : ATTR_LABEL_PT
 
   useEffect(() => {

@@ -6,7 +6,7 @@ import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { Attributes, DerivedStats } from '../types/hero'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -76,12 +76,17 @@ function formatStatValue(key: StatKey, value: number): string {
 
 export default function HeroPanel() {
   const [subPage, setSubPage] = useState<SubAttrPage>('combat')
-  const { freePoints, attributes, level, spendPoint, optimizePoints, applyPreset } = useHeroStore()
+  const freePoints     = useHeroStore(s => s.freePoints)
+  const attributes     = useHeroStore(s => s.attributes)
+  const level          = useHeroStore(s => s.level)
+  const spendPoint     = useHeroStore(s => s.spendPoint)
+  const optimizePoints = useHeroStore(s => s.optimizePoints)
+  const applyPreset    = useHeroStore(s => s.applyPreset)
   const equipment    = useInventoryStore(s => s.equipment)
   const weaponProgress = useInventoryStore(s => s.weaponProgress)
   const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const activeBuffs  = useSpellStore(s => s.activeBuffs)
-  const partyAttributes = getPartyEffectiveAttributes(attributes, level)
+  const partyAttributes = usePartyEffectiveAttributes(attributes, level)
   const equipBonuses = getEquipmentBonuses(equipment)
   const baseDerived  = getDerivedStats(attributes, undefined, level)
   const derived      = getEffectiveDerivedStatsFromBonuses(

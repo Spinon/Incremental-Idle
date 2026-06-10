@@ -1,7 +1,7 @@
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { getDerivedStats, staminaDrainAt, getBaseSpeed } from '../formulas/derived'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
 
@@ -14,7 +14,7 @@ export default function SpeedControls() {
   const maxSkipCharges    = useHeroStore((s) => s.maxSkipCharges)
   const consumeSkipCharge = useHeroStore((s) => s.consumeSkipCharge)
 
-  const partyAttributes = getPartyEffectiveAttributes(attrs, heroLevel)
+  const partyAttributes = usePartyEffectiveAttributes(attrs, heroLevel)
   const derived       = getDerivedStats(partyAttributes, undefined, heroLevel)
   const t             = useT()
   const baseSpeed     = getBaseSpeed(derived)

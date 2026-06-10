@@ -203,7 +203,8 @@ export function useGameLoop(paused = false) {
         // (switchAttacker just ran → attacker is now 'enemy')
         if (attacker === 'enemy') {
           useSpellStore.getState().onBattleTurn()
-          // Elemental DoTs (burn, poison) and regen tick every turn
+          // Elemental DoTs (burn, poison) and regen tick once per full round
+          // (only when the turn passes to the enemy) — same cadence as skipBattle
           useBattleStore.getState().tickStatuses()
         }
       }

@@ -13,7 +13,7 @@ import { getSpellManaCost } from '../formulas/spells'
 import { FOREST_MONSTER_MAP } from '../data/monsters'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import { HeroSprite } from './icons/hero/HeroComposer'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import { cn } from '../lib/utils'
@@ -175,7 +175,7 @@ export default function MiniBattlePlayer() {
   const lang = useSettingsStore(s => s.lang)
   const isEn = lang === 'en'
   const equipBonuses = getEquipmentBonuses(equipment)
-  const partyAttributes = getPartyEffectiveAttributes(attrs, heroLevel)
+  const partyAttributes = usePartyEffectiveAttributes(attrs, heroLevel)
   const derivedStats = getEffectiveDerivedStatsFromBonuses(
     partyAttributes,
     equipBonuses,

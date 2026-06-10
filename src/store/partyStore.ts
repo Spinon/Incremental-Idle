@@ -5,7 +5,7 @@ import { FOREST_MONSTER_MAP, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import { generateNpc, npcLevel } from '../formulas/npcs'
 import { generateItem } from '../formulas/items'
 import { buildMonster } from '../formulas/monsters'
-import { partySlotColor } from '../lib/partySlots'
+import { getHeroDerived } from '../lib/heroDerived'
 import { useHeroStore } from './heroStore'
 import { useInventoryStore } from './inventoryStore'
 import { useMapStore, DIRS, DIR_DELTA, DIR_OPPOSITE, gridKey } from './mapStore'
@@ -13,9 +13,11 @@ import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
 import type { Attributes } from '../types/hero'
 import type { PlacedTile } from '../types/map'
 import type { MonsterRarity } from '../types/monster'
-import type { PartyExplorerMarker, PartyFightLog, PartyMemberMode, PartyNpc, PartyRecruitOffer, PartySlot } from '../types/party'
+import type { PartyFightLog, PartyMemberMode, PartyNpc, PartyRecruitOffer, PartySlot } from '../types/party'
 
 const PARTY_SLOT_COUNT = 3
+// Ids are hash SEEDS only — identity (name/class/race) is intentionally
+// procedural and does NOT follow the words in the id (design decision).
 const STARTER_NPCS = ['npc_mira_guardian', 'npc_kael_ranger', 'npc_iria_arcanist']
 
 interface PartyStore {
@@ -33,7 +35,6 @@ interface PartyStore {
   ensureStarterNpcs(playerLevel: number): void
   getFollowAttributeBonus(playerLevel: number): Attributes
   getActiveFollowers(): PartyNpc[]
-  getExplorerMarkers(): PartyExplorerMarker[]
   simulateExplorersAfterPlayerVictory(): void
 }
 
@@ -69,9 +70,12 @@ function connectedNeighbors(grid: Record<string, PlacedTile>, pos: { x: number; 
   return result
 }
 
+// Explorer NPCs are a farm accelerator: they only walk through tiles the
+// PLAYER already explored (level <= NPC level), re-fighting monsters there.
+// They never consume tiles, never claim treasure and never reveal anything.
 function isNpcExploreTarget(tile: PlacedTile, npcLevelValue: number) {
-  if (tile.explored || tile.level > npcLevelValue) return false
-  return tile.content.type === 'monster' || tile.content.type === 'treasure'
+  if (!tile.explored || tile.level > npcLevelValue) return false
+  return tile.content.type === 'monster'
 }
 
 function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: number }, npcLevelValue: number) {
@@ -85,22 +89,14 @@ function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: nu
 
   while (queue.length > 0) {
     const current = queue.shift()!
-    const tile = grid[gridKey(current.pos.x, current.pos.y)]
-    if (tile && tile.level <= npcLevelValue && current.dist > 0) {
-      if (isNpcExploreTarget(tile, npcLevelValue)) {
-        return current.first ?? current.pos
-      }
-    }
-
     for (const next of connectedNeighbors(grid, current.pos)) {
       const key = gridKey(next.x, next.y)
       if (seen.has(key)) continue
       const nextTile = grid[key]
-      if (!nextTile || nextTile.level > npcLevelValue) continue
-      if (!nextTile.explored && !isNpcExploreTarget(nextTile, npcLevelValue)) continue
+      if (!nextTile || !nextTile.explored || nextTile.level > npcLevelValue) continue
       seen.add(key)
       if (isNpcExploreTarget(nextTile, npcLevelValue)) return current.first ?? next
-      if (nextTile.explored) queue.push({ pos: next, first: current.first ?? next, dist: current.dist + 1 })
+      queue.push({ pos: next, first: current.first ?? next, dist: current.dist + 1 })
     }
   }
 
@@ -207,31 +203,13 @@ export const usePartyStore = create<PartyStore>()(
           .filter((npc): npc is PartyNpc => !!npc)
       },
 
-      getExplorerMarkers: () => {
-        const state = get()
-        return state.slots
-          .flatMap(slot => {
-            if (slot.mode !== 'explore' || !slot.memberId) return []
-            const npc = state.knownNpcs.find(n => n.id === slot.memberId)
-            if (!npc) return []
-            return [{
-              id: npc.id,
-              name: npc.name,
-              nameEn: npc.nameEn,
-              class: npc.class,
-              color: partySlotColor(slot.id),
-              slotId: slot.id,
-              x: npc.explorerPos.x,
-              y: npc.explorerPos.y,
-            }]
-          })
-      },
-
       simulateExplorersAfterPlayerVictory: () => {
         const map = useMapStore.getState()
         const hero = useHeroStore.getState()
-        const inventory = useInventoryStore.getState()
         const tilesPlaced = map.tilesPlaced
+        // Rewards are collected during the Immer update and applied to the
+        // other stores AFTER set() — no cross-store side effects inside set.
+        const rewards: { xp: number; gold: number; weaponXp: number; itemLevel: number | null }[] = []
         set((st) => {
           for (const npc of st.knownNpcs) {
             const slot = activeSlotFor(st.slots, npc.id)
@@ -281,10 +259,12 @@ export const usePartyStore = create<PartyStore>()(
             const xp = Math.max(1, Math.round(10 + result.enemy.level * 4))
             const gold = Math.max(1, Math.round(15 + result.enemy.level * 8))
             const itemFound = Math.random() < 0.12
-            hero.gainXp(xp)
-            hero.earnGold(gold)
-            inventory.grantWeaponXp(Math.max(3, Math.round(result.enemy.maxHp * 0.12 + result.enemy.level * 4)))
-            if (itemFound) inventory.addItem(generateItem(Math.max(1, result.enemy.level)))
+            rewards.push({
+              xp,
+              gold,
+              weaponXp: Math.max(3, Math.round(result.enemy.maxHp * 0.12 + result.enemy.level * 4)),
+              itemLevel: itemFound ? Math.max(1, result.enemy.level) : null,
+            })
             npc.lastRewardText = `+${xp} XP / +${gold}g`
             st.fightLog.unshift({
               id: `party-log-${Date.now()}-${npc.id}-${Math.random().toString(36).slice(2)}`,
@@ -306,6 +286,17 @@ export const usePartyStore = create<PartyStore>()(
             st.fightLog = st.fightLog.slice(0, 40)
           }
         })
+        if (rewards.length > 0) {
+          const inventory = useInventoryStore.getState()
+          // Same effective xpBonus (equip/weapons/buffs) as the victory pipeline
+          const xpBonus = getHeroDerived().xpBonus
+          for (const reward of rewards) {
+            hero.gainXp(reward.xp, xpBonus)
+            hero.earnGold(reward.gold)
+            inventory.grantWeaponXp(reward.weaponXp)
+            if (reward.itemLevel !== null) inventory.addItem(generateItem(reward.itemLevel))
+          }
+        }
       },
     })),
     {

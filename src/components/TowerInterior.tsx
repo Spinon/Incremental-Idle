@@ -7,6 +7,7 @@ const AUTO_TELEPORT_MS = 6000
 
 export default function TowerInterior() {
   const exitBlueTower = useMapStore(s => s.exitBlueTower)
+  const autoExitBlueTower = useMapStore(s => s.autoExitBlueTower)
   const blueTowerAutoTarget = useMapStore(s => s.blueTowerAutoTarget)
   const playerPos = useMapStore(s => s.playerPos)
   const grid = useMapStore(s => s.grid)
@@ -34,7 +35,9 @@ export default function TowerInterior() {
   }
 
   function autoLeaveTower() {
-    exitBlueTower()
+    // Uses the auto variant: hops to the tower closest to the pending
+    // destination when that gets the hero closer, otherwise exits normally.
+    autoExitBlueTower()
   }
 
   function startTeleportSelection() {
@@ -62,7 +65,7 @@ export default function TowerInterior() {
       }
     }, 50)
     return () => clearInterval(id)
-  }, [elapsed, exitBlueTower, paused, setSceneAutoElapsed])
+  }, [paused]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div

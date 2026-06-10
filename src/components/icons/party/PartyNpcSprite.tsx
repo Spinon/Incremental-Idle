@@ -49,7 +49,7 @@ export default function PartyNpcSprite({
         width: size,
         height: size,
         display: 'inline-flex',
-        alignItems: 'center',
+        alignItems: 'flex-end',
         justifyContent: 'center',
         overflow: 'visible',
         position: 'relative',

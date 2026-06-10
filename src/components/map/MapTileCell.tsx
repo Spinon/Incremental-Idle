@@ -1,5 +1,5 @@
 import type { PlacedTile } from '../../types/map'
-import { buildMonster } from '../../formulas/monsters'
+import { estimateMonster } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
 import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon, PlayerMarker } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
@@ -76,7 +76,7 @@ function buildTitle(tile: PlacedTile): string {
   if (tile.content.type === 'monster') {
     const lvl      = tile.content.monsterLevel ?? tile.level
     const template = FOREST_MONSTER_MAP.get(tile.content.monsterType ?? '') ?? FOREST_MONSTERS[0]
-    const g        = buildMonster(template, lvl, 'normal')
+    const g        = estimateMonster(template, lvl, 'normal')
     return `${base} — ${template.name} Nv.${lvl}\nHP ${g.hp}  ATK ${g.atk}  DEF ${g.def}`
   }
   if (tile.content.type === 'treasure') return `${base} — Tesouro: Demon Dourado e baú`

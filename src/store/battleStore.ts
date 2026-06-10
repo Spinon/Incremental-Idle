@@ -182,7 +182,6 @@ interface BattleStore {
   applyElementalStatus(status: ActiveStatus, target: 'enemy' | 'hero'): void
   tickStatuses(): void
   clearStatuses(): void
-  restoreMidFight(playerHpRatio: number, enemyHpRatio: number, enemyStatuses: ActiveStatus[], heroStatuses: ActiveStatus[], attacker: Side, hitsLeft: number, comboSize: number, enemySnapshot?: Unit): void
   applyEnemyDebuff(atkMult: number, atkSpeedMult: number): void
   restoreEnemyStats(savedAtk: number, savedAtkSpeed: number): void
 }
@@ -773,27 +772,6 @@ export const useBattleStore = create<BattleStore>()(
       st.enemyStatuses = []
       st.heroStatuses  = []
       st.enemyBleedPower = 0
-    }),
-
-    restoreMidFight: (playerHpRatio, enemyHpRatio, enemyStatuses, heroStatuses, attacker, hitsLeft, comboSize, enemySnapshot) => set((st) => {
-      if (
-        enemySnapshot
-        && typeof enemySnapshot.name === 'string'
-        && typeof enemySnapshot.level === 'number'
-        && typeof enemySnapshot.maxHp === 'number'
-        && enemySnapshot.maxHp > 0
-      ) {
-        st.enemy = { ...enemySnapshot }
-      }
-      st.player.hp     = Math.max(1, Math.min(st.player.maxHp, Math.round(st.player.maxHp * playerHpRatio)))
-      st.enemy.hp      = Math.max(1, Math.min(st.enemy.maxHp,  Math.round(st.enemy.maxHp  * enemyHpRatio)))
-      st.enemyStatuses = enemyStatuses
-      st.heroStatuses  = heroStatuses
-      st.enemyBleedPower = 0
-      st.attacker      = attacker
-      st.hitsLeft      = hitsLeft
-      st.comboSize     = comboSize
-      st.phase         = 'idle'
     }),
 
 

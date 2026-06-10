@@ -9,7 +9,7 @@ import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
 import { applySpellBuffs, getSpellManaCost } from '../formulas/spells'
 import { cn } from '../lib/utils'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
 import type { DerivedStats } from '../types/hero'
 import { useSettingsStore } from '../store/settingsStore'
@@ -121,7 +121,8 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean, 
 } {
   const e = spell.effect
   const details: string[] = []
-  const duration = cappedDuration(e.duration, maxDuration)
+  // Utility buffs are exempt from the cooldown clamp (see spellStore.castSpell)
+  const duration = e.type === 'utility' ? e.duration : cappedDuration(e.duration, maxDuration)
   const debuffDuration = cappedDuration(e.debuffDuration, maxDuration)
 
   if (e.type === 'damage') {
@@ -523,7 +524,7 @@ export default function SpellbookPanel() {
   const spellAutoSlots = useSpellStore(s => s.autoSlots)
   const setAutoSlot    = useSpellStore(s => s.setAutoSlot)
 
-  const partyAttributes = getPartyEffectiveAttributes(attrs, level)
+  const partyAttributes = usePartyEffectiveAttributes(attrs, level)
   const knownWordIds    = getKnownWordIds(level, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
   const equipBonuses = getEquipmentBonuses(equipment)

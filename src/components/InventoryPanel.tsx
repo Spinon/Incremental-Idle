@@ -21,7 +21,7 @@ import {
   WEAPON_TYPES,
 } from '../formulas/weapons'
 import { cn } from '../lib/utils'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import { useConsumableById } from '../lib/consumables'
 import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, AutoConsumableConfig, Consumable, ConsumableEffect, TreasureChest } from '../types/item'
 import type { EquippedWeapons, WeaponMaterials, WeaponProgress, WeaponType } from '../types/weapon'
@@ -1236,7 +1236,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   })
 
   // ── Handlers ──
-  const partyAttributesForChest = getPartyEffectiveAttributes(attrs, heroLevel)
+  const partyAttributesForChest = usePartyEffectiveAttributes(attrs, heroLevel)
   const derivedForChest = getDerivedStats(partyAttributesForChest, equipBonuses, heroLevel)
   const openSeconds = openingChest
     ? chestOpenSeconds(openingChest, derivedForChest.goldEfficiency, derivedForChest.dropChance)

@@ -20,9 +20,17 @@ interface HeroStore {
   skipCharges: number
   maxSkipCharges: number
   gold: number
+  /**
+   * Floating "+X" labels (StickyBar). Gains landing within GAIN_FLOAT_WINDOW_MS
+   * are SUMMED into the visible float — a victory tick fires several sources
+   * (kill XP, tile XP, party explorers...) and the label must show the total.
+   * New reward sources only need to call gainXp/earnGold; no extra wiring.
+   */
   lastXpGain: number
+  lastXpGainAt: number
   xpGainVersion: number
   lastGoldGain: number
+  lastGoldGainAt: number
   goldGainVersion: number
   heroConfig: HeroConfig
 
@@ -34,8 +42,9 @@ interface HeroStore {
   gainXp(amount: number, xpBonusOverride?: number): void
   earnGold(amount: number): void
   spendGold(amount: number): boolean
-  restoreStamina(amount: number, maxOverride?: number): void
-  restoreMana(amount: number, maxOverride?: number): void
+  /** Cap (max) is required: callers must pass the EFFECTIVE max (with equip/weapons/buffs) — use getHeroDerived(). */
+  restoreStamina(amount: number, max: number): void
+  restoreMana(amount: number, max: number): void
   consumeMana(amount: number): void
   gainSkipCharge(): void
   tickResources(deltaMs: number, speed: Speed, derivedOverride?: DerivedStats): void
@@ -48,6 +57,15 @@ function xpForLevel(level: number): number {
 }
 
 const MAX_SKIP_CHARGES = 3
+
+// Matches the .anim-xp-float duration (2.4s in index.css): while the float is
+// still on screen, further gains are summed into it instead of replacing it.
+const GAIN_FLOAT_WINDOW_MS = 2400
+
+/** Windowed accumulator for the floating "+X" labels (see HeroStore docs). */
+function accumulateGainFloat(prevValue: number, prevAt: number, amount: number, now: number): number {
+  return now - prevAt <= GAIN_FLOAT_WINDOW_MS ? prevValue + amount : amount
+}
 
 const INITIAL_ATTRS: Attributes = {
   forca: 0, agilidade: 0, destreza: 0, vitalidade: 0,
@@ -69,8 +87,10 @@ export const useHeroStore = create<HeroStore>()(
     maxSkipCharges: 3,
     gold: 0,
     lastXpGain: 0,
+    lastXpGainAt: 0,
     xpGainVersion: 0,
     lastGoldGain: 0,
+    lastGoldGainAt: 0,
     goldGainVersion: 0,
     heroConfig: { ...DEFAULT_HERO_CONFIG },
 
@@ -180,8 +200,10 @@ export const useHeroStore = create<HeroStore>()(
     }),
 
     earnGold: (amount) => set((st) => {
+      const now = Date.now()
       st.gold += amount
-      st.lastGoldGain = amount
+      st.lastGoldGain = accumulateGainFloat(st.lastGoldGain, st.lastGoldGainAt, amount, now)
+      st.lastGoldGainAt = now
       st.goldGainVersion += 1
     }),
 
@@ -191,14 +213,12 @@ export const useHeroStore = create<HeroStore>()(
       return ok
     },
 
-    restoreStamina: (amount, maxOverride) => set((st) => {
-      const derived = getDerivedStats(st.attributes, undefined, st.level)
-      st.stamina = Math.min(maxOverride ?? derived.maxStamina, st.stamina + amount)
+    restoreStamina: (amount, max) => set((st) => {
+      st.stamina = Math.min(max, st.stamina + amount)
     }),
 
-    restoreMana: (amount, maxOverride) => set((st) => {
-      const derived = getDerivedStats(st.attributes, undefined, st.level)
-      st.mana = Math.min(maxOverride ?? derived.maxMana, st.mana + amount)
+    restoreMana: (amount, max) => set((st) => {
+      st.mana = Math.min(max, st.mana + amount)
     }),
 
     consumeMana: (amount) => set((st) => {
@@ -216,7 +236,9 @@ export const useHeroStore = create<HeroStore>()(
       set((st) => {
         const derived = getDerivedStats(st.attributes, undefined, st.level)
         const actual = Math.round(amount * (xpBonusOverride ?? derived.xpBonus))
-        st.lastXpGain = actual
+        const now = Date.now()
+        st.lastXpGain = accumulateGainFloat(st.lastXpGain, st.lastXpGainAt, actual, now)
+        st.lastXpGainAt = now
         st.xpGainVersion += 1
         st.xp += actual
         while (st.xp >= st.xpToNext) {

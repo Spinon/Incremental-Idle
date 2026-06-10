@@ -120,6 +120,58 @@ Verificação final: `tsc -b` OK, **`npm run build` OK** (produção), preview r
 - `SpellbookPanel.tsx` (857 ln), `QuestPanel`, `AuthGate`, `HeroPanel`, `HouseInterior`, `TowerInterior`, `NotifToast`, `cloudSaveStore.ts`, `MapTileCell`, `TileDeck`, ícones SVG, `data/words.ts` — componentes de exibição/baixo risco; nenhum bug conhecido apontando para eles.
 - 🔵 Aviso do build: chunk principal 831kB (>500kB) — candidato a code-splitting (`dynamic import()` por aba) numa rodada futura de otimização.
 
+## Etapa 6 — Pente fino dos não cobertos (sessão 7)
+
+Cobriu a lista "Não cobertos em profundidade" + as 4 pendências 🟡 de lógica suspeita.
+
+### Correções aplicadas
+
+1. 🔴 **Auto-teleporte da Torre Azul nunca funcionou** — `mapStore.autoExitBlueTower()` (que pula para a torre mais próxima do destino pendente) era código morto: o timer do [TowerInterior.tsx](src/components/TowerInterior.tsx) exibia "Auto-teleport in Xs" mas chamava `exitBlueTower()` (saída simples). Agora o auto-timer usa `autoExitBlueTower()`; o botão manual "Sair" continua na saída simples. Bônus: o intervalo do timer era recriado a cada 50ms (`elapsed` nas deps) — corrigido como no HouseInterior.
+2. 🟡 **SpellbookPanel exibia duração de utilitários capada pelo cooldown** — o fix da Etapa 5 isentou `utility` do clamp no store, mas o SpellCard ainda mostrava a duração capada (ex.: "15t" para um buff de 40 turnos). Exibição agora espelha o store.
+3. 🟡 **Tooltip do MapTileCell usava `buildMonster` (jitter aleatório)** — mesmo bug família da Etapa 4 (item 5); stats do tooltip "pulavam" a cada render. Trocado por `estimateMonster`.
+4. 🟡 **HeroPanel assinava o heroStore inteiro** (`useHeroStore()` destruturado) — re-renderizava a cada tick de hp/mana/stamina com a aba aberta. Trocado por 6 seletores (mesma família do fix do StickyBar na Etapa 3). Conferido: o texto do bônus passivo (+1.5 ATK/+0.5 DEF/+8 HP por nível) bate com formulas/derived.ts.
+5. 🟡 **`pendingMonsterXp` sobrescrito → agora acumula** — virou array (`push` nos dois writers, drain devolve a lista, victoryRewards aplica o gate de nível por entrada). Saves antigos (objeto|null) são normalizados no `merge` do persist (migrate só roda em bump de versão, então a normalização vive no merge).
+6. 🟡 **`restoreStamina/restoreMana`: cap agora é parâmetro obrigatório** — o default interno recalculava max SEM equipamento/armas/buffs (inconsistente com getHeroDerived). Único caller (consumables) já passava o cap efetivo.
+7. 🔵 **`battleStore.restoreMidFight` removido** — código morto (zero callers) e inconsistente com a persistência (zerava `enemyBleedPower` que o partialize preserva).
+8. 🔵 **Comentário dos DoTs no useGameLoop corrigido** — dizia "tick every turn"; na prática (e por design, igual ao skipBattle) tica 1× por rodada completa, quando o turno passa ao inimigo.
+
+### Auditados sem problemas
+`QuestPanel`, `NotifToast` (timer RAF com pausa por hover correto), `HouseInterior` (timers limpos, recap de derrota ok), `TileDeck`, `AuthGate` (validações e fluxo de recovery corretos), `data/words.ts` (curva de slots confere com a UI), `MapTileCell` (demais aspectos).
+
+### 🔵 Observações menores do cloudSaveStore (não aplicadas — risco/benefício baixo em código de save)
+- Timestamps iguais + diferença significativa de conteúdo cai no caso final "Cloud save is up to date" sem oferecer escolha (janela improvável: exige capturedAt local idêntico ao remoto).
+- `initPromise` nunca é resetado se `getSession` falhar — status 'error' fica preso até recarregar a página.
+- `verifyRecoveryOtp` autentica o usuário sem disparar `pullRemoteSave` (sync só ocorre após reload, se o usuário abandonar o reset de senha).
+
+Verificação sessão 7: `tsc -b` OK. **Preview bloqueado por WIP externo à revisão**: BattleArena.tsx (modificado fora desta sessão) importa `src/assets/backgrounds/forest/frame_000..N.png` que não existem no disco (a pasta só tem `background.png`) — o dev server falha o transform e o app não monta. Verificar no preview quando os frames forem adicionados.
+
+## Etapa 7 — Revisão do sistema de Party (sessão 7)
+
+Cobriu: partyStore, formulas/npcs, lib/partyBonuses, lib/partySlots, types/party, PartyPanel, PartyNpcSprite, integrações (useGameLoop, mapStore npcRescue, App, MapSection/MapViewport).
+
+### Decisões do usuário aplicadas
+
+1. ✅ **Explorador = acelerador de farm** — NPC em modo Explorar agora anda APENAS por tiles já explorados pelo player (nível ≤ nível do NPC) e re-luta monstros neles, sem consumir nada. Antes ele mirava tiles INEXPLORADOS de monstro/tesouro mas nunca os consumia → farmava o mesmo tile para sempre sem nunca "explorar" de fato. `isNpcExploreTarget` + `findNpcStep` reescritos ([partyStore.ts](src/store/partyStore.ts)).
+2. ✅ **Identidade procedural mantida** — `npc_mira_guardian` gera um clérigo elfo "Kael" (classe/raça/nome vêm do hash do id, não das palavras do id). Decisão: é intencional; ids são apenas seeds. Documentado em comentário no `STARTER_NPCS`.
+3. ✅ **Derrota para o predador = perda permanente do NPC** — coerente com a morte em qualquer tile (reseta o mapa inteiro). Sem mudança.
+
+### Correções aplicadas
+
+4. 🟡 **Bônus de party "congelado" nos painéis** — `getPartyEffectiveAttributes` lê o partyStore via `getState()` sem assinar; HeroPanel/SpellbookPanel/StickyBar/SpeedControls/MiniBattlePlayer/InventoryPanel não re-renderizavam ao trocar slots/modos da party (stats derivados ficavam defasados até outro evento re-renderizar). Novos hooks reativos `usePartyAttributeBonus`/`usePartyEffectiveAttributes` em [partyBonuses.ts](src/lib/partyBonuses.ts); call sites migrados. App.tsx manteve o `useMemo` (identidade usada em deps de efeitos) com as assinaturas adicionadas às deps. **Pendente: BattleArena.tsx** ainda usa a variante não-reativa — não tocado por estar em WIP do usuário (assets dos fundos animados).
+5. 🟡 **Efeitos colaterais dentro do `set` Immer** — `simulateExplorersAfterPlayerVictory` chamava `hero.gainXp/earnGold` e `inventory.grantWeaponXp/addItem` DENTRO do updater (contra a convenção do projeto, cf. fix do spellStore). Recompensas agora são coletadas no set e aplicadas depois.
+6. 🟡 **XP dos exploradores sem xpBonus efetivo** — `hero.gainXp(xp)` usava o default interno (sem equipamento); agora passa `getHeroDerived().xpBonus`, igual ao pipeline de vitória.
+7. 🔵 **Código morto removido** — `getExplorerMarkers` (MapSection monta os marcadores por conta própria, assinando o store corretamente) e campo `explorerDestination` (nunca lido).
+
+### Auditados sem problemas
+`PartyPanel` (assina o store corretamente, dedupe de slots ok), `PartyNpcSprite`, `partySlots`, tile `npcRescue` no mapStore (geração 1% em tiles vazios, sightedCells preserva o NPC, pendingNpcRecruit drenado na vitória), feitiços dos NPCs (todos os 12 ids existem em data/spells), fluxo resgate→oferta→aceite.
+
+### ⚖️ Balanceamento (observar em jogo)
+- **Atributos de NPC congelados na descoberta** — `generateNpc` distribui `8 + nível×4` pontos UMA vez; o NPC nunca redistribui ao subir de nível (só `npcLevel` escala via levelOffset). Starters descobertos no nível 1 ficam fracos em `simulateNpcBattle` no late game (chance mínima 20% segura o piso). Se a party "morrer" no late game, regenerar atributos por nível atual é o ajuste.
+- **Follow bonus = 5% dos atributos do NPC × (nívelNPC/nívelPlayer)** — modesto; ok como começo.
+- Vitória de explorador: XP `10+4×lv`, ouro `15+8×lv`, item 12% — comparável ao 1º encontro de tile; com a regra "só tiles explorados" vira renda passiva paralela ao farm manual. Observar.
+
+Verificação: `tsc -b` OK, preview montado sem erros de console, painel de atributos exibindo bônus de party (ATK/DEF base→modificado).
+
 ---
 
 # RESUMO FINAL DA REVISÃO (6 sessões)
