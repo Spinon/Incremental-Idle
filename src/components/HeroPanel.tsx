@@ -6,6 +6,7 @@ import { useSettingsStore } from '../store/settingsStore'
 import { getDerivedStats, getBaseSpeed } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { Attributes, DerivedStats } from '../types/hero'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
@@ -80,10 +81,11 @@ export default function HeroPanel() {
   const weaponProgress = useInventoryStore(s => s.weaponProgress)
   const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
   const activeBuffs  = useSpellStore(s => s.activeBuffs)
+  const partyAttributes = getPartyEffectiveAttributes(attributes, level)
   const equipBonuses = getEquipmentBonuses(equipment)
   const baseDerived  = getDerivedStats(attributes, undefined, level)
   const derived      = getEffectiveDerivedStatsFromBonuses(
-    attributes,
+    partyAttributes,
     equipBonuses,
     level,
     weaponProgress,

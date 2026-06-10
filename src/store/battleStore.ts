@@ -9,6 +9,7 @@ import { useSpellStore } from './spellStore'
 import { getWeaponCombatProfile, WEAPON_EFFECT_LABELS } from '../formulas/weapons'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
 import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
@@ -49,7 +50,7 @@ export interface Unit {
   resVital:   number
   rarity?: MonsterRarity
   monsterType?: string
-  monsterVariant?: 'golden'
+  monsterVariant?: 'golden' | 'predator'
   /** True for the first-encounter boss version of a monster tile
    *  (spawned at tile.level + random 1–5 above normal). */
   enraged: boolean
@@ -123,7 +124,7 @@ interface BattleStore {
   nextEnemyBaseLevel: number
   nextEnemyType: string
   nextEnemyRarity:  MonsterRarity
-  nextEnemyVariant: 'golden' | null
+  nextEnemyVariant: 'golden' | 'predator' | null
   nextTilesPlaced:  number
   /**
    * True when the current enemy is the "enraged" first-encounter boss
@@ -150,7 +151,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  startBattle(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean, monsterVariant?: 'golden' | null): void
+  startBattle(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean, monsterVariant?: 'golden' | 'predator' | null): void
   captureDefeat(playerLevel: number, tilesPlaced: number): void
   applyHit(): void
   switchAttacker(): void
@@ -253,8 +254,9 @@ function syncBattlePlayerFromStores() {
   const hero = useHeroStore.getState()
   const inventory = useInventoryStore.getState()
   const spell = useSpellStore.getState()
+  const partyAttributes = getPartyEffectiveAttributes(hero.attributes, hero.level)
   const derived = getEffectiveDerivedStatsFromBonuses(
-    hero.attributes,
+    partyAttributes,
     getEquipmentBonuses(inventory.equipment),
     hero.level,
     inventory.weaponProgress,
@@ -346,6 +348,17 @@ export const useBattleStore = create<BattleStore>()(
         st.enemy.name = 'Demon Dourado'
         st.enemy.namePt = 'Demon Dourado'
         st.enemy.nameEn = 'Golden Demon'
+      }
+      if (monsterVariant === 'predator') {
+        st.enemy.name = `[Predador] ${st.enemy.name}`
+        st.enemy.namePt = `[Predador] ${st.enemy.namePt ?? st.enemy.name}`
+        st.enemy.nameEn = `[Predator] ${st.enemy.nameEn ?? st.enemy.name}`
+        st.enemy.maxHp = Math.round(st.enemy.maxHp * 1.22)
+        st.enemy.hp = st.enemy.maxHp
+        st.enemy.atk = Math.round(st.enemy.atk * 1.16)
+        st.enemy.def = Math.round(st.enemy.def * 1.12)
+        st.enemy.atkSpeed = Math.round(st.enemy.atkSpeed * 1.08 * 100) / 100
+        st.enemy.accuracy = Math.min(0.55, st.enemy.accuracy + 0.04)
       }
       if (questId) {
         st.enemy.name   = questName   ?? st.enemy.name

@@ -31,7 +31,7 @@ export interface MonsterSpriteProps {
   monsterId: string
   rarity?: MonsterRarity
   enraged?: boolean
-  variant?: 'golden'
+  variant?: 'golden' | 'predator'
   size?: number
 }
 
@@ -128,6 +128,8 @@ export function MonsterSprite({
   ].filter(Boolean).join(' ') || undefined
   const glow = variant === 'golden'
     ? 'drop-shadow(0 0 9px rgba(250, 204, 21, 0.85))'
+    : variant === 'predator'
+    ? 'drop-shadow(0 0 10px rgba(168, 85, 247, 0.9))'
     : enraged
     ? 'drop-shadow(0 0 8px rgba(248, 80, 36, 0.75))'
     : RARITY_GLOW[rarity]
@@ -163,6 +165,12 @@ export function MonsterSprite({
         <span
           className="pointer-events-none absolute inset-0 rounded-full border border-yellow-300/50 bg-yellow-300/15 mix-blend-screen"
           style={{ boxShadow: '0 0 16px rgba(250, 204, 21, 0.45) inset' }}
+        />
+      )}
+      {variant === 'predator' && (
+        <span
+          className="pointer-events-none absolute inset-0 rounded-full border border-purple-300/55 bg-purple-500/12 mix-blend-screen"
+          style={{ boxShadow: '0 0 18px rgba(168, 85, 247, 0.45) inset' }}
         />
       )}
     </span>

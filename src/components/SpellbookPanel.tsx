@@ -9,6 +9,7 @@ import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
 import { applySpellBuffs, getSpellManaCost } from '../formulas/spells'
 import { cn } from '../lib/utils'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
 import type { DerivedStats } from '../types/hero'
 import { useSettingsStore } from '../store/settingsStore'
@@ -522,18 +523,19 @@ export default function SpellbookPanel() {
   const spellAutoSlots = useSpellStore(s => s.autoSlots)
   const setAutoSlot    = useSpellStore(s => s.setAutoSlot)
 
-  const knownWordIds    = getKnownWordIds(level, attrs.inteligencia, attrs.sabedoria, earnedWordIds)
+  const partyAttributes = getPartyEffectiveAttributes(attrs, level)
+  const knownWordIds    = getKnownWordIds(level, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
   const availableSpells = getPlayerSpells(knownWordIds)
   const equipBonuses = getEquipmentBonuses(equipment)
   const weaponStats = getWeaponStatBonuses(weaponProgress, equippedWeapons)
   const weaponProfile = getWeaponCombatProfile(weaponProgress, equippedWeapons)
-  const baseDerived = getDerivedStats(attrs, equipBonuses, level)
+  const baseDerived = getDerivedStats(partyAttributes, equipBonuses, level)
   const spellDerived: DerivedStats = applySpellBuffs({
     ...baseDerived,
     magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
   }, activeBuffs)
 
-  const wordSlotCount = getAutoWordSlots(level, attrs.inteligencia, attrs.sabedoria)
+  const wordSlotCount = getAutoWordSlots(level, partyAttributes.inteligencia, partyAttributes.sabedoria)
   const nextSlotAt  = (Math.floor(level / 5) + 1) * 5  // next level milestone
 
   const [tab, setTab]           = useState<'words' | 'spells'>('words')

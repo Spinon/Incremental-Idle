@@ -5,6 +5,7 @@ import { useInventoryStore } from '../../store/inventoryStore'
 import { useSpellStore } from '../../store/spellStore'
 import { useQuestStore } from '../../store/questStore'
 import { useUIStore } from '../../store/uiStore'
+import { usePartyStore } from '../../store/partyStore'
 import { getDerivedStats } from '../../formulas/derived'
 import { getEquipmentBonuses } from '../../formulas/items'
 import { applySpellBuffs } from '../../formulas/spells'
@@ -15,6 +16,8 @@ import { useSettingsStore } from '../../store/settingsStore'
 import MapViewport from './MapViewport'
 import TileDeck from './TileDeck'
 import { cn } from '../../lib/utils'
+import { getPartyEffectiveAttributes } from '../../lib/partyBonuses'
+import { partySlotColor } from '../../lib/partySlots'
 import type { PlacedTile, TileContent } from '../../types/map'
 import type { MonsterRarity } from '../../types/monster'
 import type { QuestMapMarker, QuestObjectiveExtermination } from '../../types/quest'
@@ -204,8 +207,27 @@ export default function MapSection() {
   const heroLevel = useHeroStore(s => s.level)
   const equipment = useInventoryStore(s => s.equipment)
   const activeBuffs = useSpellStore(s => s.activeBuffs)
+  const partySlots = usePartyStore(s => s.slots)
+  const knownPartyNpcs = usePartyStore(s => s.knownNpcs)
+  const partyMarkers = partySlots
+    .filter(slot => slot.mode === 'explore' && slot.memberId)
+    .flatMap(slot => {
+      const npc = knownPartyNpcs.find(n => n.id === slot.memberId)
+      if (!npc) return []
+      return [{
+        id: npc.id,
+        name: npc.name,
+        nameEn: npc.nameEn,
+        class: npc.class,
+        color: partySlotColor(slot.id),
+        slotId: slot.id,
+        x: npc.explorerPos.x,
+        y: npc.explorerPos.y,
+      }]
+    })
+  const partyAttributes = getPartyEffectiveAttributes(attrs, heroLevel)
   const derived   = applySpellBuffs(
-    getDerivedStats(attrs, getEquipmentBonuses(equipment), heroLevel),
+    getDerivedStats(partyAttributes, getEquipmentBonuses(equipment), heroLevel),
     activeBuffs,
   )
   const t       = useT()
@@ -463,6 +485,7 @@ export default function MapSection() {
             draggedTile={deck.find(tile => tile.id === (draggingId ?? selectedDeckId)) ?? null}
             selectedDeckId={selectedDeckId}
             questMarkers={questMarkers}
+            partyMarkers={partyMarkers}
             onDrop={(tileId, x, y) => {
               placeTile(tileId, x, y)
               setDraggingId(null)
@@ -800,6 +823,7 @@ function ActiveTileInfoPanel({
   const contentLabel =
     !content                   ? (isEn ? 'Unknown' : 'Desconhecido') :
     content.type === 'market'  ? (isEn ? 'Market' : 'Mercado') :
+    content.type === 'npcRescue' ? (isEn ? 'Predator Rescue' : 'Resgate Predator') :
     content.type === 'monster' && content.bountyQuestId ? (isEn ? 'Bounty Target' : 'Alvo de missão') :
     content.type === 'monster' ? (isEn ? 'Monster Lair' : 'Covil') :
     content.type === 'treasure'? (isEn ? 'Treasure' : 'Tesouro') :
@@ -810,6 +834,7 @@ function ActiveTileInfoPanel({
   const headerColor =
     isBlocked                  ? 'text-slate-400' :
     content?.type === 'market' ? 'text-indigo-400' :
+    content?.type === 'npcRescue' ? 'text-purple-400' :
     content?.type === 'monster'? 'text-red-400' :
     content?.type === 'treasure'? 'text-yellow-400' :
     content?.type === 'blueTower'? 'text-sky-400' :
@@ -819,6 +844,7 @@ function ActiveTileInfoPanel({
     ? (() => {
         const baseLevel = content.monsterLevel ?? tile.level
         const bounty = content.type === 'monster' && !!content.bountyQuestId
+        const predator = content.type === 'npcRescue'
         const enraged = !tile.explored && content.type === 'monster' && !bounty
         const lvl = enraged ? previewEnragedLevel(baseLevel, tilesPlaced) : baseLevel
         const rarity = (content.monsterRarity ?? 'normal') as MonsterRarity
@@ -831,6 +857,7 @@ function ActiveTileInfoPanel({
           level: lvl,
           baseLevel,
           enraged,
+          predator,
           bounty,
           bountyName: content.bountyTargetName,
           bountyNameEn: content.bountyTargetNameEn,
@@ -906,6 +933,11 @@ function ActiveTileInfoPanel({
         {enemyInfo?.bounty && (
           <span className="rounded border border-emerald-400/20 px-1.5 py-0.5 font-semibold text-emerald-400">
             {isEn ? 'Bounty target' : 'Alvo de missão'}
+          </span>
+        )}
+        {enemyInfo?.predator && (
+          <span className="rounded border border-purple-400/20 px-1.5 py-0.5 font-semibold text-purple-400">
+            Predator +{Math.max(0, enemyInfo.level - enemyInfo.baseLevel)}
           </span>
         )}
         {enemyInfo && enemyInfo.rarity !== 'normal' && (

@@ -7,6 +7,7 @@ export const SAVE_KEYS = {
   battle:    'incremental-idle-battle',
   spells:    'incremental-idle-spells',
   quests:    'incremental-idle-quests',
+  party:     'incremental-idle-party',
   settings:  'incremental-idle-settings',
   notifs:    'incremental-idle-notifs',
 } as const

@@ -11,6 +11,7 @@ import { useInventoryStore } from './inventoryStore'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile } from '../formulas/weapons'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
@@ -100,8 +101,9 @@ export const useSpellStore = create<SpellStore>()(
 
       const { effect } = spell
       const equip = getEquipmentBonuses(weaponState.equipment)
+      const partyAttributes = getPartyEffectiveAttributes(heroState.attributes, heroState.level)
       const derived = getEffectiveDerivedStatsFromBonuses(
-        heroState.attributes,
+        partyAttributes,
         equip,
         heroState.level,
         weaponState.weaponProgress,

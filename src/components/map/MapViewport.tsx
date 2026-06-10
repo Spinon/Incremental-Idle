@@ -5,6 +5,7 @@ import MapTileCell, { type Visibility } from './MapTileCell'
 import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 import type { QuestMapMarker, QuestDifficulty } from '../../types/quest'
+import type { PartyExplorerMarker } from '../../types/party'
 
 interface Props {
   grid: Record<string, PlacedTile>
@@ -20,6 +21,7 @@ interface Props {
   draggedTile: MapTile | null
   selectedDeckId: string | null
   questMarkers: QuestMapMarker[]
+  partyMarkers: PartyExplorerMarker[]
   onDrop(tileId: string, x: number, y: number): void
   onPlaceSelected(x: number, y: number): void
   onTileClick(x: number, y: number): void
@@ -56,11 +58,12 @@ function ghostBg(content: TileContent): string {
   if (content.type === 'treasure') return 'bg-yellow-950/25'
   if (content.type === 'market')   return 'bg-indigo-950/25'
   if (content.type === 'blueTower') return 'bg-sky-950/25'
+  if (content.type === 'npcRescue') return 'bg-purple-950/30'
   return ''
 }
 
 export default function MapViewport({
-  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, selectedDeckId, questMarkers, onDrop, onPlaceSelected, onTileClick, onCameraChange, onZoom, onZoomChange, onUserInteraction,
+  grid, sightedCells, playerPos, destination, selectedPos, vision, heroLevel, zoom, cameraPos, draggingId, draggedTile, selectedDeckId, questMarkers, partyMarkers, onDrop, onPlaceSelected, onTileClick, onCameraChange, onZoom, onZoomChange, onUserInteraction,
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
@@ -407,6 +410,7 @@ export default function MapViewport({
                   {sight.type === 'market'   && <MarketIcon   size={previewIconSize} />}
                   {sight.type === 'quest'    && <QuestIcon    size={previewIconSize} />}
                   {sight.type === 'blueTower' && <BlueTowerIcon size={previewIconSize} />}
+                  {sight.type === 'npcRescue' && <MonsterIcon size={previewIconSize} />}
                 </div>
               )}
               {vis === 'penumbra' && (
@@ -459,6 +463,27 @@ export default function MapViewport({
             )}>
               {m.x},{m.y}
             </div>
+          </div>
+        )
+      })}
+
+      {/* Party explorer markers */}
+      {partyMarkers.map((m) => {
+        const left = tileLeft(m.x)
+        const top  = tileTop(m.y)
+        if (left < -tilePx || left > vpW || top < -tilePx || top > vpH) return null
+        const size = Math.max(12, Math.min(20, Math.round(tilePx * 0.36)))
+        return (
+          <div
+            key={`party-${m.id}`}
+            className="absolute pointer-events-none z-50"
+            style={{ left: left + tilePx * 0.28, top: top + tilePx * 0.72, transform: 'translate(-50%, -50%)' }}
+            title={m.name}
+          >
+            <div
+              className="rounded-full border-2 border-white/60 shadow-[0_0_0_2px_rgba(15,23,42,0.8),0_8px_16px_rgba(0,0,0,0.35)]"
+              style={{ width: size, height: size, backgroundColor: m.color }}
+            />
           </div>
         )
       })}

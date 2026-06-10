@@ -13,6 +13,8 @@ import { tryAutoUseConsumable } from '../lib/consumables'
 import { getBaseSpeed } from '../formulas/derived'
 import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
+import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { usePartyStore } from '../store/partyStore'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
@@ -213,10 +215,11 @@ export function useGameLoop(paused = false) {
       const speed    = useBattleStore.getState().speed
       const attrs    = useHeroStore.getState().attributes
       const heroLvl  = useHeroStore.getState().level
+      const partyAttrs = getPartyEffectiveAttributes(attrs, heroLvl)
       const inv      = useInventoryStore.getState()
       const equip    = getEquipmentBonuses(inv.equipment)
       const derived  = getEffectiveDerivedStatsFromBonuses(
-        attrs,
+        partyAttrs,
         equip,
         heroLvl,
         inv.weaponProgress,
@@ -311,6 +314,8 @@ export function useGameLoop(paused = false) {
           prevTurn.current = -1
           useSpellStore.getState().clearEnemyDebuff()
           const defeatedEnemy = useBattleStore.getState().enemy
+          const rescuedNpc = useMapStore.getState().drainNpcRecruit()
+          if (rescuedNpc) usePartyStore.getState().addRecruitOffer(rescuedNpc)
 
           // ── Quest progress: kill hooks (read before reset clears questId) ──
           {
@@ -341,10 +346,11 @@ export function useGameLoop(paused = false) {
             // placed (map is geometrically enclosed, not just level-capped).
             const afterPlace = useMapStore.getState()
             const attrs2     = useHeroStore.getState().attributes
+            const partyAttrs2 = getPartyEffectiveAttributes(attrs2, heroLv)
             const inv2       = useInventoryStore.getState()
             const equip2     = getEquipmentBonuses(inv2.equipment)
             const d2         = getEffectiveDerivedStatsFromBonuses(
-              attrs2,
+              partyAttrs2,
               equip2,
               heroLv,
               inv2.weaponProgress,
@@ -379,10 +385,11 @@ export function useGameLoop(paused = false) {
 
           // Item drop
           const heroAttrs = useHeroStore.getState().attributes
+          const partyHeroAttrs = getPartyEffectiveAttributes(heroAttrs, useHeroStore.getState().level)
           const inv3      = useInventoryStore.getState()
           const equip     = getEquipmentBonuses(inv3.equipment)
           const dropDerived = getEffectiveDerivedStatsFromBonuses(
-            heroAttrs,
+            partyHeroAttrs,
             equip,
             useHeroStore.getState().level,
             inv3.weaponProgress,
@@ -451,6 +458,7 @@ export function useGameLoop(paused = false) {
               })
             }
           }
+          usePartyStore.getState().simulateExplorersAfterPlayerVictory()
           const activatedBlueTower = useMapStore.getState().activatePendingBlueTower()
           if (!activatedBlueTower) {
             useMapStore.getState().moveOneStep(useHeroStore.getState().level)
