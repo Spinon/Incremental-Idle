@@ -149,6 +149,16 @@ function statBase(stat: keyof ItemStats, level: number): number {
 
 const FLOAT_STATS = new Set<keyof ItemStats>(['atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus'])
 
+/** Fisher-Yates — the `sort(() => Math.random() - 0.5)` idiom is biased. */
+function shuffled<T>(arr: readonly T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function pickStats(slot: EquipSlot, rarity: ItemRarity): (keyof ItemStats)[] {
   const possible  = SLOT_STATS[slot]
   // set/unique always roll all available stats for the slot
@@ -158,7 +168,7 @@ function pickStats(slot: EquipSlot, rarity: ItemRarity): (keyof ItemStats)[] {
     rarity === 'epic'   ? Math.min(3, possible.length) :
     rarity === 'rare'   ? Math.min(2, possible.length) :
     1
-  return [...possible].sort(() => Math.random() - 0.5).slice(0, count)
+  return shuffled(possible).slice(0, count)
 }
 
 // ─── Generator ────────────────────────────────────────────────────────────────
@@ -221,8 +231,7 @@ export function generateItem(level: number, forMarket = false): Item {
   let attrBonus: Item['attrBonus']
   if (rarity === 'unique') {
     const numAttrs   = Math.random() < 0.6 ? 2 : 1   // 60% chance of 2 attrs
-    const shuffled   = [...ALL_ATTRS].sort(() => Math.random() - 0.5)
-    const picked     = shuffled.slice(0, numAttrs)
+    const picked     = shuffled(ALL_ATTRS).slice(0, numAttrs)
     const perAttr    = Math.random() < 0.5 ? 2 : 1
     attrBonus = {}
     for (const a of picked) attrBonus[a] = perAttr
@@ -376,7 +385,9 @@ export function generateConsumable(level: number): Consumable {
       magnitude = PERCENT_STATS.has(stat)
         ? parseFloat((0.03 * mult * scalar).toFixed(3))
         : Math.round(3 * mult * scalar)
-      durationTurns = 1
+      // Rounds of combat, scaled by rarity — at 1 turn the tonic expired
+      // before it could matter (auto-use fires at battle start)
+      durationTurns = rarity === 'epic' ? 6 : rarity === 'rare' ? 5 : rarity === 'uncommon' ? 4 : 3
       break
     }
     case 'physicalDamage':

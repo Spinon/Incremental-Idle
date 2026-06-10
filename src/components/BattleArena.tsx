@@ -231,9 +231,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
     || cloudStatus === 'loading'
     || (!!cloudUser && !cloudRemoteChecked)
     || paused
-  const gainXp     = useHeroStore((s) => s.gainXp)
   const heroLevel  = useHeroStore((s) => s.level)
-  const xpGranted  = useRef(false)
   const t          = useT()
   const lang       = useSettingsStore(s => s.lang)
   const isEn       = lang === 'en'
@@ -416,21 +414,9 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
 
     let cancelled = false
 
-    if (store.phase === 'over') {
-      if (!xpGranted.current && store.winner === 'player') {
-        xpGranted.current = true
-        if (Math.abs(heroLevel - store.enemy.level) <= 5) {
-          const doom = store.enemyStatuses.some(s => s.type === 'doom')
-          gainXp(Math.round(store.enemy.maxHp * (doom ? 2 : 1)))
-        }
-      }
-      timerA.current = setTimeout(() => {
-        if (!cancelled && useBattleStore.getState().phase === 'over') {
-          xpGranted.current = false
-        }
-      }, 1800 / store.speed)
-      return () => { cancelled = true; clearTimers() }
-    }
+    // Kill XP is granted by grantVictoryRewards in the game loop —
+    // the arena only animates; phase 'over' starts no timers here.
+    if (store.phase === 'over') return
 
     if (store.phase === 'idle') {
       // First hit of a combo → full idle pause; continuation → short gap

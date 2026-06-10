@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useUIStore } from '../store/uiStore'
 import { getEquipmentBonuses, ATTR_LABEL_PT, ATTR_LABEL_EN, getItemDisplayName } from '../formulas/items'
-import { chestOpenSeconds, rollChestLoot } from '../formulas/chests'
+import { chestOpenSeconds } from '../formulas/chests'
 import { getDerivedStats } from '../formulas/derived'
 import {
   canEquipWeapon,
@@ -38,11 +38,8 @@ const CONSUMABLE_EFFECTS: ConsumableEffect[] = [
   'normalizeTile', 'resetAttrs',
 ]
 
-// ─── Sell price (mirrors inventoryStore logic) ────────────────────────────────
-const SELL_MULT_LOCAL: Record<ItemRarity, number> = { common: 1, uncommon: 3, rare: 8, epic: 20, set: 35, unique: 60 }
-function localSellPrice(item: Item): number {
-  return Math.max(1, Math.floor(item.level * SELL_MULT_LOCAL[item.rarity]))
-}
+// Sell price comes from the store — single source of truth
+import { sellPrice as localSellPrice } from '../store/inventoryStore'
 
 function consumableEffectLabel(effect: ConsumableEffect, isEn: boolean): string {
   const labels: Record<ConsumableEffect, [string, string]> = {
@@ -1170,11 +1167,6 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const setConsumableAutoSlot = useInventoryStore(s => s.setConsumableAutoSlot)
   const startOpeningChest  = useInventoryStore(s => s.startOpeningChest)
   const cancelOpeningChest = useInventoryStore(s => s.cancelOpeningChest)
-  const advanceOpeningChest = useInventoryStore(s => s.advanceOpeningChest)
-  const clearOpenedChest   = useInventoryStore(s => s.clearOpenedChest)
-  const addItemToInventory = useInventoryStore(s => s.addItem)
-  const addConsumableToBag = useInventoryStore(s => s.addConsumable)
-  const addWeaponMaterial  = useInventoryStore(s => s.addWeaponMaterial)
   const sellMode           = useInventoryStore(s => s.sellMode)
   const selectedForSale    = useInventoryStore(s => s.selectedForSale)
   const setSellMode        = useInventoryStore(s => s.setSellMode)
@@ -1250,21 +1242,8 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
     ? chestOpenSeconds(openingChest, derivedForChest.goldEfficiency, derivedForChest.dropChance)
     : 0
 
-  useEffect(() => {
-    if (!openingChest) return
-    const id = window.setInterval(() => advanceOpeningChest(250), 250)
-    return () => window.clearInterval(id)
-  }, [advanceOpeningChest, openingChest])
-
-  useEffect(() => {
-    if (!openingChest || openSeconds <= 0 || chestProgressMs < openSeconds * 1000) return
-    const loot = rollChestLoot(openingChest)
-    clearOpenedChest()
-    if (loot.gold > 0) earnGold(loot.gold)
-    for (const item of loot.items) addItemToInventory(item)
-    for (const consumable of loot.consumables) addConsumableToBag(consumable)
-    for (const material of loot.materials) addWeaponMaterial(material.tier, material.count)
-  }, [addConsumableToBag, addItemToInventory, addWeaponMaterial, chestProgressMs, clearOpenedChest, earnGold, openSeconds, openingChest])
+  // Chest opening ticks + loot resolution live in the game loop
+  // (lib/chestOpening.ts) so chests keep opening on any tab.
 
   function handleInventoryClick(item: Item) {
     if (sellMode) {
@@ -1672,7 +1651,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                 : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700',
             )}
           >
-            <span>âš™</span>
+            <span>⚙</span>
             <span>Auto</span>
           </button>
         </div>

@@ -4,12 +4,14 @@ import { immer } from 'zustand/middleware/immer'
 import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import { useInventoryStore } from './inventoryStore'
-import { useHeroStore } from './heroStore'
 import { useSpellStore } from './spellStore'
 import { getWeaponCombatProfile, WEAPON_EFFECT_LABELS } from '../formulas/weapons'
-import { getEquipmentBonuses } from '../formulas/items'
-import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { getHeroDerived } from '../lib/heroDerived'
+import {
+  STATUS_RULES, attackerMissChance, attackerCannotCrit, attackerAtkFromPrecision,
+  defenderCannotDodge, damageTakenMult, damageReductionRemoval, attackSpeedMult,
+  isTurnSkipper,
+} from '../formulas/statusEffects'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
 import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
@@ -104,6 +106,20 @@ export interface LogEntry {
   }
 }
 
+export interface StartBattleOptions {
+  level: number
+  monsterType?: string
+  monsterRarity?: MonsterRarity
+  tilesPlaced?: number
+  enraged?: boolean
+  baseLevel?: number
+  questId?: string
+  questName?: string
+  questNameEn?: string
+  questNpc?: boolean
+  monsterVariant?: 'golden' | 'predator' | null
+}
+
 interface HeroSync {
   atk: number; def: number; maxHp: number; atkSpeed: number; dodgeChance: number
   critChance: number; critDamage: number; accuracy: number; damageReduction: number
@@ -151,7 +167,7 @@ interface BattleStore {
   setSkipAnim(v: boolean): void
   setPhase(p: Phase): void
   syncFromHero(stats: HeroSync): void
-  startBattle(level: number, monsterType?: string, monsterRarity?: MonsterRarity, tilesPlaced?: number, enraged?: boolean, baseLevel?: number, questId?: string, questName?: string, questNameEn?: string, questNpc?: boolean, monsterVariant?: 'golden' | 'predator' | null): void
+  startBattle(opts: StartBattleOptions): void
   captureDefeat(playerLevel: number, tilesPlaced: number): void
   applyHit(): void
   switchAttacker(): void
@@ -251,18 +267,7 @@ function weaponLog(type: WeaponType): LogEntry['weaponEffect'] {
 }
 
 function syncBattlePlayerFromStores() {
-  const hero = useHeroStore.getState()
-  const inventory = useInventoryStore.getState()
-  const spell = useSpellStore.getState()
-  const partyAttributes = getPartyEffectiveAttributes(hero.attributes, hero.level)
-  const derived = getEffectiveDerivedStatsFromBonuses(
-    partyAttributes,
-    getEquipmentBonuses(inventory.equipment),
-    hero.level,
-    inventory.weaponProgress,
-    inventory.equippedWeapons,
-    spell.activeBuffs,
-  )
+  const derived = getHeroDerived()
 
   useBattleStore.getState().syncFromHero({
     atk: derived.atk,
@@ -318,7 +323,7 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    startBattle: (level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc, monsterVariant) => {
+    startBattle: ({ level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc, monsterVariant }) => {
       syncBattlePlayerFromStores()
       set((st) => {
       const resolvedTilesPlaced = tilesPlaced ?? st.nextTilesPlaced
@@ -440,16 +445,16 @@ export const useBattleStore = create<BattleStore>()(
       const atkSt = st.attacker === 'player' ? st.heroStatuses  : st.enemyStatuses
       const defSt = st.attacker === 'player' ? st.enemyStatuses : st.heroStatuses
 
-      // ── Blind: 10 % miss chance for the attacker ──────────────────────────
-      if (atkSt.some(s => s.type === 'blind') && Math.random() < 0.10) {
+      // ── Attacker miss chance from statuses (blind) ─────────────────────────
+      const missChance = attackerMissChance(atkSt)
+      if (missChance > 0 && Math.random() < missChance) {
         st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, missed: true })
         st.hitsLeft -= 1
         return
       }
 
-      // ── Shock: defender cannot dodge ─────────────────────────────────────
-      const shocked = defSt.some(s => s.type === 'shock')
-      if (!shocked && checkDodge(atkUnit, defUnit)) {
+      // ── Dodge, unless a status pins the defender (shock) ──────────────────
+      if (!defenderCannotDodge(defSt) && checkDodge(atkUnit, defUnit)) {
         st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: 0, missed: true })
         st.hitsLeft -= 1
         return
@@ -459,30 +464,28 @@ export const useBattleStore = create<BattleStore>()(
       const effAtk = { ...atkUnit }
       const effDef = { ...defUnit }
 
-      // Blind → attacker cannot crit
-      if (atkSt.some(s => s.type === 'blind')) effAtk.critChance = 0
+      if (attackerCannotCrit(atkSt)) effAtk.critChance = 0
 
       // Distortion → attacker's ATK swapped with its precision (destreza-equivalent):
-      // (critChance + accuracy) × 100 replaces raw ATK:
       //   forca-dominant monsters (high ATK, low dex) become very weak
       //   destreza-dominant monsters (spider) are barely affected
-      if (atkSt.some(s => s.type === 'distortion')) {
+      if (attackerAtkFromPrecision(atkSt)) {
         effAtk.atk = Math.max(1, Math.round((atkUnit.critChance + atkUnit.accuracy) * 100))
       }
 
-      // Curse → defender's damage reduction zeroed
-      if (defSt.some(s => s.type === 'curse')) effDef.damageReduction = 0
+      // Curse → defender loses power×100% of its damage reduction.
+      // Legacy saves carry integer powers ≥ 1 — clamped to full removal.
+      const drRemoval = damageReductionRemoval(defSt)
+      if (drRemoval > 0) effDef.damageReduction *= (1 - drRemoval)
 
       // ── Compute base damage ───────────────────────────────────────────────
       const weaponState = useInventoryStore.getState()
       const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
       const { dmg: rawDmg, isCrit } = calcDmg(effAtk, effDef)
 
-      // Marked  → defender takes 1.5× damage (eternum brands the target)
-      // Blessed → defender takes 0.5× damage (caelum protects the hero)
-      const marked  = defSt.some(s => s.type === 'marked')  ? 1.5 : 1.0
-      const blessed = defSt.some(s => s.type === 'blessed') ? 0.5 : 1.0
-      let dmg = Math.max(1, Math.round(rawDmg * marked * blessed))
+      // Marked ×1.5, blessed ×0.5 — aggregated from the registry
+      const takenMult = damageTakenMult(defSt)
+      let dmg = Math.max(1, Math.round(rawDmg * takenMult))
 
       let blocked = false
       let weaponEffect: LogEntry['weaponEffect'] | undefined
@@ -507,7 +510,7 @@ export const useBattleStore = create<BattleStore>()(
       if (st.attacker === 'player' && newHp > 0) {
         if (weaponProfile.swordExtraHitChance > 0 && Math.random() < weaponProfile.swordExtraHitChance) {
           const { dmg: extraRaw, isCrit: extraCrit } = calcDmg(effAtk, st.enemy)
-          const extraDmg = Math.max(1, Math.round(extraRaw * marked * blessed))
+          const extraDmg = Math.max(1, Math.round(extraRaw * takenMult))
           const hpAfterExtra = Math.max(0, st.enemy.hp - extraDmg)
           st.enemy.hp = hpAfterExtra
           st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg: extraDmg, isCrit: extraCrit, weaponEffect: weaponLog('sword') })
@@ -583,16 +586,15 @@ export const useBattleStore = create<BattleStore>()(
       st.phase = 'idle'
       st.turn += 1
 
-      // Gravity: enemy loses their entire turn (stun)
+      // Turn-skip statuses (gravity): enemy loses their entire turn
       if (candidate === 'enemy') {
-        const gIdx = st.enemyStatuses.findIndex(s => s.type === 'gravity')
+        const gIdx = st.enemyStatuses.findIndex(s => isTurnSkipper(s.type))
         if (gIdx >= 0) {
-          // Consume the gravity turn and skip back to player
+          // Consume one skipped turn and hand the turn back to the player
           st.enemyStatuses[gIdx].turnsLeft -= 1
           if (st.enemyStatuses[gIdx].turnsLeft <= 0) {
             st.enemyStatuses.splice(gIdx, 1)
           }
-          // Enemy turn skipped — player attacks again
           st.attacker = 'player'
         } else {
           st.attacker = 'enemy'
@@ -603,11 +605,10 @@ export const useBattleStore = create<BattleStore>()(
 
       const next = st.attacker === 'player' ? st.player : st.enemy
       const opp  = st.attacker === 'player' ? st.enemy  : st.player
-      // Freeze: attacker's atkSpeed reduced to 35 % while frozen
-      // Makes fast enemies lose their combo advantage (e.g. goblin 2→1 hits/turn)
+      // Freeze: attacker's atkSpeed reduced while frozen — fast enemies lose
+      // their combo advantage (e.g. goblin 2→1 hits/turn)
       const nextSt = st.attacker === 'player' ? st.heroStatuses : st.enemyStatuses
-      const frozen = nextSt.some(s => s.type === 'freeze')
-      const effSpeed = frozen ? Math.max(0.1, next.atkSpeed * 0.35) : next.atkSpeed
+      const effSpeed = Math.max(0.1, next.atkSpeed * attackSpeedMult(nextSt))
       st.hitsLeft  = calcHits(effSpeed, opp.atkSpeed)
       st.comboSize = st.hitsLeft
     }),
@@ -694,7 +695,8 @@ export const useBattleStore = create<BattleStore>()(
 
       // ── DoTs on enemy ─────────────────────────────────────────────────────
       for (const s of st.enemyStatuses) {
-        if (s.type === 'burn' || s.type === 'poison') {
+        const rules = STATUS_RULES[s.type]
+        if (rules?.dot) {
           const dmg   = Math.max(1, Math.round(s.power))
           const newHp = Math.max(0, st.enemy.hp - dmg)
           st.enemy.hp = newHp
@@ -711,14 +713,14 @@ export const useBattleStore = create<BattleStore>()(
             },
           })
           if (newHp === 0) { st.winner = 'player'; st.phase = 'over' }
-          // Poison grows each tick
-          if (s.type === 'poison') s.power = Math.round(s.power * 1.3)
+          if (rules.dot.growthPerTick) s.power = Math.round(s.power * rules.dot.growthPerTick)
         }
       }
 
       // ── DoTs + Regen on hero ───────────────────────────────────────────────
       for (const s of st.heroStatuses) {
-        if (s.type === 'burn' || s.type === 'poison') {
+        const rules = STATUS_RULES[s.type]
+        if (rules?.dot) {
           const dmg   = Math.max(1, Math.round(s.power))
           const newHp = Math.max(0, st.player.hp - dmg)
           st.player.hp = newHp
@@ -735,19 +737,19 @@ export const useBattleStore = create<BattleStore>()(
             },
           })
           if (newHp === 0) { st.winner = 'enemy'; st.phase = 'over' }
-          if (s.type === 'poison') s.power = Math.round(s.power * 1.3)
+          if (rules.dot.growthPerTick) s.power = Math.round(s.power * rules.dot.growthPerTick)
         }
-        if (s.type === 'regen') {
-          const healed = Math.max(1, s.power)
+        if (rules?.hot) {
+          const healed = Math.max(1, Math.round(s.power))
           st.player.hp = Math.min(st.player.maxHp, st.player.hp + healed)
           st.log.unshift({
-            attacker: STATUS_ICONS.regen + ' ' + STATUS_LABEL_PT.regen,
+            attacker: STATUS_ICONS[s.type] + ' ' + STATUS_LABEL_PT[s.type],
             defender: st.player.name,
             dmg: 0,
             spell: {
-              name: STATUS_LABEL_PT.regen,
-              nameEn: STATUS_LABEL_EN.regen,
-              icon: STATUS_ICONS.regen,
+              name: STATUS_LABEL_PT[s.type],
+              nameEn: STATUS_LABEL_EN[s.type],
+              icon: STATUS_ICONS[s.type],
               effectType: 'heal',
               value: healed,
             },
@@ -756,11 +758,13 @@ export const useBattleStore = create<BattleStore>()(
       }
 
       // ── Decrement all statuses, remove expired ─────────────────────────────
+      // Turn-skippers (gravity) are consumed in switchAttacker — decrementing
+      // them here too would halve their advertised duration.
       st.enemyStatuses = st.enemyStatuses
-        .map(s => ({ ...s, turnsLeft: s.turnsLeft - 1 }))
+        .map(s => isTurnSkipper(s.type) ? s : { ...s, turnsLeft: s.turnsLeft - 1 })
         .filter(s => s.turnsLeft > 0)
       st.heroStatuses = st.heroStatuses
-        .map(s => ({ ...s, turnsLeft: s.turnsLeft - 1 }))
+        .map(s => isTurnSkipper(s.type) ? s : { ...s, turnsLeft: s.turnsLeft - 1 })
         .filter(s => s.turnsLeft > 0)
 
     }),
@@ -910,6 +914,7 @@ export const useBattleStore = create<BattleStore>()(
       enemyStatuses:        state.enemyStatuses,
       heroStatuses:         state.heroStatuses,
       enemyBleedPower:      state.enemyBleedPower,
+      heroShield:           state.heroShield,
     }),
   }
   )

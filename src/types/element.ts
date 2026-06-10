@@ -8,7 +8,7 @@ export type StatusType =
   | 'burn'      // ignis:   damage/turn, replaces if stronger
   | 'freeze'    // glacies: enemy loses 1 combo hit while active
   | 'shock'     // fulgur:  enemy dodgeChance = 0
-  | 'curse'     // umbra:   enemy damageReduction = 0
+  | 'curse'     // umbra:   removes power×100% of enemy damageReduction
   | 'blind'     // lux:     enemy critChance = 0
   | 'poison'    // toxicum: growing damage/turn (×1.3 per tick)
   | 'doom'      // mortis:  on kill → double XP reward
@@ -96,13 +96,21 @@ interface StatusConfig {
   powerScale: number  // multiplied by magicDamage of caster
   basePower:  number  // base power (floor)
   turns:      number  // duration in battle turns
+  /**
+   * When set, power is a FRACTION 0–1 (e.g. curse: fraction of damage
+   * reduction removed) instead of a flat magnitude:
+   *   power = min(cap, base + level × perLevel)
+   */
+  fraction?:  { base: number; perLevel: number; cap: number }
 }
 
 export const ELEMENT_DEFAULT_STATUS: Record<ElementType, StatusConfig> = {
   ignis:   { chance: 0.30, powerScale: 0.35, basePower: 2, turns: 3 },
   glacies: { chance: 0.40, powerScale: 0,    basePower: 1, turns: 2 },
   fulgur:  { chance: 0.35, powerScale: 0,    basePower: 1, turns: 2 },
-  umbra:   { chance: 0.40, powerScale: 0,    basePower: 1, turns: 3 },
+  umbra:   { chance: 0.40, powerScale: 0,    basePower: 1, turns: 3,
+             // Curse removes 50% of DR at low level, scaling to 85% — no longer binary
+             fraction: { base: 0.5, perLevel: 0.01, cap: 0.85 } },
   lux:     { chance: 0.35, powerScale: 0,    basePower: 1, turns: 2 },
   toxicum: { chance: 0.45, powerScale: 0.40, basePower: 2, turns: 4 },
   mortis:  { chance: 0.35, powerScale: 0,    basePower: 1, turns: 3 },
@@ -124,7 +132,9 @@ export function makeStatus(
   level = 1,
 ): ActiveStatus {
   const cfg = ELEMENT_DEFAULT_STATUS[element]
-  const power = Math.max(1, Math.round(cfg.basePower + level * 0.25 + magicDamage * cfg.powerScale))
+  const power = cfg.fraction
+    ? Math.min(cfg.fraction.cap, cfg.fraction.base + level * cfg.fraction.perLevel)
+    : Math.max(1, Math.round(cfg.basePower + level * 0.25 + magicDamage * cfg.powerScale))
   return { element, type: ELEMENT_STATUS[element], power, turnsLeft: cfg.turns }
 }
 
@@ -187,7 +197,7 @@ export const STATUS_LABEL_PT: Record<StatusType, string> = {
   burn:       'Queimando',        // ignis:   dano/turno
   freeze:     'Congelado',        // glacies: velocidade de ataque −65%
   shock:      'Eletrocutado',     // fulgur:  dodge = 0
-  curse:      'Amaldiçoado',      // umbra:   redução de dano = 0
+  curse:      'Amaldiçoado',      // umbra:   perde power×100% da redução de dano
   blind:      'Ofuscado',         // lux:     crit = 0, 10 % miss
   poison:     'Envenenado',       // toxicum: dano crescente/turno
   doom:       'Sentenciado',      // mortis:  ×2 XP ao morrer

@@ -9,7 +9,7 @@ import { usePartyStore } from '../../store/partyStore'
 import { getDerivedStats } from '../../formulas/derived'
 import { getEquipmentBonuses } from '../../formulas/items'
 import { applySpellBuffs } from '../../formulas/spells'
-import { buildMonster, estimateMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
+import { estimateMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS, FOREST_RANDOM_MONSTERS, monsterName, monstersForBiome } from '../../data/monsters'
 import { useT } from '../../i18n/useT'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -655,7 +655,9 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
       const mType     = tile.content.monsterType ?? fallback.id
       const mRarity  = (tile.content.monsterRarity ?? 'normal') as MonsterRarity
       const template = FOREST_MONSTER_MAP.get(mType) ?? FOREST_MONSTERS[0]
-      const monster  = buildMonster(template, lvl, mRarity, tilesPlaced)
+      // estimateMonster: jitter-free preview — buildMonster rolls random
+      // attribute jitter, making displayed stats shift on every recompute
+      const monster  = estimateMonster(template, lvl, mRarity, tilesPlaced)
       result.push({
         x: tile.x, y: tile.y, baseLevel, level: lvl,
         monsterType: mType, monsterRarity: mRarity,
@@ -996,7 +998,7 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
   const { content, level, explored, x, y } = tile
 
   const emptyTemplate = content.type === 'empty' ? stableMonsterForTile(tile) : null
-  const emptyStats = emptyTemplate ? buildMonster(emptyTemplate, level, 'normal', tilesPlaced) : null
+  const emptyStats = emptyTemplate ? estimateMonster(emptyTemplate, level, 'normal', tilesPlaced) : null
 
   const headerLabel =
     content.type === 'market'   ? (isEn ? 'Market' : 'Mercado') :
@@ -1029,7 +1031,7 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
       {content.type === 'monster' && (() => {
         const lvl      = content.monsterLevel ?? level
         const template = FOREST_MONSTER_MAP.get(content.monsterType ?? '') ?? FOREST_MONSTERS[0]
-        const g        = buildMonster(template, lvl, (content.monsterRarity ?? 'normal') as MonsterRarity, tilesPlaced)
+        const g        = estimateMonster(template, lvl, (content.monsterRarity ?? 'normal') as MonsterRarity, tilesPlaced)
         return (
           <div className="flex gap-4 text-[11px] text-slate-400">
             <span>{template.emoji} {monsterName(template, isEn)} <span className="text-red-400 font-semibold">Nv.{lvl}</span></span>

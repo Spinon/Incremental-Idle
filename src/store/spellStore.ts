@@ -8,10 +8,8 @@ import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
 import { useMapStore } from './mapStore'
 import { useInventoryStore } from './inventoryStore'
-import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile } from '../formulas/weapons'
-import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
+import { getHeroDerived } from '../lib/heroDerived'
 import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
@@ -100,16 +98,7 @@ export const useSpellStore = create<SpellStore>()(
       heroState.consumeMana(manaCost)
 
       const { effect } = spell
-      const equip = getEquipmentBonuses(weaponState.equipment)
-      const partyAttributes = getPartyEffectiveAttributes(heroState.attributes, heroState.level)
-      const derived = getEffectiveDerivedStatsFromBonuses(
-        partyAttributes,
-        equip,
-        heroState.level,
-        weaponState.weaponProgress,
-        weaponState.equippedWeapons,
-        get().activeBuffs,
-      )
+      const derived = getHeroDerived()
 
       // ── Compute values that require derived stats ─────────────────────
       let dmg  = 0
@@ -172,13 +161,17 @@ export const useSpellStore = create<SpellStore>()(
       }
 
       // ── Debuff: save current enemy stats, apply multipliers ───────────
-      const savedAtk      = battleStore.enemy.atk
-      const savedAtkSpeed = battleStore.enemy.atkSpeed
-
+      // Restore any previous debuff BEFORE capturing savedAtk — otherwise a
+      // chained debuff records the already-debuffed value as "original" and
+      // the enemy never recovers its true stats.
       if (shouldDebuff) {
-        // Restore any previous debuff first
         const prev = get().activeDebuff
         if (prev) useBattleStore.getState().restoreEnemyStats(prev.savedAtk, prev.savedAtkSpeed)
+      }
+      const savedAtk      = useBattleStore.getState().enemy.atk
+      const savedAtkSpeed = useBattleStore.getState().enemy.atkSpeed
+
+      if (shouldDebuff) {
         useBattleStore.getState().applyEnemyDebuff(
           effect.enemyAtkMult      ?? 1,
           effect.enemyAtkSpeedMult ?? 1,
@@ -193,7 +186,12 @@ export const useSpellStore = create<SpellStore>()(
 
         // Buff / utility side-effects
         if (effect.statAdds && effect.duration) {
-          const effectiveDuration = Math.min(effect.duration, effectiveCooldown)
+          // Combat buffs are clamped to the cooldown (no 100% uptime), but
+          // utility/exploration buffs are designed to outlast it — their data
+          // durations (40-100 turns) and descriptions assume no clamp.
+          const effectiveDuration = effect.type === 'utility'
+            ? effect.duration
+            : Math.min(effect.duration, effectiveCooldown)
           st.activeBuffs = st.activeBuffs.filter(b => b.spellId !== spellId)
           st.activeBuffs.push({
             spellId,

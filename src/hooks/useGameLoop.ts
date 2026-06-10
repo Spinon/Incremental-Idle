@@ -4,44 +4,18 @@ import { useHeroStore } from '../store/heroStore'
 import { useMapStore } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
-import { useSpellStore, getKnownWordIds } from '../store/spellStore'
-import { useQuestStore } from '../store/questStore'
+import { useSpellStore } from '../store/spellStore'
 import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 import { tryAutoUseConsumable } from '../lib/consumables'
+import { tickChestOpening } from '../lib/chestOpening'
+import { getHeroDerived } from '../lib/heroDerived'
+import { grantVictoryRewards } from '../lib/victoryRewards'
 import { getBaseSpeed } from '../formulas/derived'
-import { generateItem, getEquipmentBonuses, getItemDisplayName } from '../formulas/items'
-import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
-import { getPartyEffectiveAttributes } from '../lib/partyBonuses'
 import { usePartyStore } from '../store/partyStore'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
-import { DROP_WORDS } from '../data/words'
 import type { Phase } from '../store/battleStore'
-import type { MonsterRarity } from '../types/monster'
-
-// Chance a monster of each rarity drops a word on defeat
-const WORD_DROP_CHANCE: Partial<Record<MonsterRarity, number>> = {
-  rare:   0.02,
-  epic:   0.04,
-  unique: 0.10,
-}
-
-// Which word rarities each monster rarity can drop (cumulative)
-const WORD_DROP_POOL: Partial<Record<MonsterRarity, ReadonlyArray<'rare' | 'epic' | 'unique'>>> = {
-  rare:   ['rare'],
-  epic:   ['rare', 'epic'],
-  unique: ['rare', 'epic', 'unique'],
-}
-
-const RARITY_LABEL_PT: Record<string, string> = {
-  common: 'Comum', uncommon: 'Incomum', rare: 'Raro',
-  epic: 'Épico', set: 'Conjunto', unique: 'Único',
-}
-const RARITY_LABEL_EN: Record<string, string> = {
-  common: 'Common', uncommon: 'Uncommon', rare: 'Rare',
-  epic: 'Epic', set: 'Set', unique: 'Unique',
-}
 
 const STEP_MS = 200
 const SYNC_PROMPT_MS = 30 * 1000
@@ -213,22 +187,11 @@ export function useGameLoop(paused = false) {
       advanceBlockingSystems(options)
 
       const speed    = useBattleStore.getState().speed
-      const attrs    = useHeroStore.getState().attributes
-      const heroLvl  = useHeroStore.getState().level
-      const partyAttrs = getPartyEffectiveAttributes(attrs, heroLvl)
-      const inv      = useInventoryStore.getState()
-      const equip    = getEquipmentBonuses(inv.equipment)
-      const derived  = getEffectiveDerivedStatsFromBonuses(
-        partyAttrs,
-        equip,
-        heroLvl,
-        inv.weaponProgress,
-        inv.equippedWeapons,
-        useSpellStore.getState().activeBuffs,
-      )
+      const derived  = getHeroDerived()
 
       tickResources(deltaMs, speed, derived)
       useSpellStore.getState().tick(deltaMs / 1000)
+      tickChestOpening(deltaMs, derived)
       if (!options.offline) tryAutoUseConsumable()
 
       const turn     = useBattleStore.getState().turn
@@ -313,23 +276,12 @@ export function useGameLoop(paused = false) {
           }
           prevTurn.current = -1
           useSpellStore.getState().clearEnemyDebuff()
-          const defeatedEnemy = useBattleStore.getState().enemy
           const rescuedNpc = useMapStore.getState().drainNpcRecruit()
           if (rescuedNpc) usePartyStore.getState().addRecruitOffer(rescuedNpc)
 
-          // ── Quest progress: kill hooks (read before reset clears questId) ──
-          {
-            const bs          = useBattleStore.getState()
-            const playerPos   = useMapStore.getState().playerPos
-            const monsterType = defeatedEnemy.monsterType ?? bs.enemy.monsterType ?? ''
-            const questId     = bs.activeEnemyQuestId
-            if (questId) {
-              useQuestStore.getState().onBountyDefeated(questId)
-            } else {
-              useQuestStore.getState().onBountyDefeatedAt(playerPos.x, playerPos.y)
-            }
-            useQuestStore.getState().onMonsterKill(monsterType, playerPos.x, playerPos.y)
-          }
+          // Chest claim, quest kill hooks, tile/monster XP, weapon XP,
+          // item drop and word drop all live in the rewards pipeline.
+          grantVictoryRewards(derived)
 
           // ── Auto-place tiles (Full Auto mode only) ──────────────────────
           if (useMapStore.getState().autoExplore === 'full') {
@@ -345,18 +297,7 @@ export function useGameLoop(paused = false) {
             // Truly stuck: deck is full AND no tile of ANY level can be
             // placed (map is geometrically enclosed, not just level-capped).
             const afterPlace = useMapStore.getState()
-            const attrs2     = useHeroStore.getState().attributes
-            const partyAttrs2 = getPartyEffectiveAttributes(attrs2, heroLv)
-            const inv2       = useInventoryStore.getState()
-            const equip2     = getEquipmentBonuses(inv2.equipment)
-            const d2         = getEffectiveDerivedStatsFromBonuses(
-              partyAttrs2,
-              equip2,
-              heroLv,
-              inv2.weaponProgress,
-              inv2.equippedWeapons,
-              useSpellStore.getState().activeBuffs,
-            )
+            const d2         = getHeroDerived()
             const maxDk      = Math.min(8, 3 + Math.floor(d2.vision / 50))
             if (
               afterPlace.scene === 'map' &&
@@ -367,97 +308,6 @@ export function useGameLoop(paused = false) {
             }
           }
 
-          const tileXp = useMapStore.getState().drainXp()
-          if (tileXp > 0) gainXp(tileXp, derived.xpBonus)
-
-          // Monster boss XP — only granted if enemy is within ±5 hero levels
-          const monsterReward = useMapStore.getState().drainMonsterXp()
-          if (monsterReward) {
-            const heroLevel = useHeroStore.getState().level
-            if (Math.abs(heroLevel - monsterReward.monsterLevel) <= 5) {
-              gainXp(monsterReward.xp, derived.xpBonus)
-            }
-          }
-
-          useInventoryStore.getState().grantWeaponXp(
-            Math.max(5, Math.round(defeatedEnemy.maxHp * 0.25 + defeatedEnemy.level * 8)),
-          )
-
-          // Item drop
-          const heroAttrs = useHeroStore.getState().attributes
-          const partyHeroAttrs = getPartyEffectiveAttributes(heroAttrs, useHeroStore.getState().level)
-          const inv3      = useInventoryStore.getState()
-          const equip     = getEquipmentBonuses(inv3.equipment)
-          const dropDerived = getEffectiveDerivedStatsFromBonuses(
-            partyHeroAttrs,
-            equip,
-            useHeroStore.getState().level,
-            inv3.weaponProgress,
-            inv3.equippedWeapons,
-            useSpellStore.getState().activeBuffs,
-          )
-          if (Math.random() < dropDerived.dropChance) {
-            const item = generateItem(Math.max(1, defeatedEnemy.level))
-            const added = useInventoryStore.getState().addItem(item)
-
-            if (added) {
-              const isUpgrade = useInventoryStore.getState().isItemUpgrade(item)
-              const rarityPt  = RARITY_LABEL_PT[item.rarity] ?? item.rarity
-              const rarityEn  = RARITY_LABEL_EN[item.rarity] ?? item.rarity
-
-              useNotifStore.getState().push({
-                title:    '🎁 Item encontrado!',
-                titleEn:  '🎁 Item found!',
-                body:     `${rarityPt} — ${getItemDisplayName(item, false)}${isUpgrade ? ' ★ Upgrade!' : ''}`,
-                bodyEn:   `${rarityEn} — ${getItemDisplayName(item, true)}${isUpgrade ? ' ★ Upgrade!' : ''}`,
-                rarity:   item.rarity,
-                scrollTo: 'equips',
-                actions:  isUpgrade ? [
-                  { label: 'Equipar', labelEn: 'Equip', kind: 'equip', payload: item.id },
-                  { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'equips' },
-                ] : [
-                  { label: 'Ver Inventário', labelEn: 'View Inventory', kind: 'scroll', payload: 'equips' },
-                ],
-              })
-            }
-          }
-
-          // Word drop (rare+ monsters only)
-          const monsterRarity = defeatedEnemy.rarity as MonsterRarity | undefined
-          const dropChance    = monsterRarity ? WORD_DROP_CHANCE[monsterRarity] : undefined
-
-          if (dropChance && Math.random() < dropChance) {
-            const allowedRarities = WORD_DROP_POOL[monsterRarity!]!
-            const spellSt         = useSpellStore.getState()
-            const heroSt          = useHeroStore.getState()
-            const knownIds        = new Set(getKnownWordIds(
-              heroSt.level, heroSt.attributes.inteligencia,
-              heroSt.attributes.sabedoria, spellSt.earnedWordIds,
-            ))
-
-            // Filter DROP_WORDS to eligible rarities and not already known
-            const candidates = DROP_WORDS.filter(
-              w => allowedRarities.includes(w.rarity as 'rare' | 'epic' | 'unique')
-                && !knownIds.has(w.id),
-            )
-
-            if (candidates.length > 0) {
-              const word = candidates[Math.floor(Math.random() * candidates.length)]
-              useSpellStore.getState().earnWord(word.id)
-
-              const rarityPt = RARITY_LABEL_PT[word.rarity] ?? word.rarity
-              const rarityEn = RARITY_LABEL_EN[word.rarity] ?? word.rarity
-              useNotifStore.getState().push({
-                title:    '📖 Palavra aprendida!',
-                titleEn:  '📖 Word learned!',
-                body:     `${rarityPt} — ${word.nameEn}${word.namePt !== word.nameEn ? ` (${word.namePt})` : ''}`,
-                bodyEn:   `${rarityEn} — ${word.nameEn}`,
-                rarity:   word.rarity as 'rare' | 'epic' | 'unique',
-                scrollTo: 'spells',
-                actions:  [{ label: 'Ver Grimório', labelEn: 'View Spellbook', kind: 'scroll', payload: 'spells' }],
-              })
-            }
-          }
           usePartyStore.getState().simulateExplorersAfterPlayerVictory()
           const activatedBlueTower = useMapStore.getState().activatePendingBlueTower()
           if (!activatedBlueTower) {
