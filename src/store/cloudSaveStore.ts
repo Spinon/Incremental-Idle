@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Session, User } from '@supabase/supabase-js'
+import type { RealtimeChannel, Session, User } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import {
   CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY,
@@ -17,6 +17,13 @@ import {
 
 type CloudStatus = 'idle' | 'loading' | 'signed-out' | 'signed-in' | 'syncing' | 'error'
 type AuthMode = 'sign-in' | 'sign-up' | 'password-recovery-request' | 'password-recovery-verify' | 'password-reset'
+
+interface CloudSessionLock {
+  activeClientSessionId?: string
+  activeClientHeartbeatAt?: string
+  activeClientStartedAt?: string
+  activeClientAppVersion?: string
+}
 
 interface CloudSaveRow {
   user_id: string
@@ -61,6 +68,15 @@ interface CloudSaveStore {
 
 let initPromise: Promise<void> | null = null
 const CLOUD_SAVE_CONFLICT_GRACE_MS = 5 * 60 * 1000
+const CLOUD_SESSION_CLIENT_ID_KEY = 'incremental-idle-cloud-client-session-id'
+const CLOUD_SESSION_LEASE_MS = 2 * 60 * 1000
+const CLOUD_SESSION_HEARTBEAT_MS = 15 * 1000
+const CLOUD_SESSION_WATCH_MS = 5 * 1000
+const ACTIVE_SESSION_ERROR = 'This account is active in another browser or device.'
+let sessionHeartbeatTimer: number | null = null
+let sessionWatchTimer: number | null = null
+let sessionWatchChannel: RealtimeChannel | null = null
+let watchedUserId: string | null = null
 
 function authStatusFromSession(session: Session | null): CloudStatus {
   return session ? 'signed-in' : 'signed-out'
@@ -73,6 +89,103 @@ function isoMs(value: string | null | undefined): number {
 
 function compareIso(a: string | null | undefined, b: string | null | undefined): number {
   return isoMs(a) - isoMs(b)
+}
+
+function makeClientSessionId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+function getClientSessionId(): string {
+  try {
+    const existing = sessionStorage.getItem(CLOUD_SESSION_CLIENT_ID_KEY)
+    if (existing) return existing
+
+    const id = makeClientSessionId()
+    sessionStorage.setItem(CLOUD_SESSION_CLIENT_ID_KEY, id)
+    return id
+  } catch {
+    return makeClientSessionId()
+  }
+}
+
+function readSessionLock(metadata: Record<string, unknown> | null | undefined): CloudSessionLock {
+  return {
+    activeClientSessionId: typeof metadata?.activeClientSessionId === 'string' ? metadata.activeClientSessionId : undefined,
+    activeClientHeartbeatAt: typeof metadata?.activeClientHeartbeatAt === 'string' ? metadata.activeClientHeartbeatAt : undefined,
+    activeClientStartedAt: typeof metadata?.activeClientStartedAt === 'string' ? metadata.activeClientStartedAt : undefined,
+    activeClientAppVersion: typeof metadata?.activeClientAppVersion === 'string' ? metadata.activeClientAppVersion : undefined,
+  }
+}
+
+function isFreshLock(lock: CloudSessionLock, now = Date.now()): boolean {
+  const heartbeatAt = isoMs(lock.activeClientHeartbeatAt)
+  return heartbeatAt > 0 && now - heartbeatAt < CLOUD_SESSION_LEASE_MS
+}
+
+function isLockedByAnotherClient(row: CloudSaveRow | null, clientSessionId = getClientSessionId()): boolean {
+  if (!row) return false
+  const lock = readSessionLock(row.metadata)
+  return !!lock.activeClientSessionId
+    && lock.activeClientSessionId !== clientSessionId
+    && isFreshLock(lock)
+}
+
+function withSessionLockMetadata(row: CloudSaveRow | null, nowIso = new Date().toISOString()): Record<string, unknown> {
+  const current = row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+    ? row.metadata
+    : {}
+  const previous = readSessionLock(current)
+
+  return {
+    ...current,
+    source: 'web',
+    activeClientSessionId: getClientSessionId(),
+    activeClientHeartbeatAt: nowIso,
+    activeClientStartedAt: previous.activeClientSessionId === getClientSessionId()
+      ? previous.activeClientStartedAt ?? nowIso
+      : nowIso,
+    activeClientAppVersion: __APP_VERSION__,
+  }
+}
+
+function clearSessionHeartbeat() {
+  if (sessionHeartbeatTimer === null) return
+  window.clearInterval(sessionHeartbeatTimer)
+  sessionHeartbeatTimer = null
+}
+
+function exclusiveConflictMessage() {
+  return 'Sua conta foi aberta em outro lugar. Entre novamente para assumir este dispositivo.'
+}
+
+function setExclusiveConflictState() {
+  useCloudSaveStore.setState({
+    status: 'signed-out',
+    session: null,
+    user: null,
+    pendingRemote: null,
+    remoteChecked: false,
+    authMode: 'sign-in',
+    error: exclusiveConflictMessage(),
+    message: null,
+  })
+}
+
+function clearSessionWatch() {
+  if (sessionWatchTimer !== null) {
+    window.clearInterval(sessionWatchTimer)
+    sessionWatchTimer = null
+  }
+  if (sessionWatchChannel && supabase) {
+    void supabase.removeChannel(sessionWatchChannel)
+  }
+  sessionWatchChannel = null
+  watchedUserId = null
+  window.removeEventListener('focus', checkWatchedSession)
+  document.removeEventListener('visibilitychange', checkWatchedSession)
 }
 
 function readPersistedState(snapshot: LocalSaveSnapshot, key: keyof typeof SAVE_KEYS): Record<string, unknown> {
@@ -149,6 +262,7 @@ async function fetchRemoteSave(userId: string): Promise<CloudSaveRow | null> {
 
 async function upsertSnapshot(userId: string, snapshot: LocalSaveSnapshot): Promise<CloudSaveRow> {
   if (!supabase) throw new Error('Supabase is not configured.')
+  const existing = await fetchRemoteSave(userId)
 
   const { data, error } = await supabase
     .from('cloud_saves')
@@ -160,15 +274,140 @@ async function upsertSnapshot(userId: string, snapshot: LocalSaveSnapshot): Prom
       game_version: snapshot.appVersion,
       local_save_id: snapshot.localSaveId,
       local_updated_at: snapshot.capturedAt,
-      metadata: {
-        source: 'web',
-      },
+      metadata: withSessionLockMetadata(existing),
     }, { onConflict: 'user_id,slot_key' })
     .select('*')
     .single()
 
   if (error) throw error
   return data as CloudSaveRow
+}
+
+async function writeSessionLock(userId: string): Promise<CloudSaveRow | null> {
+  if (!supabase) return null
+  const existing = await fetchRemoteSave(userId)
+  if (!existing) return upsertSnapshot(userId, captureLocalSaveSnapshot())
+
+  const { data, error } = await supabase
+    .from('cloud_saves')
+    .update({ metadata: withSessionLockMetadata(existing) })
+    .eq('user_id', userId)
+    .eq('slot_key', CLOUD_SAVE_SLOT_KEY)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as CloudSaveRow
+}
+
+async function releaseSessionLock(userId: string): Promise<void> {
+  if (!supabase) return
+  const existing = await fetchRemoteSave(userId)
+  if (!existing) return
+
+  const lock = readSessionLock(existing.metadata)
+  if (lock.activeClientSessionId !== getClientSessionId()) return
+
+  const { activeClientSessionId, activeClientHeartbeatAt, activeClientStartedAt, activeClientAppVersion, ...rest } = existing.metadata ?? {}
+  void activeClientSessionId
+  void activeClientHeartbeatAt
+  void activeClientStartedAt
+  void activeClientAppVersion
+
+  const { error } = await supabase
+    .from('cloud_saves')
+    .update({ metadata: rest })
+    .eq('user_id', userId)
+    .eq('slot_key', CLOUD_SAVE_SLOT_KEY)
+
+  if (error) throw error
+}
+
+async function assertExclusiveSession(userId: string): Promise<void> {
+  const remote = await fetchRemoteSave(userId)
+  if (isLockedByAnotherClient(remote)) {
+    throw new Error(ACTIVE_SESSION_ERROR)
+  }
+  await writeSessionLock(userId)
+}
+
+async function claimExclusiveSession(userId: string, revokeOtherSessions: boolean): Promise<void> {
+  if (revokeOtherSessions) {
+    const { error } = await supabase!.auth.signOut({ scope: 'others' })
+    if (error) throw error
+  }
+  await writeSessionLock(userId)
+}
+
+async function signOutLocalForExclusiveConflict(): Promise<void> {
+  clearSessionHeartbeat()
+  clearSessionWatch()
+  if (supabase) await supabase.auth.signOut({ scope: 'local' })
+}
+
+async function checkWatchedSession(): Promise<void> {
+  if (!watchedUserId) return
+
+  try {
+    const remote = await fetchRemoteSave(watchedUserId)
+    if (!isLockedByAnotherClient(remote)) return
+    setExclusiveConflictState()
+    await signOutLocalForExclusiveConflict()
+  } catch {
+    // Network/RLS errors should not kick the player out by themselves.
+  }
+}
+
+function handleWatchedRow(row: CloudSaveRow | null) {
+  if (!isLockedByAnotherClient(row)) return
+  setExclusiveConflictState()
+  void signOutLocalForExclusiveConflict()
+}
+
+function startSessionWatch(userId: string) {
+  clearSessionWatch()
+  watchedUserId = userId
+  window.addEventListener('focus', checkWatchedSession)
+  document.addEventListener('visibilitychange', checkWatchedSession)
+  sessionWatchTimer = window.setInterval(() => {
+    void checkWatchedSession()
+  }, CLOUD_SESSION_WATCH_MS)
+
+  if (!supabase) return
+  sessionWatchChannel = supabase
+    .channel(`cloud-session-lock:${userId}:${getClientSessionId()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'cloud_saves',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const row = (payload.new && typeof payload.new === 'object')
+          ? payload.new as CloudSaveRow
+          : null
+        handleWatchedRow(row)
+      },
+    )
+    .subscribe()
+}
+
+function startSessionHeartbeat(userId: string) {
+  clearSessionHeartbeat()
+  sessionHeartbeatTimer = window.setInterval(() => {
+    assertExclusiveSession(userId).catch(() => {
+      setExclusiveConflictState()
+      void signOutLocalForExclusiveConflict()
+    })
+  }, CLOUD_SESSION_HEARTBEAT_MS)
+}
+
+function startExclusiveSessionMonitoring(userId: string) {
+  startSessionHeartbeat(userId)
+  startSessionWatch(userId)
+  void checkWatchedSession()
 }
 
 function markAcceptedRemote(row: CloudSaveRow) {
@@ -246,12 +485,14 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         user: session?.user ?? null,
         remoteChecked: false,
       })
+      if (session?.user) startExclusiveSessionMonitoring(session.user.id)
 
       supabase.auth.onAuthStateChange((event, nextSession) => {
         const previousUserId = get().user?.id ?? null
         const nextUserId = nextSession?.user?.id ?? null
         const userChanged = previousUserId !== nextUserId
         const shouldClearPending = event === 'SIGNED_OUT' || userChanged
+        const explicitAuthFlow = event === 'SIGNED_IN' && get().status === 'loading'
         set({
           session: nextSession,
           user: nextSession?.user ?? null,
@@ -260,7 +501,12 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
           pendingRemote: shouldClearPending ? null : get().pendingRemote,
           remoteChecked: nextSession?.user && !userChanged ? get().remoteChecked : false,
         })
-        if (nextSession?.user && (userChanged || !get().remoteChecked)) {
+        if (nextSession?.user && !explicitAuthFlow) startExclusiveSessionMonitoring(nextSession.user.id)
+        else {
+          clearSessionHeartbeat()
+          clearSessionWatch()
+        }
+        if (nextSession?.user && !explicitAuthFlow && (userChanged || !get().remoteChecked)) {
           window.setTimeout(() => {
             get().pullRemoteSave().catch((err: unknown) => {
               set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
@@ -288,6 +534,16 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       set({ status: 'error', error: error.message })
       return
     }
+    if (data.session?.user) {
+      try {
+        await claimExclusiveSession(data.session.user.id, true)
+        startExclusiveSessionMonitoring(data.session.user.id)
+      } catch (err) {
+        await signOutLocalForExclusiveConflict()
+        set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+        return
+      }
+    }
     set({
       status: authStatusFromSession(data.session),
       session: data.session,
@@ -308,6 +564,16 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     if (error) {
       set({ status: 'error', error: error.message })
       return
+    }
+    if (data.session?.user) {
+      try {
+        await claimExclusiveSession(data.session.user.id, true)
+        startExclusiveSessionMonitoring(data.session.user.id)
+      } catch (err) {
+        await signOutLocalForExclusiveConflict()
+        set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+        return
+      }
     }
     set({
       status: authStatusFromSession(data.session),
@@ -352,6 +618,16 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       set({ status: 'error', error: error.message })
       return
     }
+    if (data.session?.user) {
+      try {
+        await claimExclusiveSession(data.session.user.id, true)
+        startExclusiveSessionMonitoring(data.session.user.id)
+      } catch (err) {
+        await signOutLocalForExclusiveConflict()
+        set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+        return
+      }
+    }
     set({
       status: authStatusFromSession(data.session),
       session: data.session,
@@ -370,7 +646,9 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       set({ status: 'error', error: error.message })
       return
     }
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'local' })
+    clearSessionHeartbeat()
+    clearSessionWatch()
     set({
       status: 'signed-out',
       session: null,
@@ -382,11 +660,21 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
   signOut: async () => {
     if (!supabase) return
-    const { error } = await supabase.auth.signOut()
+    const userId = get().user?.id
+    if (userId) {
+      try {
+        await releaseSessionLock(userId)
+      } catch {
+        // Signing out should not be blocked by a best-effort lock release.
+      }
+    }
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
     if (error) {
       set({ status: 'error', error: error.message })
       return
     }
+    clearSessionHeartbeat()
+    clearSessionWatch()
     set({
       status: 'signed-out',
       session: null,
@@ -406,6 +694,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
     set({ status: 'syncing', error: null, message: null })
     try {
+      await assertExclusiveSession(user.id)
       markLocalSaveChanged()
       const snapshot = captureLocalSaveSnapshot()
       const row = await upsertSnapshot(user.id, snapshot)
@@ -419,6 +708,11 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         message: 'Cloud save updated.',
       })
     } catch (err) {
+      if (err instanceof Error && err.message === ACTIVE_SESSION_ERROR) {
+        await signOutLocalForExclusiveConflict()
+        setExclusiveConflictState()
+        return
+      }
       set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
     }
   },
@@ -431,6 +725,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
     set({ status: 'syncing', error: null, message: null })
     try {
+      await assertExclusiveSession(user.id)
       const remote = await fetchRemoteSave(user.id)
       const hadLocalUpdatedAt = getLocalSaveUpdatedAt() !== null
       const local = captureLocalSaveSnapshot({ markChanged: false })
@@ -532,6 +827,11 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         set({ message: 'Cloud save was created by a newer game version.' })
       }
     } catch (err) {
+      if (err instanceof Error && err.message === ACTIVE_SESSION_ERROR) {
+        await signOutLocalForExclusiveConflict()
+        setExclusiveConflictState()
+        return
+      }
       set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
     }
   },
