@@ -62,7 +62,8 @@ function statScore(item: Item): number {
 function itemScore(item: Item):  number {
   return RARITY_RANK[item.rarity] * 10000 + item.level * 50 + statScore(item)
 }
-function sellPrice(item: Item):  number { return Math.max(1, Math.floor(item.level * SELL_MULT[item.rarity])) }
+/** Exported so UI components show the exact price the store will pay. */
+export function sellPrice(item: Item): number { return Math.max(1, Math.floor(item.level * SELL_MULT[item.rarity])) }
 
 export interface AutoSellConfig {
   enabled:  boolean

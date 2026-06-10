@@ -14,7 +14,14 @@ import { cn } from '../lib/utils'
 const TABS = APP_TABS
 
 export default function StickyBar() {
-  const { speed, skipAnim, phase, setSpeed, setSkipAnim, skipBattle } = useBattleStore()
+  // Selective subscriptions — the whole-store hook re-rendered this sticky
+  // header on every battle log entry / HP change
+  const speed       = useBattleStore(s => s.speed)
+  const skipAnim    = useBattleStore(s => s.skipAnim)
+  const phase       = useBattleStore(s => s.phase)
+  const setSpeed    = useBattleStore(s => s.setSpeed)
+  const setSkipAnim = useBattleStore(s => s.setSkipAnim)
+  const skipBattle  = useBattleStore(s => s.skipBattle)
   const activeTab    = useUIStore(s => s.activeTab)
   const setActiveTab = useUIStore(s => s.setActiveTab)
 

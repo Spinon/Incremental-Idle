@@ -1,5 +1,4 @@
-import { getDerivedStats } from '../formulas/derived'
-import { getEquipmentBonuses } from '../formulas/items'
+import { getHeroDerived } from './heroDerived'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
@@ -51,8 +50,9 @@ export function useConsumableById(id: string): ConsumableUseResult {
 
 export function applyConsumableEffect(consumable: Consumable): void {
   const hero = useHeroStore.getState()
-  const inventory = useInventoryStore.getState()
-  const derived = getDerivedStats(hero.attributes, getEquipmentBonuses(inventory.equipment), hero.level)
+  // Effective stats (incl. weapons + buffs) — keeps potion caps consistent
+  // with the maxima shown everywhere else in the game
+  const derived = getHeroDerived()
 
   switch (consumable.effect) {
     case 'stamina':
@@ -109,8 +109,12 @@ export function tryAutoUseConsumable(now = Date.now()): ConsumableUseResult {
     if (!consumable || !shouldAutoUseConsumable(consumable, config.threshold)) continue
 
     const result = useConsumableById(consumable.id)
-    if (result === 'used') lastAutoUseAt = now
-    return result
+    if (result === 'used') {
+      lastAutoUseAt = now
+      return result
+    }
+    if (result === 'pending') return result
+    // 'blocked' → keep trying the remaining quickslots this tick
   }
 
   return 'blocked'
@@ -118,10 +122,9 @@ export function tryAutoUseConsumable(now = Date.now()): ConsumableUseResult {
 
 function shouldAutoUseConsumable(consumable: Consumable, threshold: number): boolean {
   const hero = useHeroStore.getState()
-  const inventory = useInventoryStore.getState()
   const battle = useBattleStore.getState()
   const spell = useSpellStore.getState()
-  const derived = getDerivedStats(hero.attributes, getEquipmentBonuses(inventory.equipment), hero.level)
+  const derived = getHeroDerived()
   const battleActive = battle.phase === 'idle' || battle.phase === 'attacking'
 
   switch (consumable.effect) {

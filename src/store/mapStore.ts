@@ -74,9 +74,9 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 /**
- * Picks a tile level centred on `heroLevel` with a ±5 triangular distribution.
- * The sum of two uniform [-5, +5] samples produces a tent-shaped probability
- * curve: levels near the centre are ~3× more likely than the extremes.
+ * Picks a tile level with a triangular distribution peaking at heroLevel-1,
+ * spanning roughly heroLevel-5 to heroLevel+3. Only ~16% of generated tiles
+ * exceed the hero's level.
  */
 function heroRelativeLevel(heroLevel: number): number {
   // Biased triangular distribution: peak at heroLevel-1, range heroLevel-5 to heroLevel+3.
@@ -273,10 +273,13 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
 
   if (!tile.explored) {
     tile.explored = true
-    if (tile.content.type === 'treasure') {
-      st.pendingChests.push(createTreasureChest(tile.level))
-      tile.content  = { type: 'empty' }
-    }
+    // Exploration XP trickle — feeds the pendingXp → drainXp → xpBonus
+    // pipeline (which existed but was never fed). Modest next to monster
+    // first-encounter XP, but makes exploring itself rewarding.
+    st.pendingXp += Math.round((4 + tile.level * 2) * (0.8 + Math.random() * 0.4))
+    // Treasure tiles keep their content until the golden demon is actually
+    // defeated — the chest is granted via claimTreasureAt() on victory, and a
+    // lost fight can be retried by re-entering the tile.
   }
 
   return { enemy: tileEnemy, questTileLevel }
@@ -284,19 +287,19 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
 
 function startTileBattle(enemy: TileEnemyQueue | null): void {
   if (!enemy) return
-  useBattleStore.getState().startBattle(
-    enemy.level,
-    enemy.type,
-    enemy.rarity,
-    enemy.tilesPlaced,
-    enemy.enraged,
-    enemy.baseLevel,
-    enemy.questId,
-    enemy.targetName,
-    enemy.targetNameEn,
-    enemy.isNpc,
-    enemy.variant,
-  )
+  useBattleStore.getState().startBattle({
+    level:          enemy.level,
+    monsterType:    enemy.type,
+    monsterRarity:  enemy.rarity,
+    tilesPlaced:    enemy.tilesPlaced,
+    enraged:        enemy.enraged,
+    baseLevel:      enemy.baseLevel,
+    questId:        enemy.questId,
+    questName:      enemy.targetName,
+    questNameEn:    enemy.targetNameEn,
+    questNpc:       enemy.isNpc,
+    monsterVariant: enemy.variant,
+  })
 }
 
 function createQuestFromTile(tileLevel: number): void {
@@ -533,6 +536,12 @@ interface MapStore {
   setDestination(x: number, y: number): void
   setAutoExplore(v: 'manual' | 'move' | 'full'): void
   toggleRiskMode(): void
+  /**
+   * Grants the chest of a treasure tile after its golden demon is defeated.
+   * Converts the tile content to empty so it can't be farmed. Returns true
+   * if a chest was queued.
+   */
+  claimTreasureAt(x: number, y: number): boolean
   drainXp(): number
   drainGold(): number
   drainWeaponMaterials(): WeaponMaterialDrop[]
@@ -943,6 +952,18 @@ export const useMapStore = create<MapStore>()(
         placed = true
         })
         return placed
+      },
+
+      claimTreasureAt: (x, y): boolean => {
+        let claimed = false
+        set((st) => {
+          const tile = st.grid[gridKey(x, y)]
+          if (!tile || tile.content.type !== 'treasure') return
+          st.pendingChests.push(createTreasureChest(tile.level))
+          tile.content = { type: 'empty' }
+          claimed = true
+        })
+        return claimed
       },
 
       drainXp: () => {

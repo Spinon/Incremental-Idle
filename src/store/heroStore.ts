@@ -47,6 +47,8 @@ function xpForLevel(level: number): number {
   return Math.floor(level * 80 + level ** 2.4 * 22)
 }
 
+const MAX_SKIP_CHARGES = 3
+
 const INITIAL_ATTRS: Attributes = {
   forca: 0, agilidade: 0, destreza: 0, vitalidade: 0,
   inteligencia: 0, sabedoria: 0, carisma: 0,
@@ -204,8 +206,9 @@ export const useHeroStore = create<HeroStore>()(
     }),
 
     gainSkipCharge: () => set((st) => {
-      st.skipCharges = Math.min(st.maxSkipCharges + 1, st.skipCharges + 1)
-      st.maxSkipCharges = Math.max(st.maxSkipCharges, Math.ceil(st.skipCharges))
+      // Hard cap at 3 — also normalizes saves inflated by the old ratchet bug
+      st.maxSkipCharges = MAX_SKIP_CHARGES
+      st.skipCharges = Math.min(MAX_SKIP_CHARGES, st.skipCharges + 1)
     }),
 
     gainXp: (amount, xpBonusOverride) => {
@@ -241,6 +244,7 @@ export const useHeroStore = create<HeroStore>()(
       st.mana = Math.min(derived.maxMana, st.mana + derived.manaRegen * speed * deltaS)
 
       // Skip charges regen: level charges per hour = level/3600 per second
+      if (st.maxSkipCharges !== MAX_SKIP_CHARGES) st.maxSkipCharges = MAX_SKIP_CHARGES
       const regenRate = st.level / 3600
       st.skipCharges = Math.min(st.maxSkipCharges, st.skipCharges + regenRate * deltaS)
     }),

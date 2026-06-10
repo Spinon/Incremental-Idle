@@ -196,8 +196,13 @@ export default function MarketInterior() {
       if (w.rarity === 'rare'   && tilesPlaced < 40) return false
       return true
     })
-    const wordOffersList = [...availableWords]
-      .sort(() => Math.random() - 0.5)
+    // Fisher-Yates pick — sort(() => Math.random() - 0.5) is a biased shuffle
+    const pool = [...availableWords]
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[pool[i], pool[j]] = [pool[j], pool[i]]
+    }
+    const wordOffersList = pool
       .slice(0, 2)
       .map(w => ({ wordId: w.id, price: wordPrice(w.rarity as 'rare' | 'epic' | 'unique', tileLevel) }))
 
@@ -260,12 +265,13 @@ export default function MarketInterior() {
   }
 
   function markBought(id: string) {
-    setBought(prev => {
-      const next = new Set(prev)
-      next.add(id)
-      saveOffer(marketKey, { ...offer, boughtIds: Array.from(next) })
-      return next
-    })
+    // Keep the store write OUTSIDE the setState updater — updaters run during
+    // the render phase, and writing to mapStore there triggers React's
+    // "Cannot update a component while rendering" error.
+    const next = new Set(bought)
+    next.add(id)
+    setBought(next)
+    saveOffer(marketKey, { ...offer, boughtIds: Array.from(next) })
   }
 
   function buyConsumable(c: Consumable) {
@@ -349,7 +355,8 @@ export default function MarketInterior() {
           <div className="flex flex-col gap-2">
             {offer.consumables.map(c => {
               const isBought  = bought.has(c.id)
-              const canAfford = gold >= c.price
+              // Compare against the DISCOUNTED price — buyConsumable charges eff()
+              const canAfford = gold >= eff(c.price)
               const isFull    = failId === c.id
               const rarLbl    = isEn ? RARITY_LABEL_EN[c.rarity] : RARITY_LABEL_PT[c.rarity]
               return (
@@ -416,7 +423,7 @@ export default function MarketInterior() {
             {offer.equipment.map(item => {
               const isBought  = bought.has(item.id)
               const price     = item.price!
-              const canAfford = gold >= price
+              const canAfford = gold >= eff(price)
               const isFull    = failId === item.id
               const rarLbl    = isEn ? RARITY_LABEL_EN[item.rarity] : RARITY_LABEL_PT[item.rarity]
               const slotName  = isEn ? SLOT_NAME_EN[item.slot] : SLOT_NAME_PT[item.slot]
@@ -495,7 +502,7 @@ export default function MarketInterior() {
                   const word      = WORD_MAP.get(wo.wordId)
                   if (!word) return null
                   const isBought  = bought.has(wo.wordId)
-                  const canAfford = gold >= wo.price
+                  const canAfford = gold >= eff(wo.price)
                   const icon      = WORD_ICONS[word.id] ?? '📖'
 
                   // Count new spell combos this word would unlock with current known words
