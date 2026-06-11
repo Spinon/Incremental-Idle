@@ -164,6 +164,7 @@ export function useGameLoop(paused = false) {
   const battleResolveAt = useRef<number | null>(null)
   const syncSnapshot  = useRef<Record<string, string | null> | null>(null)
   const syncActive    = useRef(false)
+  const notifPausedForOffline = useRef(false)
   // Ref (not effect-local) so StrictMode's dev remount doesn't re-run the
   // startup check and mistake the transaction the first mount just began for
   // an interrupted one from a previous page load.
@@ -385,6 +386,18 @@ export function useGameLoop(paused = false) {
     let lagMs = 0
     let startupReloading = false
 
+    function pauseNotifsForOffline() {
+      if (notifPausedForOffline.current) return
+      notifPausedForOffline.current = true
+      useNotifStore.getState().setPaused(true)
+    }
+
+    function resumeNotifsAfterOffline() {
+      if (!notifPausedForOffline.current) return
+      notifPausedForOffline.current = false
+      useNotifStore.getState().setPaused(false)
+    }
+
     function startOfflineSync(elapsedMs: number) {
       if (syncActive.current || elapsedMs < STEP_MS) return
 
@@ -392,6 +405,7 @@ export function useGameLoop(paused = false) {
       if (totalMs <= 0) return
 
       syncActive.current = true
+      pauseNotifsForOffline()
       syncSnapshot.current = snapshotPersistedState()
       beginOfflineTransaction(syncSnapshot.current)
       lagMs = 0
@@ -408,34 +422,40 @@ export function useGameLoop(paused = false) {
         // chunk chain must survive StrictMode's dev remount mid-simulation.
         if (!syncActive.current) return
 
-        let steps = 0
-        let remainingMs = totalMs - processedMs
+        try {
+          let steps = 0
+          let remainingMs = totalMs - processedMs
 
-        while (remainingMs > 0 && steps < SYNC_CHUNK_STEPS && processedMs < totalMs) {
-          const deltaMs = Math.min(OFFLINE_STEP_MS, remainingMs)
-          runStep(deltaMs, { offline: true })
-          processedMs += deltaMs
-          remainingMs = totalMs - processedMs
-          steps += 1
-        }
+          while (remainingMs > 0 && steps < SYNC_CHUNK_STEPS && processedMs < totalMs) {
+            const deltaMs = Math.min(OFFLINE_STEP_MS, remainingMs)
+            runStep(deltaMs, { offline: true })
+            processedMs += deltaMs
+            remainingMs = totalMs - processedMs
+            steps += 1
+          }
 
-        if (processedMs >= totalMs) {
+          if (processedMs >= totalMs) {
+            resumeNotifsAfterOffline()
+            setOfflineSync({
+              status: 'ready',
+              elapsedMs: totalMs,
+              processedMs,
+            })
+            writeLastActiveAt()
+            lastTickAt = performance.now()
+            return
+          }
+
           setOfflineSync({
-            status: 'ready',
+            status: 'running',
             elapsedMs: totalMs,
             processedMs,
           })
-          writeLastActiveAt()
-          lastTickAt = performance.now()
-          return
+          window.setTimeout(processChunk, 0)
+        } catch (error) {
+          resumeNotifsAfterOffline()
+          throw error
         }
-
-        setOfflineSync({
-          status: 'running',
-          elapsedMs: totalMs,
-          processedMs,
-        })
-        window.setTimeout(processChunk, 0)
       }
 
       window.setTimeout(processChunk, 0)
@@ -468,6 +488,7 @@ export function useGameLoop(paused = false) {
     syncActions.current = {
       accept: () => {
         syncActive.current = false
+        resumeNotifsAfterOffline()
         syncSnapshot.current = null
         clearOfflineTransaction()
         lagMs = 0
@@ -486,6 +507,7 @@ export function useGameLoop(paused = false) {
         setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })
       },
       discard: () => {
+        resumeNotifsAfterOffline()
         if (syncSnapshot.current) {
           restorePersistedState(syncSnapshot.current)
         }
@@ -541,6 +563,7 @@ export function useGameLoop(paused = false) {
     document.addEventListener('visibilitychange', pumpOnResume)
 
     return () => {
+      if (!syncActive.current) resumeNotifsAfterOffline()
       clearInterval(id)
       window.removeEventListener('focus', pumpOnResume)
       document.removeEventListener('visibilitychange', pumpOnResume)

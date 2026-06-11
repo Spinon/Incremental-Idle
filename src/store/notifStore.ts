@@ -29,10 +29,12 @@ export interface GameNotif {
 interface NotifStore {
   queue:   GameNotif[]
   enabled: boolean
+  paused:  boolean
 
   push(n: Omit<GameNotif, 'id' | 'createdAt'>): void
   dismiss(id: string): void
   setEnabled(v: boolean): void
+  setPaused(v: boolean): void
 }
 
 let _seq = 0
@@ -43,9 +45,10 @@ export const useNotifStore = create<NotifStore>()(
     (set) => ({
       queue:   [],
       enabled: true,
+      paused:  false,
 
       push: (n) => set((st) => {
-        if (!st.enabled) return st
+        if (!st.enabled || st.paused) return st
         // Limit queue to 5 notifications
         const newNotif: GameNotif = { ...n, id: uid(), createdAt: Date.now() }
         const trimmed = st.queue.length >= 5 ? st.queue.slice(1) : st.queue
@@ -57,6 +60,7 @@ export const useNotifStore = create<NotifStore>()(
       })),
 
       setEnabled: (enabled) => set({ enabled }),
+      setPaused: (paused) => set({ paused }),
     }),
     {
       name: SAVE_KEYS.notifs,

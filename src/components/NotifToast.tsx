@@ -203,8 +203,9 @@ function ToastCard({ notif }: ToastCardProps) {
 export default function NotifToast() {
   const queue   = useNotifStore(s => s.queue)
   const enabled = useNotifStore(s => s.enabled)
+  const paused  = useNotifStore(s => s.paused)
 
-  if (!enabled || queue.length === 0) return null
+  if (!enabled || paused || queue.length === 0) return null
 
   // Show the oldest notification (index 0) first
   const current = queue[0]
