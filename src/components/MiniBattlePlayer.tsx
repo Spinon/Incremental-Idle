@@ -599,23 +599,35 @@ export default function MiniBattlePlayer() {
               {quickslots.map((qid, slot) => {
                 const c = qid ? consumables.find(x => x.id === qid) : null
                 const itemAuto = !!(c && consumableAutoSlots[slot]?.enabled)
+                const itemCd = c && (c.cooldownTurns ?? 0) > 0 ? (cooldowns[`consumable_cd_${c.effect}`] ?? 0) : 0
                 return (
                   <button
                     key={slot}
                     type="button"
                     onClick={() => c && useMiniConsumable(c)}
-                    disabled={!c}
-                    title={c ? `[${slot + 1}] ${isEn ? c.nameEn : c.name}` : (isEn ? `Quickslot ${slot + 1} empty` : `Atalho ${slot + 1} vazio`)}
+                    disabled={!c || itemCd > 0}
+                    title={c
+                      ? `[${slot + 1}] ${isEn ? c.nameEn : c.name}${itemCd > 0 ? ` (${itemCd} ${isEn ? 'left' : 'rest.'})` : ''}`
+                      : (isEn ? `Quickslot ${slot + 1} empty` : `Atalho ${slot + 1} vazio`)}
                     className={cn(
                       'h-8 rounded border flex items-center justify-center transition',
                       c
-                        ? cn(MINI_RARITY_BORDER[c.rarity], 'relative bg-slate-800 hover:bg-slate-700 active:scale-95')
+                        ? cn(
+                            MINI_RARITY_BORDER[c.rarity],
+                            'relative bg-slate-800',
+                            itemCd > 0 ? 'cursor-not-allowed' : 'hover:bg-slate-700 active:scale-95',
+                          )
                         : 'border-dashed border-slate-700 bg-slate-800/40 opacity-45 cursor-not-allowed',
                     )}
                   >
                     <span className="text-base leading-none">{c ? c.icon : slot + 1}</span>
-                    {itemAuto && (
+                    {itemAuto && itemCd === 0 && (
                       <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-slate-900" />
+                    )}
+                    {itemCd > 0 && (
+                      <span className="absolute inset-0 rounded bg-black/55 flex items-center justify-center text-[9px] font-black text-white">
+                        {itemCd}
+                      </span>
                     )}
                   </button>
                 )

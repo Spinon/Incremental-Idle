@@ -270,12 +270,13 @@ export const useInventoryStore = create<InventoryStore>()(
       },
 
       removeConsumable: (id) => {
-        let found: Consumable | null = null
+        // Read from the finalized state BEFORE mutating: capturing the item
+        // inside the immer recipe returns a draft proxy that is revoked when
+        // set() finishes, so callers crashed on first property access.
+        const found = get().consumables.find(c => c.id === id) ?? null
+        if (!found) return null
         set((st) => {
-          const idx = st.consumables.findIndex(c => c.id === id)
-          if (idx === -1) return
-          found = st.consumables[idx]
-          st.consumables.splice(idx, 1)
+          st.consumables = st.consumables.filter(c => c.id !== id)
           // Clear any quickslot pointing to this item
           st.quickslots = st.quickslots.map(qid => qid === id ? null : qid)
         })

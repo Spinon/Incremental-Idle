@@ -1328,6 +1328,13 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   }
 
   function consumableEffectDesc(c: Consumable): string {
+    const cdSuffix = (c.cooldownTurns ?? 0) > 0
+      ? ` · CD ${c.cooldownTurns} ${isEn ? 'turns' : 'turnos'}`
+      : ''
+    return consumableEffectBase(c) + cdSuffix
+  }
+
+  function consumableEffectBase(c: Consumable): string {
     switch (c.effect) {
       case 'stamina': return `${isEn ? 'Restore' : 'Restaura'} ${Math.round(c.magnitude * 100)}% Stamina`
       case 'mana':    return `${isEn ? 'Restore' : 'Restaura'} ${Math.round(c.magnitude * 100)}% Mana`

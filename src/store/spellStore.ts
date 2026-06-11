@@ -44,6 +44,11 @@ interface SpellStore {
   setAutoSlot(slotIndex: number, config: AutoCastConfig): void
   castSpell(spellId: string): void
   addConsumableBuff(statAdds: ActiveBuff['statAdds'], durationTurns: number): void
+  /**
+   * Puts a consumable effect on cooldown, sharing the spell cooldown registry
+   * (and its per-turn decrement in onBattleTurn). Key format: consumable_cd_*.
+   */
+  startConsumableCooldown(key: string, turns: number): void
   onBattleTurn(): void       // called each time battleStore.turn increments
   clearEnemyDebuff(): void   // called when a new enemy spawns
   tick(deltaS: number): void // only for buff/debuff durations (seconds)
@@ -223,6 +228,10 @@ export const useSpellStore = create<SpellStore>()(
         statAdds,
         remaining: Math.max(1, durationTurns),
       })
+    }),
+
+    startConsumableCooldown: (key, turns) => set((st) => {
+      st.cooldowns[key] = Math.max(st.cooldowns[key] ?? 0, Math.max(1, Math.round(turns)))
     }),
 
     // Decrement cooldowns + buff/debuff durations by 1 turn, then process auto-cast

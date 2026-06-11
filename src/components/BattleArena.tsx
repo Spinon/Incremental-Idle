@@ -817,17 +817,24 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         {quickslots.map((qid, slot) => {
           const c = qid ? consumables.find(x => x.id === qid) : null
           const itemAuto = !!(c && consumableAutoSlots[slot]?.enabled)
+          const itemCd = c && (c.cooldownTurns ?? 0) > 0 ? (cooldowns[`consumable_cd_${c.effect}`] ?? 0) : 0
           return (
             <button
               key={slot}
               onClick={() => c && useQuickslot(c)}
-              disabled={!c}
-              title={c ? `[${slot + 1}] ${isEn ? c.nameEn : c.name}` : (isEn ? `Quickslot ${slot + 1} (empty)` : `Atalho ${slot + 1} (vazio)`)}
+              disabled={!c || itemCd > 0}
+              title={c
+                ? `[${slot + 1}] ${isEn ? c.nameEn : c.name}${(c.cooldownTurns ?? 0) > 0 ? ` · CD ${c.cooldownTurns} ${isEn ? 'turns' : 'turnos'}${itemCd > 0 ? ` (${itemCd} ${isEn ? 'left' : 'rest.'})` : ''}` : ''}`
+                : (isEn ? `Quickslot ${slot + 1} (empty)` : `Atalho ${slot + 1} (vazio)`)}
               style={{ width: 44, height: 44 }}
               className={cn(
                 'relative rounded-xl border-2 flex flex-col items-center justify-center transition-all',
                 c
-                  ? cn(RARITY_BORDER[c.rarity], 'bg-white dark:bg-slate-800 hover:scale-110 active:scale-95 shadow')
+                  ? cn(
+                      RARITY_BORDER[c.rarity],
+                      'bg-white dark:bg-slate-800 shadow',
+                      itemCd > 0 ? 'cursor-not-allowed' : 'hover:scale-110 active:scale-95',
+                    )
                   : 'border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 opacity-40 cursor-not-allowed',
               )}
             >
@@ -835,9 +842,29 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
                 <>
                   <span className="text-lg leading-none">{c.icon}</span>
                   <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500">{slot + 1}</span>
-                  {itemAuto && (
+                  {itemAuto && itemCd === 0 && (
                     <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white dark:border-slate-800" />
                   )}
+                  {itemCd > 0 && (() => {
+                    const circ = 2 * Math.PI * 17
+                    const offset = circ * (itemCd / (c.cooldownTurns ?? itemCd))
+                    return (
+                      <div className="absolute inset-0 rounded-xl bg-black/50 flex items-center justify-center">
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 44 44" fill="none">
+                          <circle cx="22" cy="22" r="17" stroke="white" strokeOpacity="0.15" strokeWidth="3" />
+                          <circle
+                            cx="22" cy="22" r="17"
+                            stroke="white" strokeOpacity="0.85" strokeWidth="3"
+                            strokeDasharray={circ}
+                            strokeDashoffset={circ - offset}
+                            strokeLinecap="round"
+                            transform="rotate(-90 22 22)"
+                          />
+                        </svg>
+                        <span className="text-[9px] text-white font-bold z-10">{itemCd}</span>
+                      </div>
+                    )
+                  })()}
                 </>
               ) : (
                 <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600">{slot + 1}</span>

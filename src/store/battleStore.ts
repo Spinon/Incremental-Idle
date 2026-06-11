@@ -78,6 +78,13 @@ export interface DeathRecord {
   tilesPlaced: number
 }
 
+/** Display info for battle-log entries produced by consumables. */
+export interface ConsumableLogLabel {
+  name: string
+  nameEn?: string
+  icon: string
+}
+
 export interface SpellLogData {
   name: string
   nameEn?: string
@@ -176,9 +183,9 @@ interface BattleStore {
   logSpell(data: SpellLogData & { casterName: string }): void
   applyMagicDamage(dmg: number, element?: ElementType): void
   healPlayer(hp: number): void
-  addHeroShield(amount: number): void
-  applyConsumablePhysicalDamage(dmg: number): void
-  applyConsumableEnemyDebuff(power: number, turns: number): void
+  addHeroShield(amount: number, label?: ConsumableLogLabel): void
+  applyConsumablePhysicalDamage(dmg: number, label?: ConsumableLogLabel): void
+  applyConsumableEnemyDebuff(power: number, turns: number, label?: ConsumableLogLabel): void
   applyElementalStatus(status: ActiveStatus, target: 'enemy' | 'hero'): void
   tickStatuses(): void
   clearStatuses(): void
@@ -631,7 +638,7 @@ export const useBattleStore = create<BattleStore>()(
       }
     },
 
-    logSpell: ({ casterName, name, icon, effectType, value }) => set((st) => {
+    logSpell: ({ casterName, name, nameEn, icon, effectType, value }) => set((st) => {
       // For damage/debuff the target is the enemy; for heal/buff the caster benefits
       const defender = (effectType === 'damage' || effectType === 'debuff')
         ? st.enemy.name
@@ -640,7 +647,7 @@ export const useBattleStore = create<BattleStore>()(
         attacker: casterName,
         defender,
         dmg: effectType === 'damage' ? value : 0,
-        spell: { name, icon, effectType, value },
+        spell: { name, nameEn, icon, effectType, value },
       })
     }),
 
@@ -779,18 +786,24 @@ export const useBattleStore = create<BattleStore>()(
       st.player.hp = Math.min(st.player.maxHp, st.player.hp + hp)
     }),
 
-    addHeroShield: (amount) => set((st) => {
+    addHeroShield: (amount, label) => set((st) => {
       if (st.phase === 'empty' || st.phase === 'over') return
       st.heroShield += Math.max(1, Math.round(amount))
       st.log.unshift({
         attacker: st.player.name,
         defender: st.player.name,
         dmg: 0,
-        spell: { name: 'Escudo', nameEn: 'Shield', icon: 'S', effectType: 'buff', value: 0 },
+        spell: {
+          name: label?.name ?? 'Escudo',
+          nameEn: label?.nameEn ?? 'Shield',
+          icon: label?.icon ?? '🛡',
+          effectType: 'buff',
+          value: 0,
+        },
       })
     }),
 
-    applyConsumablePhysicalDamage: (dmg) => set((st) => {
+    applyConsumablePhysicalDamage: (dmg, label) => set((st) => {
       if (st.phase === 'empty' || st.phase === 'over') return
       const effective = Math.max(1, Math.round(dmg))
       st.enemy.hp = Math.max(0, st.enemy.hp - effective)
@@ -798,12 +811,18 @@ export const useBattleStore = create<BattleStore>()(
         attacker: st.player.name,
         defender: st.enemy.name,
         dmg: effective,
-        spell: { name: 'Item', nameEn: 'Item', icon: 'D', effectType: 'damage', value: effective },
+        spell: {
+          name: label?.name ?? 'Item',
+          nameEn: label?.nameEn ?? 'Item',
+          icon: label?.icon ?? '💥',
+          effectType: 'damage',
+          value: effective,
+        },
       })
       if (st.enemy.hp === 0) { st.winner = 'player'; st.phase = 'over' }
     }),
 
-    applyConsumableEnemyDebuff: (power, turns) => set((st) => {
+    applyConsumableEnemyDebuff: (power, turns, label) => set((st) => {
       if (st.phase === 'empty' || st.phase === 'over') return
       const status: ActiveStatus = {
         element: 'umbra',
@@ -822,7 +841,13 @@ export const useBattleStore = create<BattleStore>()(
         attacker: st.player.name,
         defender: st.enemy.name,
         dmg: 0,
-        spell: { name: 'Debilitar', nameEn: 'Weaken', icon: '!', effectType: 'debuff', value: 0 },
+        spell: {
+          name: label?.name ?? 'Debilitar',
+          nameEn: label?.nameEn ?? 'Weaken',
+          icon: label?.icon ?? '☠️',
+          effectType: 'debuff',
+          value: 0,
+        },
       })
     }),
 

@@ -325,6 +325,8 @@ const CONSUMABLE_NAMES: Partial<Record<ConsumableEffect, Record<string, [string,
 
 const CONSUMABLE_ICONS: Partial<Record<ConsumableEffect, string>> = {
   stamina: '💪', mana: '🔷', skip: '⏩', xp: '📖',
+  shield: '🛡', statBuff: '⚗️', physicalDamage: '💥', enemyDebuff: '☠️',
+  resetAttrs: '🔄', normalizeTile: '🗺️',
 }
 
 const ALL_EFFECTS: ConsumableEffect[] = [
@@ -378,6 +380,7 @@ export function generateConsumable(level: number): Consumable {
     case 'shield':
       magnitude = Math.round((18 + level * 8) * mult)
       durationTurns = 1
+      cooldownTurns = 4
       break
     case 'statBuff': {
       stat = BUFF_STATS[Math.floor(Math.random() * BUFF_STATS.length)]
@@ -388,6 +391,9 @@ export function generateConsumable(level: number): Consumable {
       // Rounds of combat, scaled by rarity — at 1 turn the tonic expired
       // before it could matter (auto-use fires at battle start)
       durationTurns = rarity === 'epic' ? 6 : rarity === 'rare' ? 5 : rarity === 'uncommon' ? 4 : 3
+      // No 100% uptime: cooldown outlasts the buff by 2 turns (same
+      // philosophy as spell buffs, which are clamped to their cooldown)
+      cooldownTurns = durationTurns + 2
       break
     }
     case 'physicalDamage':
