@@ -1,3 +1,5 @@
+import { createJSONStorage, type StateStorage } from 'zustand/middleware'
+
 export const SAVE_SCHEMA_VERSION = 2
 
 export const SAVE_KEYS = {
@@ -25,6 +27,45 @@ export const CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY = 'incremental-idle-cloud-acce
 export const CLOUD_OVERWRITTEN_BACKUP_KEY = 'incremental-idle-cloud-overwritten-backup'
 
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
+
+let deferredPersistDepth = 0
+const deferredPersistWrites = new Map<string, string>()
+
+const pausableLocalStorage: StateStorage = {
+  getItem: (name) => localStorage.getItem(name),
+  setItem: (name, value) => {
+    if (deferredPersistDepth > 0) {
+      deferredPersistWrites.set(name, value)
+      return
+    }
+    localStorage.setItem(name, value)
+  },
+  removeItem: (name) => {
+    if (deferredPersistDepth > 0) {
+      deferredPersistWrites.delete(name)
+    }
+    localStorage.removeItem(name)
+  },
+}
+
+export const gameStorage = createJSONStorage(() => pausableLocalStorage)
+
+export function beginDeferredPersistWrites(): void {
+  deferredPersistDepth += 1
+}
+
+export function endDeferredPersistWrites(options: { flush: boolean } = { flush: true }): void {
+  deferredPersistDepth = Math.max(0, deferredPersistDepth - 1)
+  if (deferredPersistDepth > 0) return
+
+  const writes = [...deferredPersistWrites.entries()]
+  deferredPersistWrites.clear()
+
+  if (!options.flush) return
+  for (const [key, value] of writes) {
+    localStorage.setItem(key, value)
+  }
+}
 
 export interface LocalSaveSnapshot {
   schemaVersion: number

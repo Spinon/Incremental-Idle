@@ -5,7 +5,7 @@ import type { Attributes, DerivedStats, HeroConfig } from '../types/hero'
 import { DEFAULT_HERO_CONFIG } from '../types/hero'
 import { getDerivedStats, staminaDrainAt } from '../formulas/derived'
 import type { Speed } from './battleStore'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 interface HeroStore {
@@ -278,6 +278,7 @@ export const useHeroStore = create<HeroStore>()(
   {
     name: SAVE_KEYS.hero,
     version: SAVE_SCHEMA_VERSION,
+    storage: gameStorage,
     migrate: migrateSave,
     merge: mergeSave,
   }

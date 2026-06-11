@@ -1,11 +1,11 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { Quest, QuestObjectiveExtermination, QuestObjectiveBounty } from '../types/quest'
 import { DIFFICULTY_LABEL_PT, DIFFICULTY_LABEL_EN } from '../formulas/quests'
 import { useHeroStore } from './heroStore'
 import { useNotifStore } from './notifStore'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 interface QuestStore {
@@ -135,7 +135,7 @@ export const useQuestStore = create<QuestStore>()(
       version: SAVE_SCHEMA_VERSION,
       migrate: migrateSave,
       merge: mergeSave,
-      storage: createJSONStorage(() => localStorage),
+      storage: gameStorage,
     }
   )
 )

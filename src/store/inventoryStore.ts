@@ -19,7 +19,7 @@ import {
   WEAPON_MAX_TIER,
   WEAPON_TYPES,
 } from '../formulas/weapons'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 const BASE_SLOTS      = 12
@@ -511,6 +511,7 @@ export const useInventoryStore = create<InventoryStore>()(
     {
       name: SAVE_KEYS.inventory,
       version: SAVE_SCHEMA_VERSION,
+      storage: gameStorage,
       migrate: migrateSave,
       merge: mergeSave,
     }

@@ -14,7 +14,7 @@ import type { Biome, Direction, MapTile, PlacedTile, TileContent } from '../type
 import type { MarketOffer, TreasureChest } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 import type { PartyNpc } from '../types/party'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import type { QuestObjectiveBounty } from '../types/quest'
 
 export const DIR_OPPOSITE: Record<Direction, Direction> = { N: 'S', S: 'N', E: 'W', W: 'E' }
@@ -1203,6 +1203,7 @@ export const useMapStore = create<MapStore>()(
     {
       name: SAVE_KEYS.map,
       version: SAVE_SCHEMA_VERSION,
+      storage: gameStorage,
       // mergeSave + normalization: pendingMonsterXp was `object | null` in old
       // saves (and migrate only runs on version bumps), so coerce to array here.
       merge: (persisted, current) => {

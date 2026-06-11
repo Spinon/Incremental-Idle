@@ -14,7 +14,7 @@ import type { ActiveBuff, ActiveDebuff, AutoCastConfig } from '../types/spell'
 import type { ElementType } from '../types/element'
 import { ELEMENT_DEFAULT_STATUS, makeStatus } from '../types/element'
 import type { Spell } from '../types/spell'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
 /** Returns the primary element word from a spell (word1 first, then word2). */
@@ -299,6 +299,7 @@ export const useSpellStore = create<SpellStore>()(
   {
     name: SAVE_KEYS.spells,
     version: SAVE_SCHEMA_VERSION,
+    storage: gameStorage,
     migrate: migrateSave,
     merge: mergeSave,
     partialize: (s) => ({

@@ -9,7 +9,7 @@ import { getHeroDerived } from '../lib/heroDerived'
 import { useHeroStore } from './heroStore'
 import { useInventoryStore } from './inventoryStore'
 import { useMapStore, DIRS, DIR_DELTA, DIR_OPPOSITE, gridKey } from './mapStore'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import type { Attributes } from '../types/hero'
 import type { PlacedTile } from '../types/map'
 import type { MonsterRarity } from '../types/monster'
@@ -302,6 +302,7 @@ export const usePartyStore = create<PartyStore>()(
     {
       name: SAVE_KEYS.party,
       version: SAVE_SCHEMA_VERSION,
+      storage: gameStorage,
       migrate: migrateSave,
       merge: mergeSave,
       partialize: (s) => ({

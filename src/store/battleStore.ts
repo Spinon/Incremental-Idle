@@ -17,7 +17,7 @@ import type { ElementType } from '../types/element'
 import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
 import type { ActiveStatus } from '../types/element'
 import type { WeaponType } from '../types/weapon'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 export type { ActiveStatus }
 
 export type Speed = number
@@ -887,6 +887,7 @@ export const useBattleStore = create<BattleStore>()(
   {
     name: SAVE_KEYS.battle,
     version: SAVE_SCHEMA_VERSION,
+    storage: gameStorage,
     migrate: migrateSave,
     merge: mergeSave,
     partialize: (state) => ({

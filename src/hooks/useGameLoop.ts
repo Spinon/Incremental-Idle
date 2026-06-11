@@ -5,7 +5,14 @@ import { useMapStore } from '../store/mapStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
 import { useSpellStore } from '../store/spellStore'
-import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS } from '../store/save'
+import {
+  CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY,
+  CLOUD_RESTORE_OFFLINE_PENDING_KEY,
+  OFFLINE_LAST_ACTIVE_KEY,
+  SAVE_KEYS,
+  beginDeferredPersistWrites,
+  endDeferredPersistWrites,
+} from '../store/save'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 import { tryAutoUseConsumable } from '../lib/consumables'
@@ -165,6 +172,7 @@ export function useGameLoop(paused = false) {
   const syncSnapshot  = useRef<Record<string, string | null> | null>(null)
   const syncActive    = useRef(false)
   const notifPausedForOffline = useRef(false)
+  const persistDeferredForOffline = useRef(false)
   // Ref (not effect-local) so StrictMode's dev remount doesn't re-run the
   // startup check and mistake the transaction the first mount just began for
   // an interrupted one from a previous page load.
@@ -398,6 +406,18 @@ export function useGameLoop(paused = false) {
       useNotifStore.getState().setPaused(false)
     }
 
+    function deferPersistForOffline() {
+      if (persistDeferredForOffline.current) return
+      persistDeferredForOffline.current = true
+      beginDeferredPersistWrites()
+    }
+
+    function finishDeferredPersistForOffline(flush: boolean) {
+      if (!persistDeferredForOffline.current) return
+      persistDeferredForOffline.current = false
+      endDeferredPersistWrites({ flush })
+    }
+
     function startOfflineSync(elapsedMs: number) {
       if (syncActive.current || elapsedMs < STEP_MS) return
 
@@ -405,6 +425,7 @@ export function useGameLoop(paused = false) {
       if (totalMs <= 0) return
 
       syncActive.current = true
+      deferPersistForOffline()
       pauseNotifsForOffline()
       syncSnapshot.current = snapshotPersistedState()
       beginOfflineTransaction(syncSnapshot.current)
@@ -435,6 +456,7 @@ export function useGameLoop(paused = false) {
           }
 
           if (processedMs >= totalMs) {
+            finishDeferredPersistForOffline(true)
             resumeNotifsAfterOffline()
             setOfflineSync({
               status: 'ready',
@@ -453,6 +475,7 @@ export function useGameLoop(paused = false) {
           })
           window.setTimeout(processChunk, 0)
         } catch (error) {
+          finishDeferredPersistForOffline(false)
           resumeNotifsAfterOffline()
           throw error
         }
@@ -488,6 +511,7 @@ export function useGameLoop(paused = false) {
     syncActions.current = {
       accept: () => {
         syncActive.current = false
+        finishDeferredPersistForOffline(true)
         resumeNotifsAfterOffline()
         syncSnapshot.current = null
         clearOfflineTransaction()
@@ -507,6 +531,7 @@ export function useGameLoop(paused = false) {
         setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })
       },
       discard: () => {
+        finishDeferredPersistForOffline(false)
         resumeNotifsAfterOffline()
         if (syncSnapshot.current) {
           restorePersistedState(syncSnapshot.current)
@@ -563,7 +588,10 @@ export function useGameLoop(paused = false) {
     document.addEventListener('visibilitychange', pumpOnResume)
 
     return () => {
-      if (!syncActive.current) resumeNotifsAfterOffline()
+      if (!syncActive.current) {
+        finishDeferredPersistForOffline(true)
+        resumeNotifsAfterOffline()
+      }
       clearInterval(id)
       window.removeEventListener('focus', pumpOnResume)
       document.removeEventListener('visibilitychange', pumpOnResume)

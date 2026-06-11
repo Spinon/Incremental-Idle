@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Lang } from '../i18n/translations'
-import { SAVE_KEYS, SAVE_SCHEMA_VERSION, mergeSave, migrateSave } from './save'
+import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 
 type Theme = 'dark' | 'light'
 
@@ -23,6 +23,7 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: SAVE_KEYS.settings,
       version: SAVE_SCHEMA_VERSION,
+      storage: gameStorage,
       migrate: migrateSave,
       merge: mergeSave,
     }
