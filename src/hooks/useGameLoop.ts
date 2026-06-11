@@ -27,7 +27,9 @@ import type { Phase } from '../store/battleStore'
 const STEP_MS = 200
 const SYNC_PROMPT_MS = 30 * 1000
 const OFFLINE_STEP_MS = 5 * 1000
-const SYNC_CHUNK_STEPS = 240
+const SYNC_CHUNK_STEPS = 60
+const SYNC_CHUNK_BUDGET_MS = 12
+const AUTO_PLACE_MAX_PER_STEP = 32
 const MID_FIGHT_KEY = 'ii-mid-fight'
 const OFFLINE_SYNC_SNAPSHOT_KEY = 'incremental-idle-offline-sync-snapshot'
 const OFFLINE_SYNC_PENDING_KEY = 'incremental-idle-offline-sync-pending'
@@ -343,7 +345,13 @@ export function useGameLoop(paused = false) {
             // (within the level cap).  In risk mode place any tile so the
             // deck is consumed even for above-level zones.
             const maxTileLv = riskMode ? undefined : heroLv
-            while (useMapStore.getState().tryAutoPlace(maxTileLv)) { /* */ }
+            let autoPlaced = 0
+            while (
+              autoPlaced < AUTO_PLACE_MAX_PER_STEP &&
+              useMapStore.getState().tryAutoPlace(maxTileLv)
+            ) {
+              autoPlaced += 1
+            }
 
             // Truly stuck: deck is full AND no tile of ANY level can be
             // placed (map is geometrically enclosed, not just level-capped).
@@ -446,8 +454,14 @@ export function useGameLoop(paused = false) {
         try {
           let steps = 0
           let remainingMs = totalMs - processedMs
+          const chunkStartedAt = performance.now()
 
-          while (remainingMs > 0 && steps < SYNC_CHUNK_STEPS && processedMs < totalMs) {
+          while (
+            remainingMs > 0 &&
+            steps < SYNC_CHUNK_STEPS &&
+            processedMs < totalMs &&
+            (steps === 0 || performance.now() - chunkStartedAt < SYNC_CHUNK_BUDGET_MS)
+          ) {
             const deltaMs = Math.min(OFFLINE_STEP_MS, remainingMs)
             runStep(deltaMs, { offline: true })
             processedMs += deltaMs
@@ -475,9 +489,19 @@ export function useGameLoop(paused = false) {
           })
           window.setTimeout(processChunk, 0)
         } catch (error) {
+          console.error('Offline progress simulation failed', error)
+          syncActive.current = false
           finishDeferredPersistForOffline(false)
           resumeNotifsAfterOffline()
-          throw error
+          if (syncSnapshot.current) {
+            restorePersistedState(syncSnapshot.current)
+          }
+          syncSnapshot.current = null
+          clearOfflineTransaction()
+          writeLastActiveAt()
+          setOfflineSync({ status: 'idle', elapsedMs: 0, processedMs: 0 })
+          setStartupReady(true)
+          window.setTimeout(() => window.location.reload(), 0)
         }
       }
 
