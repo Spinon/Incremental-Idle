@@ -20,6 +20,9 @@ export const LOCAL_PLAY_KEY = 'incremental-idle-local-play'
 // Stores the remote row updated_at currently being restored through offline progress.
 export const CLOUD_RESTORE_OFFLINE_PENDING_KEY = 'incremental-idle-cloud-restore-offline-pending'
 export const CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY = 'incremental-idle-cloud-accepted-remote-updated-at'
+// Last cloud save row overwritten by an explicit "keep local" choice, kept as a
+// best-effort recovery copy on this device.
+export const CLOUD_OVERWRITTEN_BACKUP_KEY = 'incremental-idle-cloud-overwritten-backup'
 
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
 

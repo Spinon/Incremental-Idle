@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import type { RealtimeChannel, Session, User } from '@supabase/supabase-js'
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, supabaseRestConfig } from '../lib/supabase'
 import {
   CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY,
+  CLOUD_OVERWRITTEN_BACKUP_KEY,
   CLOUD_SAVE_SLOT_KEY,
   CLOUD_RESTORE_OFFLINE_PENDING_KEY,
   LOCAL_PLAY_KEY,
@@ -71,12 +72,41 @@ const CLOUD_SAVE_CONFLICT_GRACE_MS = 5 * 60 * 1000
 const CLOUD_SESSION_CLIENT_ID_KEY = 'incremental-idle-cloud-client-session-id'
 const CLOUD_SESSION_LEASE_MS = 2 * 60 * 1000
 const CLOUD_SESSION_HEARTBEAT_MS = 15 * 1000
-const CLOUD_SESSION_WATCH_MS = 5 * 1000
+const SYNC_RETRY_BASE_MS = 5 * 1000
+const SYNC_RETRY_MAX_MS = 5 * 60 * 1000
 const ACTIVE_SESSION_ERROR = 'This account is active in another browser or device.'
 let sessionHeartbeatTimer: number | null = null
-let sessionWatchTimer: number | null = null
 let sessionWatchChannel: RealtimeChannel | null = null
 let watchedUserId: string | null = null
+let syncRetryTimer: number | null = null
+let syncRetryAttempt = 0
+let manualAuthInProgress = false
+// Latest metadata returned by a lock write, so the pagehide release can build
+// its payload without fetching (no async work is reliable during pagehide).
+let lastKnownLockMetadata: Record<string, unknown> | null = null
+
+function clearSyncRetry() {
+  if (syncRetryTimer !== null) {
+    window.clearTimeout(syncRetryTimer)
+    syncRetryTimer = null
+  }
+  syncRetryAttempt = 0
+}
+
+// Pull is the reconciler: it re-applies, prompts, or pushes as needed, so a
+// single retry path through pullRemoteSave covers failed pulls and pushes.
+function scheduleSyncRetry() {
+  if (syncRetryTimer !== null) return
+  const delay = Math.min(SYNC_RETRY_BASE_MS * 2 ** syncRetryAttempt, SYNC_RETRY_MAX_MS)
+  syncRetryAttempt += 1
+  syncRetryTimer = window.setTimeout(() => {
+    syncRetryTimer = null
+    if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
+    const { user, pendingRemote } = useCloudSaveStore.getState()
+    if (!user || pendingRemote) return
+    void useCloudSaveStore.getState().pullRemoteSave()
+  }, delay)
+}
 
 function authStatusFromSession(session: Session | null): CloudStatus {
   return session ? 'signed-in' : 'signed-out'
@@ -123,6 +153,27 @@ function readSessionLock(metadata: Record<string, unknown> | null | undefined): 
 function isFreshLock(lock: CloudSessionLock, now = Date.now()): boolean {
   const heartbeatAt = isoMs(lock.activeClientHeartbeatAt)
   return heartbeatAt > 0 && now - heartbeatAt < CLOUD_SESSION_LEASE_MS
+}
+
+function metadataWithoutLock(metadata: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const {
+    activeClientSessionId,
+    activeClientHeartbeatAt,
+    activeClientStartedAt,
+    activeClientAppVersion,
+    ...rest
+  } = metadata ?? {}
+  void activeClientSessionId
+  void activeClientHeartbeatAt
+  void activeClientStartedAt
+  void activeClientAppVersion
+  return rest
+}
+
+function rememberLockMetadata(row: CloudSaveRow | null) {
+  if (row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)) {
+    lastKnownLockMetadata = row.metadata
+  }
 }
 
 function isLockedByAnotherClient(row: CloudSaveRow | null, clientSessionId = getClientSessionId()): boolean {
@@ -175,10 +226,6 @@ function setExclusiveConflictState() {
 }
 
 function clearSessionWatch() {
-  if (sessionWatchTimer !== null) {
-    window.clearInterval(sessionWatchTimer)
-    sessionWatchTimer = null
-  }
   if (sessionWatchChannel && supabase) {
     void supabase.removeChannel(sessionWatchChannel)
   }
@@ -186,6 +233,7 @@ function clearSessionWatch() {
   watchedUserId = null
   window.removeEventListener('focus', checkWatchedSession)
   document.removeEventListener('visibilitychange', checkWatchedSession)
+  window.removeEventListener('pagehide', releaseSessionLockOnPageHide)
 }
 
 function readPersistedState(snapshot: LocalSaveSnapshot, key: keyof typeof SAVE_KEYS): Record<string, unknown> {
@@ -224,6 +272,18 @@ function saveSummary(snapshot: LocalSaveSnapshot) {
   }
 }
 
+// Conservative: only true when the local save is clearly an untouched new game,
+// so restoring the cloud save automatically cannot lose progress.
+function isFreshLocalSave(local: LocalSaveSnapshot): boolean {
+  const s = saveSummary(local)
+  return s.level <= 1
+    && s.xp === 0
+    && s.gold === 0
+    && s.tilesPlaced === 0
+    && s.inventoryCount === 0
+    && s.earnedWordCount === 0
+}
+
 function hasMeaningfulDifference(local: LocalSaveSnapshot, remote: LocalSaveSnapshot): boolean {
   const l = saveSummary(local)
   const r = saveSummary(remote)
@@ -260,44 +320,83 @@ async function fetchRemoteSave(userId: string): Promise<CloudSaveRow | null> {
   return data as CloudSaveRow | null
 }
 
-async function upsertSnapshot(userId: string, snapshot: LocalSaveSnapshot): Promise<CloudSaveRow> {
+// PostgREST or-filter matching rows this client may still write to: lock free,
+// owned by this client, or expired. Keeps lock writes atomic against races.
+function lockOwnershipFilter(now = Date.now()): string {
+  const staleBefore = new Date(now - CLOUD_SESSION_LEASE_MS).toISOString()
+  return [
+    'metadata->>activeClientSessionId.is.null',
+    `metadata->>activeClientSessionId.eq."${getClientSessionId()}"`,
+    'metadata->>activeClientHeartbeatAt.is.null',
+    `metadata->>activeClientHeartbeatAt.lt."${staleBefore}"`,
+  ].join(',')
+}
+
+async function upsertSnapshot(
+  userId: string,
+  snapshot: LocalSaveSnapshot,
+  existing?: CloudSaveRow | null,
+): Promise<CloudSaveRow> {
   if (!supabase) throw new Error('Supabase is not configured.')
-  const existing = await fetchRemoteSave(userId)
+  if (existing === undefined) existing = await fetchRemoteSave(userId)
+
+  const payload = {
+    save_data: snapshot,
+    save_schema_version: SAVE_SCHEMA_VERSION,
+    game_version: snapshot.appVersion,
+    local_save_id: snapshot.localSaveId,
+    local_updated_at: snapshot.capturedAt,
+    metadata: withSessionLockMetadata(existing),
+  }
+
+  if (!existing) {
+    const { data, error } = await supabase
+      .from('cloud_saves')
+      .upsert({ user_id: userId, slot_key: CLOUD_SAVE_SLOT_KEY, ...payload }, { onConflict: 'user_id,slot_key' })
+      .select('*')
+      .single()
+
+    if (error) throw error
+    rememberLockMetadata(data as CloudSaveRow)
+    return data as CloudSaveRow
+  }
 
   const { data, error } = await supabase
     .from('cloud_saves')
-    .upsert({
-      user_id: userId,
-      slot_key: CLOUD_SAVE_SLOT_KEY,
-      save_data: snapshot,
-      save_schema_version: SAVE_SCHEMA_VERSION,
-      game_version: snapshot.appVersion,
-      local_save_id: snapshot.localSaveId,
-      local_updated_at: snapshot.capturedAt,
-      metadata: withSessionLockMetadata(existing),
-    }, { onConflict: 'user_id,slot_key' })
+    .update(payload)
+    .eq('user_id', userId)
+    .eq('slot_key', CLOUD_SAVE_SLOT_KEY)
+    .or(lockOwnershipFilter())
     .select('*')
-    .single()
 
   if (error) throw error
-  return data as CloudSaveRow
+  const row = (data as CloudSaveRow[] | null)?.[0]
+  if (!row) throw new Error(ACTIVE_SESSION_ERROR)
+  rememberLockMetadata(row)
+  return row
 }
 
-async function writeSessionLock(userId: string): Promise<CloudSaveRow | null> {
+async function writeSessionLock(
+  userId: string,
+  existing: CloudSaveRow | null,
+  force = false,
+): Promise<CloudSaveRow | null> {
   if (!supabase) return null
-  const existing = await fetchRemoteSave(userId)
-  if (!existing) return upsertSnapshot(userId, captureLocalSaveSnapshot())
+  if (!existing) return upsertSnapshot(userId, captureLocalSaveSnapshot(), null)
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('cloud_saves')
     .update({ metadata: withSessionLockMetadata(existing) })
     .eq('user_id', userId)
     .eq('slot_key', CLOUD_SAVE_SLOT_KEY)
-    .select('*')
-    .single()
+  if (!force) query = query.or(lockOwnershipFilter())
 
+  const { data, error } = await query.select('*')
   if (error) throw error
-  return data as CloudSaveRow
+  const row = (data as CloudSaveRow[] | null)?.[0]
+  if (!row) throw new Error(ACTIVE_SESSION_ERROR)
+  rememberLockMetadata(row)
+  return row
 }
 
 async function releaseSessionLock(userId: string): Promise<void> {
@@ -308,27 +407,52 @@ async function releaseSessionLock(userId: string): Promise<void> {
   const lock = readSessionLock(existing.metadata)
   if (lock.activeClientSessionId !== getClientSessionId()) return
 
-  const { activeClientSessionId, activeClientHeartbeatAt, activeClientStartedAt, activeClientAppVersion, ...rest } = existing.metadata ?? {}
-  void activeClientSessionId
-  void activeClientHeartbeatAt
-  void activeClientStartedAt
-  void activeClientAppVersion
-
   const { error } = await supabase
     .from('cloud_saves')
-    .update({ metadata: rest })
+    .update({ metadata: metadataWithoutLock(existing.metadata) })
     .eq('user_id', userId)
     .eq('slot_key', CLOUD_SAVE_SLOT_KEY)
 
   if (error) throw error
+  lastKnownLockMetadata = null
 }
 
-async function assertExclusiveSession(userId: string): Promise<void> {
+// pagehide allows no awaited work, so this is a fire-and-forget keepalive PATCH
+// built from cached state. The conditional filter makes it a no-op server-side
+// if another client already took the lock; the 2 min lease stays the fallback.
+function releaseSessionLockOnPageHide() {
+  if (!supabaseRestConfig || !lastKnownLockMetadata) return
+  const { user, session } = useCloudSaveStore.getState()
+  const accessToken = session?.access_token
+  if (!user || !accessToken) return
+  if (readSessionLock(lastKnownLockMetadata).activeClientSessionId !== getClientSessionId()) return
+
+  const params = new URLSearchParams({
+    user_id: `eq.${user.id}`,
+    slot_key: `eq.${CLOUD_SAVE_SLOT_KEY}`,
+    'metadata->>activeClientSessionId': `eq.${getClientSessionId()}`,
+  })
+  void fetch(`${supabaseRestConfig.url}/rest/v1/cloud_saves?${params.toString()}`, {
+    method: 'PATCH',
+    keepalive: true,
+    headers: {
+      apikey: supabaseRestConfig.anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ metadata: metadataWithoutLock(lastKnownLockMetadata) }),
+  }).catch(() => {
+    // Best effort only; the lease expiry covers failures.
+  })
+}
+
+async function assertExclusiveSession(userId: string): Promise<CloudSaveRow | null> {
   const remote = await fetchRemoteSave(userId)
   if (isLockedByAnotherClient(remote)) {
     throw new Error(ACTIVE_SESSION_ERROR)
   }
-  await writeSessionLock(userId)
+  return writeSessionLock(userId, remote)
 }
 
 async function claimExclusiveSession(userId: string, revokeOtherSessions: boolean): Promise<void> {
@@ -336,12 +460,15 @@ async function claimExclusiveSession(userId: string, revokeOtherSessions: boolea
     const { error } = await supabase!.auth.signOut({ scope: 'others' })
     if (error) throw error
   }
-  await writeSessionLock(userId)
+  const existing = await fetchRemoteSave(userId)
+  await writeSessionLock(userId, existing, true)
 }
 
 async function signOutLocalForExclusiveConflict(): Promise<void> {
   clearSessionHeartbeat()
   clearSessionWatch()
+  clearSyncRetry()
+  lastKnownLockMetadata = null
   if (supabase) await supabase.auth.signOut({ scope: 'local' })
 }
 
@@ -369,9 +496,7 @@ function startSessionWatch(userId: string) {
   watchedUserId = userId
   window.addEventListener('focus', checkWatchedSession)
   document.addEventListener('visibilitychange', checkWatchedSession)
-  sessionWatchTimer = window.setInterval(() => {
-    void checkWatchedSession()
-  }, CLOUD_SESSION_WATCH_MS)
+  window.addEventListener('pagehide', releaseSessionLockOnPageHide)
 
   if (!supabase) return
   sessionWatchChannel = supabase
@@ -496,11 +621,15 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         const nextUserId = nextSession?.user?.id ?? null
         const userChanged = previousUserId !== nextUserId
         const shouldClearPending = event === 'SIGNED_OUT' || userChanged
-        const explicitAuthFlow = event === 'SIGNED_IN' && get().status === 'loading'
+        // Manual flows (sign in/up, OTP) claim the lock, monitor and pull
+        // themselves; reacting here too would race them and could reset
+        // remoteChecked after their pull already completed.
+        const explicitAuthFlow = manualAuthInProgress
+        const keepBusyStatus = !!nextSession?.user && (explicitAuthFlow || get().status === 'syncing')
         set({
           session: nextSession,
           user: nextSession?.user ?? null,
-          status: authStatusFromSession(nextSession),
+          status: keepBusyStatus ? get().status : authStatusFromSession(nextSession),
           authMode: event === 'PASSWORD_RECOVERY' ? 'password-reset' : get().authMode,
           pendingRemote: shouldClearPending ? null : get().pendingRemote,
           remoteChecked: nextSession?.user && !userChanged ? get().remoteChecked : false,
@@ -529,66 +658,76 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
   signInWithPassword: async (email, password) => {
     if (!supabase) return
-    set({ status: 'loading', error: null, message: null })
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (error) {
-      set({ status: 'error', error: error.message })
-      return
-    }
-    if (data.session?.user) {
-      try {
-        await claimExclusiveSession(data.session.user.id, true)
-        startExclusiveSessionMonitoring(data.session.user.id)
-      } catch (err) {
-        await signOutLocalForExclusiveConflict()
-        set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+    manualAuthInProgress = true
+    try {
+      set({ status: 'loading', error: null, message: null })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) {
+        set({ status: 'error', error: error.message })
         return
       }
+      if (data.session?.user) {
+        try {
+          await claimExclusiveSession(data.session.user.id, true)
+          startExclusiveSessionMonitoring(data.session.user.id)
+        } catch (err) {
+          await signOutLocalForExclusiveConflict()
+          set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+          return
+        }
+      }
+      set({
+        status: authStatusFromSession(data.session),
+        session: data.session,
+        user: data.session?.user ?? null,
+        authMode: 'sign-in',
+        message: 'Login successful.',
+      })
+      if (data.session?.user) await get().pullRemoteSave()
+    } finally {
+      manualAuthInProgress = false
     }
-    set({
-      status: authStatusFromSession(data.session),
-      session: data.session,
-      user: data.session?.user ?? null,
-      authMode: 'sign-in',
-      message: 'Login successful.',
-    })
-    if (data.session?.user) await get().pullRemoteSave()
   },
 
   signUpWithPassword: async (email, password) => {
     if (!supabase) return
-    set({ status: 'loading', error: null, message: null })
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-    if (error) {
-      set({ status: 'error', error: error.message })
-      return
-    }
-    if (data.session?.user) {
-      try {
-        await claimExclusiveSession(data.session.user.id, true)
-        startExclusiveSessionMonitoring(data.session.user.id)
-      } catch (err) {
-        await signOutLocalForExclusiveConflict()
-        set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+    manualAuthInProgress = true
+    try {
+      set({ status: 'loading', error: null, message: null })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+      if (error) {
+        set({ status: 'error', error: error.message })
         return
       }
+      if (data.session?.user) {
+        try {
+          await claimExclusiveSession(data.session.user.id, true)
+          startExclusiveSessionMonitoring(data.session.user.id)
+        } catch (err) {
+          await signOutLocalForExclusiveConflict()
+          set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+          return
+        }
+      }
+      set({
+        status: authStatusFromSession(data.session),
+        session: data.session,
+        user: data.session?.user ?? null,
+        authMode: 'sign-in',
+        message: data.session
+          ? 'Account created.'
+          : 'Account created. Check your email to confirm before logging in.',
+      })
+      if (data.session?.user) await get().pullRemoteSave()
+    } finally {
+      manualAuthInProgress = false
     }
-    set({
-      status: authStatusFromSession(data.session),
-      session: data.session,
-      user: data.session?.user ?? null,
-      authMode: 'sign-in',
-      message: data.session
-        ? 'Account created.'
-        : 'Account created. Check your email to confirm before logging in.',
-    })
-    if (data.session?.user) await get().pullRemoteSave()
   },
 
   requestPasswordRecovery: async (email) => {
@@ -612,34 +751,39 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
   verifyRecoveryOtp: async (email, token) => {
     if (!supabase) return
-    set({ status: 'loading', error: null, message: null })
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    })
-    if (error) {
-      set({ status: 'error', error: error.message })
-      return
-    }
-    if (data.session?.user) {
-      try {
-        await claimExclusiveSession(data.session.user.id, true)
-        startExclusiveSessionMonitoring(data.session.user.id)
-      } catch (err) {
-        await signOutLocalForExclusiveConflict()
-        set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+    manualAuthInProgress = true
+    try {
+      set({ status: 'loading', error: null, message: null })
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email',
+      })
+      if (error) {
+        set({ status: 'error', error: error.message })
         return
       }
+      if (data.session?.user) {
+        try {
+          await claimExclusiveSession(data.session.user.id, true)
+          startExclusiveSessionMonitoring(data.session.user.id)
+        } catch (err) {
+          await signOutLocalForExclusiveConflict()
+          set({ status: 'error', session: null, user: null, error: err instanceof Error ? err.message : String(err) })
+          return
+        }
+      }
+      set({
+        status: authStatusFromSession(data.session),
+        session: data.session,
+        user: data.session?.user ?? null,
+        authMode: 'password-reset',
+        recoveryEmail: null,
+        message: 'Code confirmed. Choose a new password.',
+      })
+    } finally {
+      manualAuthInProgress = false
     }
-    set({
-      status: authStatusFromSession(data.session),
-      session: data.session,
-      user: data.session?.user ?? null,
-      authMode: 'password-reset',
-      recoveryEmail: null,
-      message: 'Code confirmed. Choose a new password.',
-    })
   },
 
   updatePassword: async (password) => {
@@ -650,9 +794,18 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       set({ status: 'error', error: error.message })
       return
     }
+    const userId = get().user?.id
+    if (userId) {
+      try {
+        await releaseSessionLock(userId)
+      } catch {
+        // Best effort; the lease expiry covers failures.
+      }
+    }
     await supabase.auth.signOut({ scope: 'local' })
     clearSessionHeartbeat()
     clearSessionWatch()
+    clearSyncRetry()
     set({
       status: 'signed-out',
       session: null,
@@ -679,6 +832,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     }
     clearSessionHeartbeat()
     clearSessionWatch()
+    clearSyncRetry()
     set({
       status: 'signed-out',
       session: null,
@@ -698,11 +852,12 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
     set({ status: 'syncing', error: null, message: null })
     try {
-      await assertExclusiveSession(user.id)
+      const lockedRow = await assertExclusiveSession(user.id)
       markLocalSaveChanged()
       const snapshot = captureLocalSaveSnapshot()
-      const row = await upsertSnapshot(user.id, snapshot)
+      const row = await upsertSnapshot(user.id, snapshot, lockedRow)
       clearAcceptedRemote()
+      clearSyncRetry()
       set({
         status: 'signed-in',
         remoteUpdatedAt: row.updated_at,
@@ -718,6 +873,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         return
       }
       set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
+      scheduleSyncRetry()
     }
   },
 
@@ -729,8 +885,8 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
     set({ status: 'syncing', error: null, message: null })
     try {
-      await assertExclusiveSession(user.id)
-      const remote = await fetchRemoteSave(user.id)
+      const remote = await assertExclusiveSession(user.id)
+      clearSyncRetry()
       const hadLocalUpdatedAt = getLocalSaveUpdatedAt() !== null
       const local = captureLocalSaveSnapshot({ markChanged: false })
       if (!remote) {
@@ -739,6 +895,20 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       }
 
       const remoteSnapshot = remote.save_data
+      const remoteSchemaVersion = Math.max(num(remote.save_schema_version), num(remoteSnapshot?.schemaVersion))
+      if (remoteSchemaVersion > SAVE_SCHEMA_VERSION) {
+        // Loading (or overwriting) a newer-schema save from an older client can
+        // corrupt it. Keep remoteChecked false so autosaves stay blocked too.
+        set({
+          status: 'error',
+          remoteUpdatedAt: remote.updated_at,
+          localSnapshotAt: local.capturedAt,
+          remoteChecked: false,
+          pendingRemote: null,
+          error: 'Cloud save was created by a newer game version. Update this device to keep syncing.',
+        })
+        return
+      }
       const acceptedRemote = isAcceptedRemote(remote)
       const localIsNewer = compareIso(local.capturedAt, remote.local_updated_at) > 0
       const remoteIsNewer = compareIso(remote.local_updated_at, local.capturedAt) > 0
@@ -755,6 +925,10 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       }
 
       if (!hadLocalUpdatedAt && meaningfulDifference) {
+        if (isFreshLocalSave(local)) {
+          applyRemoteSaveAndReload(remote)
+          return
+        }
         set({
           status: 'signed-in',
           pendingRemote: remote,
@@ -826,10 +1000,6 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         pendingRemote: null,
         message: 'Cloud save is up to date.',
       })
-
-      if (remoteSnapshot.schemaVersion > local.schemaVersion) {
-        set({ message: 'Cloud save was created by a newer game version.' })
-      }
     } catch (err) {
       if (err instanceof Error && err.message === ACTIVE_SESSION_ERROR) {
         await signOutLocalForExclusiveConflict()
@@ -837,10 +1007,19 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
         return
       }
       set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
+      scheduleSyncRetry()
     }
   },
 
   chooseLocal: async () => {
+    const overwritten = get().pendingRemote
+    if (overwritten) {
+      try {
+        localStorage.setItem(CLOUD_OVERWRITTEN_BACKUP_KEY, JSON.stringify(overwritten))
+      } catch {
+        // Best-effort backup; quota errors must not block the user's choice.
+      }
+    }
     clearAcceptedRemote()
     await get().pushLocalSave(true)
   },
