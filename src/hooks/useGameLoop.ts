@@ -58,7 +58,44 @@ function resolveBattleSimulation({ offline }: SimulationContext): boolean {
   return true
 }
 
+// Interiors normally leave through real-time UI timers (market/tower 6s, house
+// 10s), which would stall the offline catch-up for their full real duration.
+// In simulation, resolve them instantly through the same exit paths the timers
+// use.
+function resolveInteriorSimulation({ offline }: SimulationContext): boolean {
+  if (!offline) return false
+  const scene = useMapStore.getState().scene
+
+  if (scene === 'market') {
+    // MarketInterior auto-sells on entry; keep that so offline runs with
+    // auto-sell builds don't fill the inventory and block drops.
+    const gold = useInventoryStore.getState().performAutoSell()
+    if (gold > 0) useHeroStore.getState().earnGold(gold)
+    useMapStore.getState().exitMarket()
+    return true
+  }
+
+  if (scene === 'tower') {
+    useMapStore.getState().autoExitBlueTower()
+    return true
+  }
+
+  if (scene === 'home') {
+    // Same condition as HouseInterior's auto-restart: only after defeat or
+    // stuck. A hero sent home manually stays home, like online.
+    const map = useMapStore.getState()
+    if (!map.defeatPending && !map.stuckPending) return false
+    useBattleStore.getState().reset()
+    map.resetMap(useHeroStore.getState().level)
+    useMapStore.getState().leaveScene()
+    return true
+  }
+
+  return false
+}
+
 const BLOCKING_SYSTEM_HANDLERS: BlockingSystemHandler[] = [
+  resolveInteriorSimulation,
   resolveBattleSimulation,
 ]
 
@@ -127,6 +164,10 @@ export function useGameLoop(paused = false) {
   const battleResolveAt = useRef<number | null>(null)
   const syncSnapshot  = useRef<Record<string, string | null> | null>(null)
   const syncActive    = useRef(false)
+  // Ref (not effect-local) so StrictMode's dev remount doesn't re-run the
+  // startup check and mistake the transaction the first mount just began for
+  // an interrupted one from a previous page load.
+  const startupOfflineChecked = useRef(false)
   const syncActions   = useRef({ accept: () => {}, discard: () => {} })
   const pausedRef     = useRef(paused)
   const [offlineSync, setOfflineSync] = useState<OfflineSyncState>({
@@ -339,11 +380,9 @@ export function useGameLoop(paused = false) {
       prevPhase.current = phase
     }
 
-    let cancelled = false
     let lastTickAt = performance.now()
     let lastActiveWriteAt = performance.now()
     let lagMs = 0
-    let startupOfflineChecked = false
     let startupReloading = false
 
     function startOfflineSync(elapsedMs: number) {
@@ -365,7 +404,9 @@ export function useGameLoop(paused = false) {
       })
 
       function processChunk() {
-        if (cancelled || !syncActive.current) return
+        // Tied to syncActive (a ref) rather than the effect lifecycle: the
+        // chunk chain must survive StrictMode's dev remount mid-simulation.
+        if (!syncActive.current) return
 
         let steps = 0
         let remainingMs = totalMs - processedMs
@@ -401,8 +442,8 @@ export function useGameLoop(paused = false) {
     }
 
     function checkStartupOffline() {
-      if (startupOfflineChecked || pausedRef.current) return
-      startupOfflineChecked = true
+      if (startupOfflineChecked.current || pausedRef.current) return
+      startupOfflineChecked.current = true
 
       if (restoreInterruptedOfflineTransaction()) {
         startupReloading = true
@@ -467,7 +508,7 @@ export function useGameLoop(paused = false) {
         return
       }
       checkStartupOffline()
-      if (startupReloading || syncActive.current || !startupOfflineChecked) return
+      if (startupReloading || syncActive.current || !startupOfflineChecked.current) return
       const elapsedMs = now - lastTickAt
       lastTickAt = now
 
@@ -500,7 +541,6 @@ export function useGameLoop(paused = false) {
     document.addEventListener('visibilitychange', pumpOnResume)
 
     return () => {
-      cancelled = true
       clearInterval(id)
       window.removeEventListener('focus', pumpOnResume)
       document.removeEventListener('visibilitychange', pumpOnResume)
