@@ -126,7 +126,15 @@ function OfflineSyncOverlay({
   )
 }
 
-function CloudSyncOverlay({ isEn }: { isEn: boolean }) {
+function CloudSyncOverlay({ isEn, status }: { isEn: boolean; status: string }) {
+  // Two visible phases: session check (idle/loading), then save reconciliation
+  // (syncing). The width nudges forward per phase so the bar reflects real
+  // progress instead of sitting at a fixed 50%.
+  const checkingSession = status === 'idle' || status === 'loading'
+  const phaseLabel = checkingSession
+    ? (isEn ? 'Checking session...' : 'Verificando sessão...')
+    : (isEn ? 'Comparing cloud and local progress...' : 'Comparando progresso local e da nuvem...')
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 px-5 py-4 text-slate-100 shadow-2xl">
@@ -136,13 +144,12 @@ function CloudSyncOverlay({ isEn }: { isEn: boolean }) {
         <h2 className="mt-1 text-lg font-black">
           {isEn ? 'Synchronizing...' : 'Sincronizando...'}
         </h2>
-        <p className="mt-2 text-sm leading-6 text-slate-300">
-          {isEn
-            ? 'The game is locked while cloud and offline progress are resolved.'
-            : 'O jogo está bloqueado enquanto a nuvem e o progresso offline são resolvidos.'}
-        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">{phaseLabel}</p>
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-800">
-          <div className="h-full w-1/2 animate-pulse rounded-full bg-indigo-400" />
+          <div
+            className="h-full animate-pulse rounded-full bg-indigo-400 transition-[width] duration-500"
+            style={{ width: checkingSession ? '35%' : '75%' }}
+          />
         </div>
       </div>
     </div>
@@ -284,20 +291,30 @@ function GameRoot() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gamePausedForSync, heroLevel])
 
+  // During the offline simulation every step mutates the game stores; keeping
+  // the battle/map tree mounted meant re-rendering it all behind the overlay.
+  // Render only the overlay until the player accepts or discards the result.
+  if (offlineSync.status !== 'idle') {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+        <OfflineSyncOverlay
+          sync={offlineSync}
+          isEn={lang === 'en'}
+          onAccept={acceptOfflineProgress}
+          onDiscard={discardOfflineProgress}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <MiniBattlePlayer />
       <NotifToast />
       <CloudSaveConflictModal />
-      {gamePausedForSync && !cloudPendingRemote && offlineSync.status === 'idle' && (
-        <CloudSyncOverlay isEn={lang === 'en'} />
+      {gamePausedForSync && !cloudPendingRemote && (
+        <CloudSyncOverlay isEn={lang === 'en'} status={cloudStatus} />
       )}
-      <OfflineSyncOverlay
-        sync={offlineSync}
-        isEn={lang === 'en'}
-        onAccept={acceptOfflineProgress}
-        onDiscard={discardOfflineProgress}
-      />
       {/* Header */}
       <header className="border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3">
         <span className="text-indigo-600 dark:text-indigo-400 font-black text-base sm:text-lg tracking-tight">

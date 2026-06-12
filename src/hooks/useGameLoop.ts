@@ -27,8 +27,9 @@ import type { Phase } from '../store/battleStore'
 const STEP_MS = 200
 const SYNC_PROMPT_MS = 30 * 1000
 const OFFLINE_STEP_MS = 5 * 1000
-const SYNC_CHUNK_STEPS = 60
-const SYNC_CHUNK_BUDGET_MS = 12
+const SYNC_CHUNK_STEPS = 500
+const SYNC_CHUNK_BUDGET_MS = 40
+const SYNC_PROGRESS_UPDATE_MS = 200
 const AUTO_PLACE_MAX_PER_STEP = 32
 const MID_FIGHT_KEY = 'ii-mid-fight'
 const OFFLINE_SYNC_SNAPSHOT_KEY = 'incremental-idle-offline-sync-snapshot'
@@ -381,7 +382,9 @@ export function useGameLoop(paused = false) {
           resolvedBlockingSystem = true
         }
 
-        if (resolvedBlockingSystem) {
+        // Skip during offline simulation: each victory would write
+        // localStorage and schedule cloud pushes mid-simulation.
+        if (resolvedBlockingSystem && !options.offline) {
           requestCriticalCloudSave()
         }
 
@@ -440,11 +443,18 @@ export function useGameLoop(paused = false) {
       lagMs = 0
 
       let processedMs = 0
+      let lastProgressPushedAt = 0
       setOfflineSync({
         status: 'running',
         elapsedMs: totalMs,
         processedMs: 0,
       })
+
+      // MessageChannel instead of setTimeout(0): nested timeouts get clamped
+      // to ~4ms by the browser, which wasted a large share of each chunk slot.
+      const chunkChannel = new MessageChannel()
+      chunkChannel.port1.onmessage = () => processChunk()
+      const scheduleNextChunk = () => chunkChannel.port2.postMessage(0)
 
       function processChunk() {
         // Tied to syncActive (a ref) rather than the effect lifecycle: the
@@ -470,6 +480,7 @@ export function useGameLoop(paused = false) {
           }
 
           if (processedMs >= totalMs) {
+            chunkChannel.port1.close()
             finishDeferredPersistForOffline(true)
             resumeNotifsAfterOffline()
             setOfflineSync({
@@ -482,14 +493,21 @@ export function useGameLoop(paused = false) {
             return
           }
 
-          setOfflineSync({
-            status: 'running',
-            elapsedMs: totalMs,
-            processedMs,
-          })
-          window.setTimeout(processChunk, 0)
+          // Throttled: a React commit per chunk costs more than the progress
+          // bar is worth.
+          const nowTs = performance.now()
+          if (nowTs - lastProgressPushedAt >= SYNC_PROGRESS_UPDATE_MS) {
+            lastProgressPushedAt = nowTs
+            setOfflineSync({
+              status: 'running',
+              elapsedMs: totalMs,
+              processedMs,
+            })
+          }
+          scheduleNextChunk()
         } catch (error) {
           console.error('Offline progress simulation failed', error)
+          chunkChannel.port1.close()
           syncActive.current = false
           finishDeferredPersistForOffline(false)
           resumeNotifsAfterOffline()
@@ -505,7 +523,7 @@ export function useGameLoop(paused = false) {
         }
       }
 
-      window.setTimeout(processChunk, 0)
+      scheduleNextChunk()
     }
 
     function checkStartupOffline() {

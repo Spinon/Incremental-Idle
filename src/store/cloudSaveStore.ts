@@ -60,7 +60,7 @@ interface CloudSaveStore {
   verifyRecoveryOtp(email: string, token: string): Promise<void>
   updatePassword(password: string): Promise<void>
   signOut(): Promise<void>
-  pushLocalSave(force?: boolean): Promise<void>
+  pushLocalSave(force?: boolean, lockedRow?: CloudSaveRow | null): Promise<void>
   pullRemoteSave(): Promise<void>
   chooseLocal(): Promise<void>
   chooseRemote(): Promise<void>
@@ -188,6 +188,10 @@ function withSessionLockMetadata(row: CloudSaveRow | null, nowIso = new Date().t
   const current = row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
     ? row.metadata
     : {}
+  return sessionLockMetadataFrom(current, nowIso)
+}
+
+function sessionLockMetadataFrom(current: Record<string, unknown>, nowIso = new Date().toISOString()): Record<string, unknown> {
   const previous = readSessionLock(current)
 
   return {
@@ -447,7 +451,28 @@ function releaseSessionLockOnPageHide() {
   })
 }
 
+// Optimistic single round trip: conditionally take/refresh the lock and read
+// the row back in one request. Falls back to fetch + write only when no row
+// matched (row missing, or held by another client — which then throws).
 async function assertExclusiveSession(userId: string): Promise<CloudSaveRow | null> {
+  if (!supabase) return null
+
+  const currentMetadata = lastKnownLockMetadata ?? {}
+  const { data, error } = await supabase
+    .from('cloud_saves')
+    .update({ metadata: sessionLockMetadataFrom(currentMetadata) })
+    .eq('user_id', userId)
+    .eq('slot_key', CLOUD_SAVE_SLOT_KEY)
+    .or(lockOwnershipFilter())
+    .select('*')
+
+  if (error) throw error
+  const row = (data as CloudSaveRow[] | null)?.[0]
+  if (row) {
+    rememberLockMetadata(row)
+    return row
+  }
+
   const remote = await fetchRemoteSave(userId)
   if (isLockedByAnotherClient(remote)) {
     throw new Error(ACTIVE_SESSION_ERROR)
@@ -844,7 +869,7 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
     })
   },
 
-  pushLocalSave: async (force = false) => {
+  pushLocalSave: async (force = false, providedLockedRow) => {
     if (localStorage.getItem(LOCAL_PLAY_KEY) === '1') return
     if (!force && (get().pendingRemote || !get().remoteChecked || get().status === 'syncing')) return
     const user = get().user
@@ -852,7 +877,11 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
     set({ status: 'syncing', error: null, message: null })
     try {
-      const lockedRow = await assertExclusiveSession(user.id)
+      // Callers that just locked the row (pullRemoteSave) pass it in so the
+      // push doesn't redo the lock round trips.
+      const lockedRow = providedLockedRow !== undefined
+        ? providedLockedRow
+        : await assertExclusiveSession(user.id)
       markLocalSaveChanged()
       const snapshot = captureLocalSaveSnapshot()
       const row = await upsertSnapshot(user.id, snapshot, lockedRow)
@@ -890,7 +919,14 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       const hadLocalUpdatedAt = getLocalSaveUpdatedAt() !== null
       const local = captureLocalSaveSnapshot({ markChanged: false })
       if (!remote) {
-        await get().pushLocalSave(true)
+        // Unblock the game first; the initial upload can finish in background.
+        set({
+          status: 'signed-in',
+          localSnapshotAt: local.capturedAt,
+          remoteChecked: true,
+          pendingRemote: null,
+        })
+        void get().pushLocalSave(true, null)
         return
       }
 
@@ -942,7 +978,16 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
 
       if (localIsNewer && (restoreOfflinePending || (acceptedRemote && !meaningfulDifference) || (withinConflictGrace && !meaningfulDifference))) {
         localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
-        await get().pushLocalSave(true)
+        // Local wins: unblock the game and push in background with the row
+        // this pull already locked.
+        set({
+          status: 'signed-in',
+          remoteUpdatedAt: remote.updated_at,
+          localSnapshotAt: local.capturedAt,
+          remoteChecked: true,
+          pendingRemote: null,
+        })
+        void get().pushLocalSave(true, remote)
         return
       }
 
@@ -978,7 +1023,14 @@ export const useCloudSaveStore = create<CloudSaveStore>((set, get) => ({
       if (localIsNewer) {
         if (restoreOfflinePending || !meaningfulDifference) {
           localStorage.removeItem(CLOUD_RESTORE_OFFLINE_PENDING_KEY)
-          await get().pushLocalSave(true)
+          set({
+            status: 'signed-in',
+            remoteUpdatedAt: remote.updated_at,
+            localSnapshotAt: local.capturedAt,
+            remoteChecked: true,
+            pendingRemote: null,
+          })
+          void get().pushLocalSave(true, remote)
           return
         }
         set({

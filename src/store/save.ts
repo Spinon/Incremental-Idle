@@ -1,4 +1,4 @@
-import { createJSONStorage, type StateStorage } from 'zustand/middleware'
+import type { PersistStorage, StorageValue } from 'zustand/middleware'
 
 export const SAVE_SCHEMA_VERSION = 2
 
@@ -29,26 +29,35 @@ export const CLOUD_OVERWRITTEN_BACKUP_KEY = 'incremental-idle-cloud-overwritten-
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
 
 let deferredPersistDepth = 0
-const deferredPersistWrites = new Map<string, string>()
+const deferredPersistValues = new Map<string, StorageValue<unknown>>()
 
-const pausableLocalStorage: StateStorage = {
-  getItem: (name) => localStorage.getItem(name),
+// Custom PersistStorage instead of createJSONStorage: deferred mode must skip
+// JSON.stringify entirely, not just the localStorage write. During offline
+// simulation every set() persists, so serializing whole stores (map tiles,
+// inventory) thousands of times dominated the simulation cost. Deferred mode
+// keeps only the latest state object per key and serializes once on flush.
+export const gameStorage: PersistStorage<unknown> = {
+  getItem: (name) => {
+    const raw = localStorage.getItem(name)
+    if (raw === null) return null
+    try {
+      return JSON.parse(raw) as StorageValue<unknown>
+    } catch {
+      return null
+    }
+  },
   setItem: (name, value) => {
     if (deferredPersistDepth > 0) {
-      deferredPersistWrites.set(name, value)
+      deferredPersistValues.set(name, value)
       return
     }
-    localStorage.setItem(name, value)
+    localStorage.setItem(name, JSON.stringify(value))
   },
   removeItem: (name) => {
-    if (deferredPersistDepth > 0) {
-      deferredPersistWrites.delete(name)
-    }
+    deferredPersistValues.delete(name)
     localStorage.removeItem(name)
   },
 }
-
-export const gameStorage = createJSONStorage(() => pausableLocalStorage)
 
 export function beginDeferredPersistWrites(): void {
   deferredPersistDepth += 1
@@ -58,12 +67,12 @@ export function endDeferredPersistWrites(options: { flush: boolean } = { flush: 
   deferredPersistDepth = Math.max(0, deferredPersistDepth - 1)
   if (deferredPersistDepth > 0) return
 
-  const writes = [...deferredPersistWrites.entries()]
-  deferredPersistWrites.clear()
+  const writes = [...deferredPersistValues.entries()]
+  deferredPersistValues.clear()
 
   if (!options.flush) return
   for (const [key, value] of writes) {
-    localStorage.setItem(key, value)
+    localStorage.setItem(key, JSON.stringify(value))
   }
 }
 
