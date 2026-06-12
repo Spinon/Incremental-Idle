@@ -94,15 +94,15 @@ const RARITY_LABEL: Record<ItemRarity, [string, string]> = {
 
 // 3-col × 6-row body grid — null means an empty ghost cell, string = EquipmentKey
 //   Row 1: _       head    _
-//   Row 2: shoulder  _     chest
-//   Row 3: _       gloves  _
+//   Row 2: shoulder  _     gloves
+//   Row 3: _       chest   _
 //   Row 4: _       legs    _
 //   Row 5: _       feet    _
 //   Row 6: acc1    acc2    acc3
 const EQUIP_GRID: (EquipmentKey | null)[] = [
   null,       'head',   null,
-  'shoulder', null,     'chest',
-  null,       'gloves', null,
+  'shoulder', null,     'gloves',
+  null,       'chest',  null,
   null,       'legs',   null,
   null,       'feet',   null,
   'acc1',     'acc2',   'acc3',
@@ -1041,17 +1041,21 @@ function ChestOpeningPanel({
   openingChest,
   progressMs,
   openSeconds,
+  autoOpenNextChest,
   isEn,
   onStart,
   onCancel,
+  onAutoOpenChange,
 }: {
   chests: TreasureChest[]
   openingChest: TreasureChest | null
   progressMs: number
   openSeconds: number
+  autoOpenNextChest: boolean
   isEn: boolean
   onStart(id: string): void
   onCancel(): void
+  onAutoOpenChange(enabled: boolean): void
 }) {
   const pct = openingChest ? Math.min(100, (progressMs / (openSeconds * 1000)) * 100) : 0
   const remaining = openingChest ? Math.max(0, Math.ceil(openSeconds - progressMs / 1000)) : 0
@@ -1059,6 +1063,19 @@ function ChestOpeningPanel({
   return (
     <div className="mt-3 rounded-xl border border-yellow-300/40 dark:border-yellow-700/50 bg-yellow-50/60 dark:bg-yellow-950/15 p-3">
       <div className="flex items-center gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => onAutoOpenChange(!autoOpenNextChest)}
+          className={cn(
+            'order-last ml-auto rounded-md border px-2 py-1 text-[9px] font-black transition-colors',
+            autoOpenNextChest
+              ? 'border-yellow-500 bg-yellow-100 text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-200'
+              : 'border-slate-300 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800',
+          )}
+          title={isEn ? 'Automatically starts the next chest when one finishes' : 'Inicia automaticamente o proximo bau quando um termina'}
+        >
+          {autoOpenNextChest ? (isEn ? 'Auto next ON' : 'Auto proximo ON') : (isEn ? 'Auto next OFF' : 'Auto proximo OFF')}
+        </button>
         <p className="text-[9px] text-yellow-700 dark:text-yellow-300 uppercase tracking-widest font-black">
           {isEn ? 'Chest Opening' : 'Abertura de Baús'}
         </p>
@@ -1156,6 +1173,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const chests             = useInventoryStore(s => s.chests)
   const openingChest       = useInventoryStore(s => s.openingChest)
   const chestProgressMs    = useInventoryStore(s => s.chestProgressMs)
+  const autoOpenNextChest  = useInventoryStore(s => s.autoOpenNextChest)
   const quickslots         = useInventoryStore(s => s.quickslots)
   const consumableAutoSlots = useInventoryStore(s => s.consumableAutoSlots)
   const weaponProgress     = useInventoryStore(s => s.weaponProgress)
@@ -1167,6 +1185,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
   const setConsumableAutoSlot = useInventoryStore(s => s.setConsumableAutoSlot)
   const startOpeningChest  = useInventoryStore(s => s.startOpeningChest)
   const cancelOpeningChest = useInventoryStore(s => s.cancelOpeningChest)
+  const setAutoOpenNextChest = useInventoryStore(s => s.setAutoOpenNextChest)
   const sellMode           = useInventoryStore(s => s.sellMode)
   const selectedForSale    = useInventoryStore(s => s.selectedForSale)
   const setSellMode        = useInventoryStore(s => s.setSellMode)
@@ -1472,16 +1491,6 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
             sellSelected={sellSelectedSet}
           />
 
-          <ChestOpeningPanel
-            chests={chests}
-            openingChest={openingChest}
-            progressMs={chestProgressMs}
-            openSeconds={openSeconds}
-            isEn={isEn}
-            onStart={startOpeningChest}
-            onCancel={cancelOpeningChest}
-          />
-
           {/* Sell mode confirm/cancel footer */}
           {sellMode && (
             <div className="mt-2 flex items-center gap-2">
@@ -1509,6 +1518,18 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
           )}
         </div>
       </div>
+
+      <ChestOpeningPanel
+        chests={chests}
+        openingChest={openingChest}
+        progressMs={chestProgressMs}
+        openSeconds={openSeconds}
+        autoOpenNextChest={autoOpenNextChest}
+        isEn={isEn}
+        onStart={startOpeningChest}
+        onCancel={cancelOpeningChest}
+        onAutoOpenChange={setAutoOpenNextChest}
+      />
 
       {/* Equipment bonuses summary */}
       {hasEquipBonuses && (
