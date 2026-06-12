@@ -4,7 +4,7 @@ import { immer } from 'zustand/middleware/immer'
 import { FOREST_MONSTER_MAP, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import { generateNpc, npcLevel } from '../formulas/npcs'
 import { generateItem } from '../formulas/items'
-import { buildMonster } from '../formulas/monsters'
+import { buildMonster, estimateMonster } from '../formulas/monsters'
 import { getHeroDerived } from '../lib/heroDerived'
 import { useHeroStore } from './heroStore'
 import { useInventoryStore } from './inventoryStore'
@@ -16,6 +16,7 @@ import type { MonsterRarity } from '../types/monster'
 import type { PartyFightLog, PartyMemberMode, PartyNpc, PartyRecruitOffer, PartySlot } from '../types/party'
 
 const PARTY_SLOT_COUNT = 3
+const NPC_MIN_TARGET_WIN_CHANCE = 0.55
 // Ids are hash SEEDS only — identity (name/class/race) is intentionally
 // procedural and does NOT follow the words in the id (design decision).
 const STARTER_NPCS = ['npc_mira_guardian', 'npc_kael_ranger', 'npc_iria_arcanist']
@@ -78,14 +79,45 @@ function isNpcExploreTarget(tile: PlacedTile, npcLevelValue: number) {
   return tile.content.type === 'monster'
 }
 
-function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: number }, npcLevelValue: number) {
+function npcBattleChance(npc: PartyNpc, npcLevelValue: number, enemy: ReturnType<typeof estimateMonster>) {
+  const npcPower = npcLevelValue * 12
+    + npc.attributes.forca * 3
+    + npc.attributes.vitalidade * 2.2
+    + npc.attributes.agilidade * 2
+    + npc.attributes.destreza * 2
+    + npc.attributes.inteligencia * 2.4
+    + npc.attributes.sabedoria * 1.8
+    + npc.spellIds.length * 8
+  const enemyPower = enemy.level * 14 + enemy.atk * 2 + enemy.def * 2 + enemy.maxHp * 0.35 + enemy.magicDamage * 2
+  return Math.max(0.2, Math.min(0.92, 0.5 + (npcPower - enemyPower) / Math.max(80, enemyPower * 2)))
+}
+
+function evaluateNpcTarget(npc: PartyNpc, npcLevelValue: number, tile: PlacedTile, tilesPlaced: number) {
+  const template = FOREST_MONSTER_MAP.get(monsterTypeForTile(tile)) ?? FOREST_RANDOM_MONSTERS[0]
+  const rarity = (tile.content.monsterRarity ?? 'normal') as MonsterRarity
+  const enemyLevel = Math.max(1, tile.content.monsterLevel ?? tile.level)
+  const enemy = estimateMonster(template, enemyLevel, rarity, tilesPlaced)
+  const chance = npcBattleChance(npc, npcLevelValue, enemy)
+  const xp = Math.max(1, Math.round(10 + enemy.level * 4))
+  const gold = Math.max(1, Math.round(15 + enemy.level * 8))
+  const rewardScore = xp + gold
+  return { chance, rewardScore }
+}
+
+function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: number }, npc: PartyNpc, npcLevelValue: number, tilesPlaced: number) {
   const queue: { pos: { x: number; y: number }; first: { x: number; y: number } | null; dist: number }[] = [
     { pos: start, first: null, dist: 0 },
   ]
   const seen = new Set([gridKey(start.x, start.y)])
+  let best: { step: { x: number; y: number }; rewardScore: number; chance: number; dist: number } | null = null
+  let safest: { step: { x: number; y: number }; rewardScore: number; chance: number; dist: number } | null = null
 
   const startTile = grid[gridKey(start.x, start.y)]
-  if (startTile && isNpcExploreTarget(startTile, npcLevelValue)) return start
+  if (startTile && isNpcExploreTarget(startTile, npcLevelValue)) {
+    const target = evaluateNpcTarget(npc, npcLevelValue, startTile, tilesPlaced)
+    safest = { step: start, rewardScore: target.rewardScore, chance: target.chance, dist: 0 }
+    if (target.chance >= NPC_MIN_TARGET_WIN_CHANCE) best = { ...safest }
+  }
 
   while (queue.length > 0) {
     const current = queue.shift()!
@@ -95,12 +127,37 @@ function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: nu
       const nextTile = grid[key]
       if (!nextTile || !nextTile.explored || nextTile.level > npcLevelValue) continue
       seen.add(key)
-      if (isNpcExploreTarget(nextTile, npcLevelValue)) return current.first ?? next
+      if (isNpcExploreTarget(nextTile, npcLevelValue)) {
+        const target = evaluateNpcTarget(npc, npcLevelValue, nextTile, tilesPlaced)
+        const candidate = {
+          step: current.first ?? next,
+          rewardScore: target.rewardScore,
+          chance: target.chance,
+          dist: current.dist + 1,
+        }
+        if (
+          !safest ||
+          candidate.chance > safest.chance ||
+          (candidate.chance === safest.chance && candidate.rewardScore > safest.rewardScore) ||
+          (candidate.chance === safest.chance && candidate.rewardScore === safest.rewardScore && candidate.dist < safest.dist)
+        ) {
+          safest = candidate
+        }
+        if (
+          candidate.chance >= NPC_MIN_TARGET_WIN_CHANCE &&
+          (!best ||
+            candidate.rewardScore > best.rewardScore ||
+            (candidate.rewardScore === best.rewardScore && candidate.chance > best.chance) ||
+            (candidate.rewardScore === best.rewardScore && candidate.chance === best.chance && candidate.dist < best.dist))
+        ) {
+          best = candidate
+        }
+      }
       queue.push({ pos: next, first: current.first ?? next, dist: current.dist + 1 })
     }
   }
 
-  return null
+  return (best ?? safest)?.step ?? null
 }
 
 function monsterTypeForTile(tile: PlacedTile) {
@@ -115,16 +172,7 @@ function simulateNpcBattle(npc: PartyNpc, playerLevel: number, tile: PlacedTile,
   const rarity = (tile.content.monsterRarity ?? 'normal') as MonsterRarity
   const enemyLevel = Math.max(1, tile.content.monsterLevel ?? tile.level)
   const enemy = buildMonster(template, enemyLevel, rarity, tilesPlaced)
-  const npcPower = level * 12
-    + npc.attributes.forca * 3
-    + npc.attributes.vitalidade * 2.2
-    + npc.attributes.agilidade * 2
-    + npc.attributes.destreza * 2
-    + npc.attributes.inteligencia * 2.4
-    + npc.attributes.sabedoria * 1.8
-    + npc.spellIds.length * 8
-  const enemyPower = enemy.level * 14 + enemy.atk * 2 + enemy.def * 2 + enemy.maxHp * 0.35 + enemy.magicDamage * 2
-  const chance = Math.max(0.2, Math.min(0.92, 0.5 + (npcPower - enemyPower) / Math.max(80, enemyPower * 2)))
+  const chance = npcBattleChance(npc, level, enemy)
   return { won: Math.random() < chance, enemy }
 }
 
@@ -220,7 +268,7 @@ export const usePartyStore = create<PartyStore>()(
                 ? { ...map.playerPos }
                 : { x: 0, y: 0 }
             }
-            const step = findNpcStep(map.grid, npc.explorerPos, level)
+            const step = findNpcStep(map.grid, npc.explorerPos, npc, level, tilesPlaced)
             if (!step) {
               npc.lastRewardText = 'sem alvo seguro'
               continue

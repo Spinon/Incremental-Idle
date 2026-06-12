@@ -23,6 +23,9 @@ export function tickChestOpening(deltaMs: number, derived: DerivedStats): void {
 
   const loot = rollChestLoot(chest)
   useInventoryStore.getState().clearOpenedChest()
+  if (useInventoryStore.getState().autoOpenNextChest) {
+    useInventoryStore.getState().startNextChest()
+  }
 
   let lostItems = 0
   let lostConsumables = 0

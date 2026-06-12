@@ -92,6 +92,7 @@ interface InventoryStore {
   chests:       TreasureChest[]
   openingChest: TreasureChest | null
   chestProgressMs: number
+  autoOpenNextChest: boolean
   /** IDs of consumables assigned to quickslots 0-3 (null = empty slot). */
   quickslots:   (string | null)[]
   consumableAutoSlots: AutoConsumableConfig[]
@@ -131,6 +132,8 @@ interface InventoryStore {
   setConsumableAutoSlot(slot: number, config: AutoConsumableConfig): void
   addChest(chest: TreasureChest): void
   startOpeningChest(chestId: string): boolean
+  startNextChest(): boolean
+  setAutoOpenNextChest(enabled: boolean): void
   cancelOpeningChest(): void
   advanceOpeningChest(deltaMs: number): void
   clearOpenedChest(): void
@@ -167,6 +170,7 @@ export const useInventoryStore = create<InventoryStore>()(
       chests:          [],
       openingChest:    null,
       chestProgressMs: 0,
+      autoOpenNextChest: false,
       quickslots:      Array(QUICKSLOT_COUNT).fill(null) as (string | null)[],
       consumableAutoSlots: Array.from({ length: QUICKSLOT_COUNT }, () => ({ ...DEFAULT_CONSUMABLE_AUTO })),
       weaponProgress:  Object.fromEntries(WEAPON_TYPES.map(t => [t, createWeaponProgress(t)])) as Record<WeaponType, WeaponProgress>,
@@ -305,6 +309,13 @@ export const useInventoryStore = create<InventoryStore>()(
           const existing = st.chests.find(c => c.level === chest.level && c.rarity === chest.rarity)
           if (existing) existing.qty += Math.max(1, chest.qty)
           else st.chests.push({ ...chest, qty: Math.max(1, chest.qty) })
+          if (st.autoOpenNextChest && !st.openingChest && st.chests.length > 0) {
+            const nextChest = st.chests[0]
+            st.openingChest = { ...nextChest, id: `${nextChest.id}_open_${Date.now()}`, qty: 1 }
+            st.chestProgressMs = 0
+            nextChest.qty -= 1
+            if (nextChest.qty <= 0) st.chests.shift()
+          }
         })
         requestCriticalCloudSave()
       },
@@ -324,6 +335,31 @@ export const useInventoryStore = create<InventoryStore>()(
         })
         if (started) requestCriticalCloudSave()
         return started
+      },
+
+      startNextChest: () => {
+        let started = false
+        set((st) => {
+          if (st.openingChest || st.chests.length === 0) return
+          const chest = st.chests[0]
+          st.openingChest = { ...chest, id: `${chest.id}_open_${Date.now()}`, qty: 1 }
+          st.chestProgressMs = 0
+          chest.qty -= 1
+          if (chest.qty <= 0) st.chests.shift()
+          started = true
+        })
+        if (started) requestCriticalCloudSave()
+        return started
+      },
+
+      setAutoOpenNextChest: (enabled) => {
+        let shouldStart = false
+        set((st) => {
+          st.autoOpenNextChest = enabled
+          shouldStart = enabled && !st.openingChest && st.chests.length > 0
+        })
+        requestCriticalCloudSave()
+        if (shouldStart) get().startNextChest()
       },
 
       cancelOpeningChest: () => {
