@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import type { MapTile, PlacedTile, TileContent } from '../../types/map'
-import { gridKey, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
+import { gridKey, getVisionRadius, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
 import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
@@ -67,7 +67,7 @@ export default function MapViewport({
 }: Props) {
   const tilePx    = Math.round(52 * zoom)
   const previewIconSize = Math.max(10, Math.min(18, Math.floor(tilePx * 0.34)))
-  const visRadius = Math.max(2, Math.round(vision / 38))
+  const visRadius = getVisionRadius(vision)
 
   // Viewport size — fluid: fills the available width, height clamped by ratio.
   const [vpW, setVpW] = useState(676)

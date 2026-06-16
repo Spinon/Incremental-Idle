@@ -104,7 +104,14 @@ function evaluateNpcTarget(npc: PartyNpc, npcLevelValue: number, tile: PlacedTil
   return { chance, rewardScore }
 }
 
-function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: number }, npc: PartyNpc, npcLevelValue: number, tilesPlaced: number) {
+function findNpcStep(
+  grid: Record<string, PlacedTile>,
+  start: { x: number; y: number },
+  npc: PartyNpc,
+  npcLevelValue: number,
+  tilesPlaced: number,
+  avoidKey?: string,
+) {
   const queue: { pos: { x: number; y: number }; first: { x: number; y: number } | null; dist: number }[] = [
     { pos: start, first: null, dist: 0 },
   ]
@@ -112,8 +119,9 @@ function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: nu
   let best: { step: { x: number; y: number }; rewardScore: number; chance: number; dist: number } | null = null
   let safest: { step: { x: number; y: number }; rewardScore: number; chance: number; dist: number } | null = null
 
-  const startTile = grid[gridKey(start.x, start.y)]
-  if (startTile && isNpcExploreTarget(startTile, npcLevelValue)) {
+  const startKey = gridKey(start.x, start.y)
+  const startTile = grid[startKey]
+  if (startTile && startKey !== avoidKey && isNpcExploreTarget(startTile, npcLevelValue)) {
     const target = evaluateNpcTarget(npc, npcLevelValue, startTile, tilesPlaced)
     safest = { step: start, rewardScore: target.rewardScore, chance: target.chance, dist: 0 }
     if (target.chance >= NPC_MIN_TARGET_WIN_CHANCE) best = { ...safest }
@@ -125,9 +133,13 @@ function findNpcStep(grid: Record<string, PlacedTile>, start: { x: number; y: nu
       const key = gridKey(next.x, next.y)
       if (seen.has(key)) continue
       const nextTile = grid[key]
-      if (!nextTile || !nextTile.explored || nextTile.level > npcLevelValue) continue
+      // Walk through ANY explored tile: gating traversal by tile level used to
+      // wall explorers in (tiles around the player sit at player level, above
+      // the NPC's level) — they froze with "no safe target" forever. The level
+      // gate still applies to FIGHT targets below.
+      if (!nextTile || !nextTile.explored) continue
       seen.add(key)
-      if (isNpcExploreTarget(nextTile, npcLevelValue)) {
+      if (key !== avoidKey && isNpcExploreTarget(nextTile, npcLevelValue)) {
         const target = evaluateNpcTarget(npc, npcLevelValue, nextTile, tilesPlaced)
         const candidate = {
           step: current.first ?? next,
@@ -215,7 +227,18 @@ export const usePartyStore = create<PartyStore>()(
 
       setSlotMode: (slotId, mode) => set((st) => {
         const slot = st.slots.find(s => s.id === slotId)
-        if (slot) slot.mode = mode
+        if (!slot) return
+        slot.mode = mode
+        // Entering explore mode: anchor the NPC at the player's position so it
+        // visibly departs from there on the next victory tick.
+        if (mode === 'explore' && slot.memberId) {
+          const npc = st.knownNpcs.find(n => n.id === slot.memberId)
+          if (npc) {
+            const playerPos = useMapStore.getState().playerPos
+            npc.explorerPos = { ...playerPos }
+            npc.lastRewardText = null
+          }
+        }
       }),
 
       removeFromSlot: (slotId) => set((st) => {
@@ -258,25 +281,41 @@ export const usePartyStore = create<PartyStore>()(
         // Rewards are collected during the Immer update and applied to the
         // other stores AFTER set() — no cross-store side effects inside set.
         const rewards: { xp: number; gold: number; weaponXp: number; itemLevel: number | null }[] = []
+        const playerKey = gridKey(map.playerPos.x, map.playerPos.y)
         set((st) => {
           for (const npc of st.knownNpcs) {
             const slot = activeSlotFor(st.slots, npc.id)
             if (!slot || slot.mode !== 'explore') continue
             const level = npcLevel(hero.level, npc)
-            if (!map.grid[gridKey(npc.explorerPos.x, npc.explorerPos.y)]) {
-              npc.explorerPos = map.grid[gridKey(map.playerPos.x, map.playerPos.y)]
+            if (!npc.explorerPos || !map.grid[gridKey(npc.explorerPos.x, npc.explorerPos.y)]) {
+              npc.explorerPos = map.grid[playerKey]
                 ? { ...map.playerPos }
                 : { x: 0, y: 0 }
             }
-            const step = findNpcStep(map.grid, npc.explorerPos, npc, level, tilesPlaced)
-            if (!step) {
-              npc.lastRewardText = 'sem alvo seguro'
-              continue
+
+            // Walk up to 3 tiles per player victory toward the chosen farm
+            // target, stopping when standing on it. The player's own tile is
+            // never a target — explorers always leave it.
+            for (let moves = 0; moves < 3; moves++) {
+              const hereKey = gridKey(npc.explorerPos.x, npc.explorerPos.y)
+              const hereTile = map.grid[hereKey]
+              if (hereTile && hereKey !== playerKey && isNpcExploreTarget(hereTile, level)) break
+              const step = findNpcStep(map.grid, npc.explorerPos, npc, level, tilesPlaced, playerKey)
+              if (!step || (step.x === npc.explorerPos.x && step.y === npc.explorerPos.y)) break
+              npc.explorerPos = step
             }
-            npc.explorerPos = step
-            const tile = map.grid[gridKey(step.x, step.y)]
-            if (!tile || !isNpcExploreTarget(tile, level)) {
-              npc.lastRewardText = 'sem encontro'
+
+            const posKey = gridKey(npc.explorerPos.x, npc.explorerPos.y)
+            const tile = map.grid[posKey]
+            if (!tile || posKey === playerKey || !isNpcExploreTarget(tile, level)) {
+              // Patrol fallback: drift to a random connected explored neighbor
+              // instead of freezing in place.
+              const neighbors = connectedNeighbors(map.grid, npc.explorerPos)
+                .filter(n => map.grid[gridKey(n.x, n.y)]?.explored && gridKey(n.x, n.y) !== playerKey)
+              if (neighbors.length > 0) {
+                npc.explorerPos = neighbors[Math.floor(Math.random() * neighbors.length)]
+              }
+              npc.lastRewardText = 'patrulhando'
               continue
             }
             const result = simulateNpcBattle(npc, hero.level, tile, tilesPlaced)
@@ -294,8 +333,8 @@ export const usePartyStore = create<PartyStore>()(
                 enemyName: result.enemy.namePt ?? result.enemy.name,
                 enemyNameEn: result.enemy.nameEn ?? result.enemy.name,
                 enemyLevel: result.enemy.level,
-                x: step.x,
-                y: step.y,
+                x: npc.explorerPos.x,
+                y: npc.explorerPos.y,
                 xp: 0,
                 gold: 0,
                 itemFound: false,
@@ -325,8 +364,8 @@ export const usePartyStore = create<PartyStore>()(
               enemyName: result.enemy.namePt ?? result.enemy.name,
               enemyNameEn: result.enemy.nameEn ?? result.enemy.name,
               enemyLevel: result.enemy.level,
-              x: step.x,
-              y: step.y,
+              x: npc.explorerPos.x,
+              y: npc.explorerPos.y,
               xp,
               gold,
               itemFound,

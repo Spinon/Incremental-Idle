@@ -52,8 +52,13 @@ interface HeroStore {
 }
 
 function xpForLevel(level: number): number {
-  // Steep curve: ~100 XP at L1, ~5k at L10, ~32k at L20, ~110k at L30
-  return Math.floor(level * 80 + level ** 2.4 * 22)
+  // Steep curve: ~100 XP at L1, ~5k at L10, ~32k at L20, ~110k at L30.
+  // Past 50 an extra ×1.05 per level kicks in (L80 ≈ ×4.3, L100 ≈ ×11.5,
+  // L130 ≈ ×49) so late game slows to under a level per hour and keeps
+  // getting steeper.
+  const base = level * 80 + level ** 2.4 * 22
+  const lateKicker = level > 50 ? Math.pow(1.05, level - 50) : 1
+  return Math.floor(base * lateKicker)
 }
 
 const MAX_SKIP_CHARGES = 3

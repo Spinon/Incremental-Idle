@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useMapStore, gridKey } from '../../store/mapStore'
+import { useMapStore, gridKey, getVisionRadius } from '../../store/mapStore'
 import { useHeroStore } from '../../store/heroStore'
 import { useInventoryStore } from '../../store/inventoryStore'
 import { useSpellStore } from '../../store/spellStore'
 import { useQuestStore } from '../../store/questStore'
 import { useUIStore } from '../../store/uiStore'
 import { usePartyStore } from '../../store/partyStore'
-import { getDerivedStats } from '../../formulas/derived'
+import { getDerivedStats, getMaxDeck } from '../../formulas/derived'
 import { getEquipmentBonuses } from '../../formulas/items'
 import { applySpellBuffs } from '../../formulas/spells'
 import { estimateMonster, MONSTER_RARITY_LABEL, MONSTER_RARITY_LABEL_EN, MONSTER_RARITY_COLOR } from '../../formulas/monsters'
@@ -234,7 +234,7 @@ export default function MapSection() {
   const t       = useT()
   const lang    = useSettingsStore(s => s.lang)
 
-  const maxDeck = Math.min(8, 3 + Math.floor(derived.vision / 50))
+  const maxDeck = getMaxDeck(derived.vision)
 
   const allQuests    = useQuestStore(s => s.quests)
   const questMarkers = useMemo<QuestMapMarker[]>(() => {
@@ -281,7 +281,7 @@ export default function MapSection() {
   }, [teleportOrigin, teleportSelecting])
 
   // Vision radius (same formula as MapViewport)
-  const visRadius = Math.max(2, Math.round(derived.vision / 38))
+  const visRadius = getVisionRadius(derived.vision)
 
   function handleTileClick(x: number, y: number) {
     if (pendingNormalizeId) {

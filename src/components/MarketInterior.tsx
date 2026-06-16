@@ -74,7 +74,10 @@ function consumableDesc(c: Consumable, isEn: boolean): string {
 
 // ─── Equipment stat summary (brief) ──────────────────────────────────────────
 
-const PERCENT_ITEM_STATS = new Set(['atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus'])
+const PERCENT_ITEM_STATS = new Set([
+  'atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus',
+  'critChance', 'accuracy', 'resIgnea', 'resGlacial', 'resSombria', 'resVital',
+])
 
 function itemDisplayName(item: Item, isEn: boolean): string {
   return getItemDisplayName(item, isEn)
@@ -93,6 +96,9 @@ function itemStatLine(item: Item, isEn: boolean): string {
     atkSpeed: ['Vel.Atk', 'AtkSpd'], magicDamage: ['Mágico', 'Magic'],
     vision: ['Visão', 'Vision'], moveSpeed: ['Mov', 'Move'],
     dropChance: ['Drop', 'Drop'], goldMult: ['Ouro', 'Gold'], xpBonus: ['XP+', 'XP+'],
+    critChance: ['Crít', 'Crit'], accuracy: ['Prec', 'Acc'],
+    resIgnea: ['R.Íg', 'F.Res'], resGlacial: ['R.Gl', 'I.Res'],
+    resSombria: ['R.So', 'S.Res'], resVital: ['R.Vi', 'V.Res'],
   }
   const parts = Object.entries(item.stats).map(([k, v]) => {
     const lbl = LABELS[k]?.[isEn ? 1 : 0] ?? k

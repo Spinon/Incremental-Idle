@@ -27,6 +27,21 @@ export const DIR_DELTA: Record<Direction, { dx: number; dy: number }> = {
 
 export const DIRS: Direction[] = ['N', 'S', 'E', 'W']
 
+// Fog preview cache limits: prune when the cache passes the max, keeping a
+// generous square around the player (larger than any reveal range).
+const SIGHTED_CELLS_MAX = 4000
+const SIGHTED_CELLS_KEEP_RADIUS = 30
+
+// Vision radius in tiles, derived from the vision stat. Logarithmic curve so
+// progression is felt across the whole game instead of exploding linearly
+// (endgame vision ~4000 used to produce a radius of 100+):
+//   vision 100→3  200→5  400→7  800→9  1600→12  3200→14  6400+→15
+export const VISION_RADIUS_MAX = 15
+export function getVisionRadius(vision: number): number {
+  const radius = 2 + 3.2 * Math.log(Math.max(1, vision / 80))
+  return Math.max(2, Math.min(VISION_RADIUS_MAX, Math.round(radius)))
+}
+
 export function gridKey(x: number, y: number): string { return `${x},${y}` }
 
 type Point = { x: number; y: number }
@@ -494,33 +509,44 @@ function findValidPlacements(
   deck: MapTile[],
 ): { tileId: string; x: number; y: number }[] {
   const results: { tileId: string; x: number; y: number }[] = []
-  const seen = new Set<string>()
 
+  // Collect open slots (empty cells reachable through a connection) once, so
+  // the deck × neighbor checks below run per slot instead of per grid tile.
+  // On large saves the grid has thousands of tiles and this function runs
+  // several times per victory during offline catch-up.
+  const slotKeys = new Set<string>()
+  const slots: { x: number; y: number }[] = []
   for (const gridTile of Object.values(grid)) {
     for (const dir of gridTile.connections) {
       const { dx, dy } = DIR_DELTA[dir]
       const nx = gridTile.x + dx
       const ny = gridTile.y + dy
-      if (grid[gridKey(nx, ny)]) continue   // slot already occupied
+      const key = gridKey(nx, ny)
+      if (grid[key] || slotKeys.has(key)) continue
+      slotKeys.add(key)
+      slots.push({ x: nx, y: ny })
+    }
+  }
 
-      for (const deckTile of deck) {
-        const combo = `${deckTile.id}:${nx},${ny}`
-        if (seen.has(combo)) continue
+  for (const slot of slots) {
+    // Neighbor facings depend only on the slot, not on the deck tile
+    const neighborFaces: (boolean | null)[] = DIRS.map((d) => {
+      const { dx, dy } = DIR_DELTA[d]
+      const neighbor = grid[gridKey(slot.x + dx, slot.y + dy)]
+      return neighbor ? neighbor.connections.includes(DIR_OPPOSITE[d]) : null
+    })
 
-        let matchCount = 0, conflict = false
-        for (const d of DIRS) {
-          const { dx: ddx, dy: ddy } = DIR_DELTA[d]
-          const neighbor = grid[gridKey(nx + ddx, ny + ddy)]
-          if (!neighbor) continue
-          const neighborFacesUs = neighbor.connections.includes(DIR_OPPOSITE[d])
-          const weFaceNeighbor  = deckTile.connections.includes(d)
-          if (neighborFacesUs !== weFaceNeighbor) { conflict = true; break }
-          if (neighborFacesUs && weFaceNeighbor)  matchCount++
-        }
-        if (!conflict && matchCount > 0) {
-          seen.add(combo)
-          results.push({ tileId: deckTile.id, x: nx, y: ny })
-        }
+    for (const deckTile of deck) {
+      let matchCount = 0, conflict = false
+      for (let i = 0; i < DIRS.length; i++) {
+        const neighborFacesUs = neighborFaces[i]
+        if (neighborFacesUs === null) continue
+        const weFaceNeighbor = deckTile.connections.includes(DIRS[i])
+        if (neighborFacesUs !== weFaceNeighbor) { conflict = true; break }
+        if (neighborFacesUs && weFaceNeighbor)  matchCount++
+      }
+      if (!conflict && matchCount > 0) {
+        results.push({ tileId: deckTile.id, x: slot.x, y: slot.y })
       }
     }
   }
@@ -701,7 +727,9 @@ export const useMapStore = create<MapStore>()(
       }),
 
       tryAutoPlace: (maxTileLevel?: number): boolean => {
-        set((st) => { reconcileActiveBounties(st) })
+        // No reconcileActiveBounties here: placeTile reconciles inside its own
+        // set(), and placement validity only reads connections, which bounties
+        // never change.
         const { grid, deck } = get()
         // Only consider tiles within the hero's reachable level — tiles above
         // the cap would be invisible to findNearestUnexplored, making the hero
@@ -1157,48 +1185,79 @@ export const useMapStore = create<MapStore>()(
         st.easyTilesRemaining = 5
       }),
 
-      tickMap: (deltaMs, moveSpeed, maxDeck, vision, heroLevel) => set((st) => {
-        reconcileActiveBounties(st)
-        const speed = Math.max(0.5, moveSpeed)
+      tickMap: (deltaMs, moveSpeed, maxDeck, vision, heroLevel) => {
+        const base = get()
 
-        // Tile deck generation
-        if (st.deck.length < maxDeck) {
-          st.deckAccum += deltaMs
-          // Early-game slowdown: starts at ~40% speed, normalises around 20 placed tiles
-          const earlyFactor = Math.min(1, 0.4 + st.tilesPlaced * 0.03)
-          const interval = TILE_GEN_BASE_MS / (speed * earlyFactor)
-          while (st.deckAccum >= interval && st.deck.length < maxDeck) {
-            st.deckAccum -= interval
-            let lvl: number
-            if (st.easyTilesRemaining > 0) {
-              // Warm-up phase: stay 5 levels below the hero to avoid defeat loops
-              lvl = Math.max(1, heroLevel - 5)
-              st.easyTilesRemaining -= 1
-            } else {
-              // Normal phase: ±5 triangular distribution around hero level
-              lvl = heroRelativeLevel(heroLevel)
-            }
-            st.deck.push(generateTile(lvl))
-          }
-        }
+        // Fog preview cache pruning. sightedCells previously grew without
+        // bound (50k+ entries on long saves), so every immer copy/finalize,
+        // save serialization and cloud payload dragged. Entries are only a
+        // visual preview consumed by placeTile; cells far from the player are
+        // regenerated when approached again, so dropping them is safe.
+        const needPrune = Object.keys(base.sightedCells).length > SIGHTED_CELLS_MAX
 
-        // Reveal empty cells within vision range (fog of war on the grid)
-        const visRadius = Math.max(2, Math.round(vision / 38))
+        // Reveal empty cells within vision range (fog of war on the grid).
+        // Scanned on the plain pre-set state, not inside the immer set(): the
+        // ~(2·range+1)² lookups through draft proxies dominated tickMap.
+        const visRadius = getVisionRadius(vision)
         const revealRange = visRadius + 2  // matches penumbra edge in viewport
-        const { x: px, y: py } = st.playerPos
+        const { x: px, y: py } = base.playerPos
+        const newCells: [string, TileContent][] = []
         for (let dy = -revealRange; dy <= revealRange; dy++) {
           for (let dx = -revealRange; dx <= revealRange; dx++) {
-            const dist = Math.max(Math.abs(dx), Math.abs(dy))
-            if (dist > revealRange) continue
-            const gx = px + dx, gy = py + dy
-            const key = gridKey(gx, gy)
-            if (st.grid[key] || st.sightedCells[key]) continue
+            const key = gridKey(px + dx, py + dy)
+            if (base.grid[key] || base.sightedCells[key]) continue
             // Fog content also hero-relative so previewed areas feel appropriate
             const lvl = heroRelativeLevel(heroLevel)
-            st.sightedCells[key] = generateContent(lvl, st.tilesPlaced, 'forest')
+            newCells.push([key, generateContent(lvl, base.tilesPlaced, 'forest')])
           }
         }
-      }),
+
+        set((st) => {
+          if (needPrune) {
+            // Keep radius (30) is well beyond the reveal range, so pruned
+            // cells never overlap the newCells written below.
+            const pruned: Record<string, TileContent> = {}
+            for (const [key, content] of Object.entries(base.sightedCells)) {
+              const comma = key.indexOf(',')
+              const cx = Number(key.slice(0, comma))
+              const cy = Number(key.slice(comma + 1))
+              if (Math.max(Math.abs(cx - px), Math.abs(cy - py)) <= SIGHTED_CELLS_KEEP_RADIUS) {
+                pruned[key] = content
+              }
+            }
+            st.sightedCells = pruned
+          }
+          for (const [key, content] of newCells) {
+            st.sightedCells[key] = content
+          }
+
+          reconcileActiveBounties(st)
+          // Deck generation scales with √moveSpeed: linear scaling made tile
+          // generation outpace everything once move speed stacked up.
+          const speed = Math.max(0.5, Math.sqrt(Math.max(0.25, moveSpeed)))
+
+          // Tile deck generation
+          if (st.deck.length < maxDeck) {
+            st.deckAccum += deltaMs
+            // Early-game slowdown: starts at ~40% speed, normalises around 20 placed tiles
+            const earlyFactor = Math.min(1, 0.4 + st.tilesPlaced * 0.03)
+            const interval = TILE_GEN_BASE_MS / (speed * earlyFactor)
+            while (st.deckAccum >= interval && st.deck.length < maxDeck) {
+              st.deckAccum -= interval
+              let lvl: number
+              if (st.easyTilesRemaining > 0) {
+                // Warm-up phase: stay 5 levels below the hero to avoid defeat loops
+                lvl = Math.max(1, heroLevel - 5)
+                st.easyTilesRemaining -= 1
+              } else {
+                // Normal phase: ±5 triangular distribution around hero level
+                lvl = heroRelativeLevel(heroLevel)
+              }
+              st.deck.push(generateTile(lvl))
+            }
+          }
+        })
+      },
     })),
     {
       name: SAVE_KEYS.map,

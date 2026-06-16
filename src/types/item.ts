@@ -19,6 +19,12 @@ export interface ItemStats {
   dropChance?: number
   goldMult?: number
   xpBonus?: number
+  critChance?: number
+  accuracy?: number
+  resIgnea?: number
+  resGlacial?: number
+  resSombria?: number
+  resVital?: number
 }
 
 /** Set items: bonus to one sub-stat per equipped set item */
@@ -130,6 +136,8 @@ export interface EquipBonuses {
   dropChance: number
   goldMult: number
   xpBonus: number
+  critChance?: number
+  accuracy?:   number
   resIgnea?:   number
   resGlacial?: number
   resSombria?: number

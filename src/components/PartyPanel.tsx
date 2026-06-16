@@ -121,6 +121,14 @@ export default function PartyPanel() {
                 <ModeButton active={slot.mode === 'explore'} mode="explore" isEn={isEn} onClick={() => setSlotMode(slot.id, 'explore')} />
                 {npc && <button type="button" onClick={() => removeFromSlot(slot.id)} className="ml-auto rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">{isEn ? 'Remove' : 'Remover'}</button>}
               </div>
+              {npc && slot.mode === 'explore' && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-slate-100 dark:bg-slate-800/70 px-2 py-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                  <span title={isEn ? 'Current map position' : 'Posição atual no mapa'}>📍 {npc.explorerPos.x},{npc.explorerPos.y}</span>
+                  <span className="text-emerald-500 font-bold" title={isEn ? 'Wins' : 'Vitórias'}>✓ {npc.explorerWins}</span>
+                  <span className="text-rose-500 font-bold" title={isEn ? 'Losses' : 'Derrotas'}>✗ {npc.explorerLosses}</span>
+                  {npc.lastRewardText && <span className="font-semibold text-slate-600 dark:text-slate-300">{npc.lastRewardText}</span>}
+                </div>
+              )}
               {!npc && selectedNpc && <button type="button" onClick={() => assignToSlot(slot.id, selectedNpc.id)} className="mt-3 w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-500">{isEn ? 'Assign selected' : 'Inserir selecionado'}</button>}
             </div>
           )
@@ -220,11 +228,26 @@ export default function PartyPanel() {
           </div>
         </div>
 
-        <aside className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-          <h3 className="text-sm font-black text-slate-700 dark:text-slate-200">{isEn ? 'Friends' : 'Amigos'}</h3>
-          <div className="mt-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3">
-            <p className="text-xs text-slate-500 dark:text-slate-400">{isEn ? 'Friend Code support will use these same party slots after the backend social layer is ready.' : 'Friend Code vai usar estes mesmos slots quando a camada social do backend estiver pronta.'}</p>
-            <input disabled placeholder="Friend Code" className="mt-3 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2 text-xs text-slate-400 outline-none" />
+        <aside className="space-y-3">
+          <div className="rounded-xl border border-amber-300/40 dark:border-amber-700/40 bg-amber-50/60 dark:bg-amber-950/15 p-3">
+            <h3 className="flex items-center gap-1.5 text-sm font-black text-amber-700 dark:text-amber-300">
+              🐾 Pets
+              <span className="rounded bg-amber-200/80 dark:bg-amber-800/60 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                {isEn ? 'Soon' : 'Em breve'}
+              </span>
+            </h3>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {isEn
+                ? 'Pets will join the same party slots with their own progression — companions that follow or farm for you.'
+                : 'Pets vão ocupar os mesmos slots da party com progressão própria — companheiros que seguem ou farmam por você.'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+            <h3 className="text-sm font-black text-slate-700 dark:text-slate-200">{isEn ? 'Friends' : 'Amigos'}</h3>
+            <div className="mt-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">{isEn ? 'Friend Code support will use these same party slots after the backend social layer is ready.' : 'Friend Code vai usar estes mesmos slots quando a camada social do backend estiver pronta.'}</p>
+              <input disabled placeholder="Friend Code" className="mt-3 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2 text-xs text-slate-400 outline-none" />
+            </div>
           </div>
         </aside>
       </section>

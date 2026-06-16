@@ -5,8 +5,21 @@ export type PartyMemberMode = 'follow' | 'explore'
 export type NpcClass = 'guardian' | 'ranger' | 'arcanist' | 'cleric' | 'rogue'
 export type NpcRace = 'human' | 'elf' | 'dwarf' | 'orc' | 'fae'
 
+/**
+ * Companion taxonomy: NPCs today, Pets next. Pets will reuse the same slot
+ * mechanics (follow bonus / explore farming) with their own progression, so
+ * everything slot-related speaks in "companions" instead of NPCs.
+ */
+export type CompanionKind = 'npc' | 'pet'
+
+export function companionKind(member: Pick<PartyNpc, 'kind'>): CompanionKind {
+  return member.kind ?? 'npc'
+}
+
 export interface PartyNpc {
   id: string
+  /** Companion kind — absent on old saves, meaning 'npc'. */
+  kind?: CompanionKind
   source: PartyMemberSource
   name: string
   nameEn: string
@@ -27,6 +40,8 @@ export interface PartySlot {
   id: string
   memberId: string | null
   mode: PartyMemberMode
+  /** Which companion kinds the slot accepts — absent means NPCs only. */
+  allowedKinds?: CompanionKind[]
 }
 
 export interface PartyFightLog {

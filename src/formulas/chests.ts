@@ -1,5 +1,5 @@
 import { generateConsumable, generateItem, pickItemRarity } from './items'
-import { rollWeaponMaterialDrop } from './weapons'
+import { pickWeaponMaterialDrop } from './weapons'
 import type { Consumable, Item, ItemRarity, TreasureChest } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 
@@ -13,6 +13,14 @@ const RARITY_VALUE: Record<ItemRarity, number> = {
 }
 
 let chestSeq = 0
+
+/** Max distinct chest stacks in the chest window; stacks themselves are unbounded. */
+export const MAX_CHEST_STACKS = 10
+
+/** Stacking bracket: chests of the same rarity within the same 10-level band stack. */
+export function chestBracket(level: number): number {
+  return Math.floor((Math.max(1, level) - 1) / 10)
+}
 
 export interface ChestLoot {
   gold: number
@@ -54,8 +62,7 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
   }
 
   if (Math.random() < 0.18) {
-    const drop = rollWeaponMaterialDrop(chest.level, value * 0.02)
-    if (drop) loot.materials.push(drop)
+    loot.materials.push(pickWeaponMaterialDrop(chest.level))
   }
 
   const extraRolls = chest.rarity === 'unique' ? 3 : chest.rarity === 'set' ? 2 : chest.rarity === 'epic' ? 2 : chest.rarity === 'rare' ? 1 : 0
@@ -65,8 +72,7 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
     else if (r < 0.62) loot.items.push(generateItem(chest.level))
     else if (r < 0.86) loot.consumables.push(generateConsumable(chest.level))
     else {
-      const drop = rollWeaponMaterialDrop(chest.level, value * 0.02)
-      if (drop) loot.materials.push(drop)
+      loot.materials.push(pickWeaponMaterialDrop(chest.level))
     }
   }
 

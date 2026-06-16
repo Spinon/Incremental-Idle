@@ -19,6 +19,7 @@ import {
   WEAPON_MAX_TIER,
   WEAPON_TYPES,
 } from '../formulas/weapons'
+import { MAX_CHEST_STACKS, chestBracket } from '../formulas/chests'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
@@ -32,6 +33,34 @@ const ACC_KEYS: EquipmentKey[] = ['acc1', 'acc2', 'acc3']
 const NON_ACC_KEYS: EquipmentKey[] = ['head', 'shoulder', 'chest', 'gloves', 'legs', 'feet']
 
 const RARITY_RANK: Record<ItemRarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, set: 5, unique: 6 }
+
+/**
+ * Stacks a chest into the window honoring the MAX_CHEST_STACKS cap.
+ * Same rarity + same 10-level bracket → stack (level keeps the highest).
+ * At the cap with no matching stack, merges into the closest stack
+ * (same rarity preferred, then nearest level).
+ */
+function stackChest(chests: TreasureChest[], chest: TreasureChest): void {
+  const qty = Math.max(1, chest.qty)
+  let target = chests.find(c => c.rarity === chest.rarity && chestBracket(c.level) === chestBracket(chest.level))
+
+  if (!target && chests.length >= MAX_CHEST_STACKS) {
+    const sameRarity = chests.filter(c => c.rarity === chest.rarity)
+    const pool = sameRarity.length > 0 ? sameRarity : chests
+    target = pool.reduce((best, c) =>
+      Math.abs(c.level - chest.level) < Math.abs(best.level - chest.level) ? c : best,
+    )
+  }
+
+  if (target) {
+    target.qty += qty
+    // Only lift the stack level within the same rarity (cross-rarity merges
+    // at the cap keep the stack's identity).
+    if (target.rarity === chest.rarity) target.level = Math.max(target.level, chest.level)
+    return
+  }
+  chests.push({ ...chest, qty })
+}
 const SELL_MULT:   Record<ItemRarity, number> = { common: 1, uncommon: 3, rare: 8, epic: 20, set: 35, unique: 60 }
 
 /**
@@ -306,9 +335,7 @@ export const useInventoryStore = create<InventoryStore>()(
 
       addChest: (chest) => {
         set((st) => {
-          const existing = st.chests.find(c => c.level === chest.level && c.rarity === chest.rarity)
-          if (existing) existing.qty += Math.max(1, chest.qty)
-          else st.chests.push({ ...chest, qty: Math.max(1, chest.qty) })
+          stackChest(st.chests, chest)
           if (st.autoOpenNextChest && !st.openingChest && st.chests.length > 0) {
             const nextChest = st.chests[0]
             st.openingChest = { ...nextChest, id: `${nextChest.id}_open_${Date.now()}`, qty: 1 }
@@ -369,9 +396,7 @@ export const useInventoryStore = create<InventoryStore>()(
           cancelled = st.openingChest
           st.openingChest = null
           st.chestProgressMs = 0
-          const existing = st.chests.find(c => c.level === cancelled!.level && c.rarity === cancelled!.rarity)
-          if (existing) existing.qty += 1
-          else st.chests.push({ ...cancelled!, id: `chest_${Date.now()}`, qty: 1 })
+          stackChest(st.chests, { ...cancelled!, id: `chest_${Date.now()}`, qty: 1 })
         })
         if (cancelled) requestCriticalCloudSave()
       },
@@ -549,7 +574,17 @@ export const useInventoryStore = create<InventoryStore>()(
       version: SAVE_SCHEMA_VERSION,
       storage: gameStorage,
       migrate: migrateSave,
-      merge: mergeSave,
+      // mergeSave + chest-stack normalization: older saves stacked chests per
+      // exact level and can exceed the MAX_CHEST_STACKS window cap.
+      merge: (persisted, current) => {
+        const merged = mergeSave(persisted, current)
+        if (Array.isArray(merged.chests) && merged.chests.length > 0) {
+          const restacked: TreasureChest[] = []
+          for (const chest of merged.chests) stackChest(restacked, chest)
+          merged.chests = restacked
+        }
+        return merged
+      },
     }
   )
 )

@@ -43,7 +43,11 @@ export function tickChestOpening(deltaMs: number, derived: DerivedStats): void {
   if (loot.gold > 0) { parts.push(`⬡ ${loot.gold}`); partsEn.push(`⬡ ${loot.gold}`) }
   if (loot.items.length > 0) { parts.push(`${loot.items.length} item${loot.items.length > 1 ? 'ns' : ''}`); partsEn.push(`${loot.items.length} item${loot.items.length > 1 ? 's' : ''}`) }
   if (loot.consumables.length > 0) { parts.push(`${loot.consumables.length} consumível${loot.consumables.length > 1 ? 'is' : ''}`); partsEn.push(`${loot.consumables.length} consumable${loot.consumables.length > 1 ? 's' : ''}`) }
-  if (loot.materials.length > 0) { parts.push('material de forja'); partsEn.push('forge material') }
+  if (loot.materials.length > 0) {
+    const tiers = loot.materials.map(m => `⚒ T${m.tier}${m.count > 1 ? ` ×${m.count}` : ''}`).join(' ')
+    parts.push(`Aço de Forja ${tiers}`)
+    partsEn.push(`Forge Steel ${tiers}`)
+  }
 
   useNotifStore.getState().push({
     title:    '🎁 Baú aberto!',

@@ -6,29 +6,15 @@ import { useUIStore } from '../store/uiStore'
 import { getEquipmentBonuses, ATTR_LABEL_PT, ATTR_LABEL_EN, getItemDisplayName } from '../formulas/items'
 import { chestOpenSeconds } from '../formulas/chests'
 import { getDerivedStats } from '../formulas/derived'
-import {
-  canEquipWeapon,
-  getWeaponCombatProfile,
-  getWeaponStatBonuses,
-  isWeaponAtForgeCap,
-  normalizeEquippedWeapons,
-  normalizeWeaponProgress,
-  TWO_HANDED_WEAPONS,
-  weaponForgeCost,
-  weaponForgeMaterialTier,
-  WEAPON_LABELS,
-  WEAPON_MATERIAL_LABELS,
-  WEAPON_TYPES,
-} from '../formulas/weapons'
+import { treasureMaxWeaponTier } from '../formulas/weapons'
 import { cn } from '../lib/utils'
 import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import { useConsumableById } from '../lib/consumables'
 import type { Item, ItemRarity, EquipmentKey, EquipmentSlots, ItemStats, AutoConsumableConfig, Consumable, ConsumableEffect, TreasureChest } from '../types/item'
-import type { EquippedWeapons, WeaponMaterials, WeaponProgress, WeaponType } from '../types/weapon'
 import SpellbookPanel from './SpellbookPanel'
+import WeaponsPanel from './WeaponsPanel'
 import {
   HeadIcon, ShoulderIcon, ChestIcon, GlovesIcon, LegsIcon, FeetIcon, AccIcon,
-  SwordIcon, DaggerIcon, AxeIcon, StaffIcon, BowIcon, ShieldIcon,
 } from './icons/EquipIcons'
 
 const ALL_RARITIES: ItemRarity[] = ['common', 'uncommon', 'rare', 'epic', 'set', 'unique']
@@ -133,13 +119,22 @@ const STAT_LABEL_PT: Partial<Record<keyof ItemStats, string>> = {
   atk: 'ATK', def: 'DEF', hp: 'HP', atkSpeed: 'Vel. Atk',
   magicDamage: 'Dano Mágico', vision: 'Visão', moveSpeed: 'Vel. Mov.',
   dropChance: 'Chance Drop', goldMult: 'Bônus Ouro', xpBonus: 'Bônus XP',
+  critChance: 'Crítico', accuracy: 'Precisão',
+  resIgnea: 'Res. Ígnea', resGlacial: 'Res. Glacial',
+  resSombria: 'Res. Sombria', resVital: 'Res. Vital',
 }
 const STAT_LABEL_EN: Partial<Record<keyof ItemStats, string>> = {
   atk: 'ATK', def: 'DEF', hp: 'HP', atkSpeed: 'Atk Speed',
   magicDamage: 'Magic Dmg', vision: 'Vision', moveSpeed: 'Move Spd',
   dropChance: 'Drop Rate', goldMult: 'Gold Bonus', xpBonus: 'XP Bonus',
+  critChance: 'Crit', accuracy: 'Accuracy',
+  resIgnea: 'Fire Res.', resGlacial: 'Frost Res.',
+  resSombria: 'Shadow Res.', resVital: 'Vital Res.',
 }
-const PERCENT_STATS = new Set<keyof ItemStats>(['dropChance', 'goldMult', 'xpBonus', 'moveSpeed', 'atkSpeed'])
+const PERCENT_STATS = new Set<keyof ItemStats>([
+  'dropChance', 'goldMult', 'xpBonus', 'moveSpeed', 'atkSpeed',
+  'critChance', 'accuracy', 'resIgnea', 'resGlacial', 'resSombria', 'resVital',
+])
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
@@ -249,221 +244,6 @@ const SLOT_ICON: Partial<Record<string, SlotIconComp>> = {
   acc1:     AccIcon,
   acc2:     AccIcon,
   acc3:     AccIcon,
-}
-
-const WEAPON_ICON: Record<WeaponType, SlotIconComp> = {
-  sword: SwordIcon,
-  dagger: DaggerIcon,
-  axe: AxeIcon,
-  staff: StaffIcon,
-  bow: BowIcon,
-  shield: ShieldIcon,
-}
-
-function pct(value: number): string {
-  return `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
-}
-
-function weaponEffectText(type: WeaponType, progress: Record<WeaponType, WeaponProgress>, loadout: EquippedWeapons, isEn: boolean): string {
-  const profile = getWeaponCombatProfile(progress, loadout)
-  switch (type) {
-    case 'sword': return isEn ? `${pct(profile.swordExtraHitChance)} double strike` : `${pct(profile.swordExtraHitChance)} golpe duplo`
-    case 'dagger': return isEn ? `${pct(profile.daggerPoisonChance)} poison` : `${pct(profile.daggerPoisonChance)} veneno`
-    case 'axe': return isEn ? `${pct(profile.axeBleedChance)} bleed, +${profile.axeBleedPower}/stack` : `${pct(profile.axeBleedChance)} sangramento, +${profile.axeBleedPower}/stack`
-    case 'staff': return isEn ? `${pct(profile.staffCooldownReduction)} cooldown, ${pct(profile.staffSlotOneManaDiscount)} slot 1 mana` : `${pct(profile.staffCooldownReduction)} cooldown, ${pct(profile.staffSlotOneManaDiscount)} mana slot 1`
-    case 'bow': return isEn ? `${pct(profile.bowMarkChance)} mark` : `${pct(profile.bowMarkChance)} marcar`
-    case 'shield': return isEn ? `${pct(profile.shieldBlockChance)} block, ${pct(profile.shieldBlockReduction)} reduction` : `${pct(profile.shieldBlockChance)} block, ${pct(profile.shieldBlockReduction)} redução`
-  }
-}
-
-function equippedWeaponCount(type: WeaponType, loadout: EquippedWeapons): number {
-  return Number(loadout.mainHand === type) + Number(loadout.offHand === type)
-}
-
-function WeaponMasteryPanel({
-  progress,
-  equipped,
-  materials,
-  isEn,
-  onEquip,
-  onForge,
-}: {
-  progress: Record<WeaponType, WeaponProgress>
-  equipped: EquippedWeapons
-  materials: WeaponMaterials
-  isEn: boolean
-  onEquip: (hand: 'mainHand' | 'offHand', type: WeaponType) => void
-  onForge: (type: WeaponType) => void
-}) {
-  const weaponProgress = normalizeWeaponProgress(progress)
-  const loadout = normalizeEquippedWeapons(equipped)
-  const statBonuses = getWeaponStatBonuses(weaponProgress, loadout)
-  const statSummary = [
-    statBonuses.atk ? `ATK +${statBonuses.atk}` : null,
-    statBonuses.def ? `DEF +${statBonuses.def}` : null,
-    statBonuses.attackSpeed ? `${isEn ? 'AtkSpd' : 'Vel'} ${formatPercent(statBonuses.attackSpeed)}` : null,
-    statBonuses.critChance ? `${isEn ? 'Crit' : 'Crit'} +${formatPercent(statBonuses.critChance)}` : null,
-    statBonuses.magicDamage ? `${isEn ? 'Magic Dmg' : 'Dano Magico'} +${statBonuses.magicDamage}` : null,
-  ].filter(Boolean).join('  ')
-
-  return (
-    <div className="mb-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 p-3">
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
-          {isEn ? 'Weapons' : 'Armas'}
-        </p>
-        <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-semibold">
-          {WEAPON_LABELS[loadout.mainHand][isEn ? 'en' : 'pt']}
-          {loadout.offHand ? ` + ${WEAPON_LABELS[loadout.offHand][isEn ? 'en' : 'pt']}` : ` (${isEn ? 'two-handed' : 'duas mãos'})`}
-        </span>
-        {statSummary && <span className="text-[9px] text-slate-500 dark:text-slate-500">{statSummary}</span>}
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-[1fr_1fr]">
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/40 p-2">
-          <p className="text-[8px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1.5 font-bold">
-            {isEn ? 'Main hand' : 'Mão principal'}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {WEAPON_TYPES.filter(type => type !== 'shield').map(type => {
-              const Icon = WEAPON_ICON[type]
-              const active = loadout.mainHand === type
-              return (
-                <button
-                  key={`main-${type}`}
-                  onClick={() => onEquip('mainHand', type)}
-                  className={cn(
-                    'h-9 px-2 rounded-lg border flex items-center gap-1.5 text-[10px] font-bold transition-colors',
-                    active
-                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 hover:border-indigo-300',
-                  )}
-                >
-                  <Icon size={18} />
-                  {WEAPON_LABELS[type][isEn ? 'en' : 'pt']}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/40 p-2">
-          <p className="text-[8px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1.5 font-bold">
-            {isEn ? 'Off hand' : 'Mão secundária'}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {(['sword', 'dagger', 'shield'] as WeaponType[]).map(type => {
-              const Icon = WEAPON_ICON[type]
-              const active = loadout.offHand === type
-              const disabled = !canEquipWeapon('offHand', type, loadout)
-              return (
-                <button
-                  key={`off-${type}`}
-                  onClick={() => onEquip('offHand', type)}
-                  disabled={disabled}
-                  className={cn(
-                    'h-9 px-2 rounded-lg border flex items-center gap-1.5 text-[10px] font-bold transition-colors',
-                    active
-                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 hover:border-indigo-300',
-                    disabled && 'opacity-35 cursor-not-allowed hover:border-slate-200 dark:hover:border-slate-700',
-                  )}
-                >
-                  <Icon size={18} />
-                  {WEAPON_LABELS[type][isEn ? 'en' : 'pt']}
-                </button>
-              )
-            })}
-            {TWO_HANDED_WEAPONS.has(loadout.mainHand) && (
-              <span className="self-center text-[9px] text-slate-400 dark:text-slate-600 italic">
-                {isEn ? 'Locked by two-handed weapon' : 'Bloqueado por arma de duas mãos'}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-        {WEAPON_TYPES.map(type => {
-          const p = weaponProgress[type]
-          const Icon = WEAPON_ICON[type]
-          const xpPct = p.level >= p.maxLevel ? 100 : Math.max(0, Math.min(100, (p.xp / p.xpToNext) * 100))
-          const atCap = isWeaponAtForgeCap(p)
-          const materialTier = weaponForgeMaterialTier(p)
-          const forgeCost = weaponForgeCost(p)
-          const owned = materials[materialTier] ?? 0
-          const canForge = atCap && owned >= forgeCost
-          const equippedHere = loadout.mainHand === type || loadout.offHand === type
-          const equippedCount = equippedWeaponCount(type, loadout)
-          const effectLoadout: EquippedWeapons = equippedHere
-            ? loadout
-            : { mainHand: type === 'shield' ? 'sword' : type, offHand: type === 'shield' ? 'shield' : null }
-
-          return (
-            <div key={type} className={cn(
-              'rounded-lg border px-2 py-2 bg-white/80 dark:bg-slate-900/50',
-              equippedHere ? 'border-indigo-300 dark:border-indigo-700' : 'border-slate-200 dark:border-slate-800',
-            )}>
-              <div className="flex items-center gap-2">
-                <Icon size={22} className={equippedHere ? 'opacity-100' : 'opacity-60'} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 truncate">
-                    {WEAPON_LABELS[type][isEn ? 'en' : 'pt']}
-                  </p>
-                  <p className="text-[8px] text-slate-400 dark:text-slate-600">
-                    T{p.tier} · Lv.{p.level}/{p.maxLevel}
-                  </p>
-                </div>
-                {equippedHere && (
-                  <div className="flex items-center gap-1">
-                    {equippedCount > 1 && (
-                      <span
-                        title={isEn ? 'Effect stacks from both hands' : 'Efeito acumulado pelas duas maos'}
-                        className="rounded border border-amber-300/70 dark:border-amber-600/60 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.5 text-[8px] font-black text-amber-600 dark:text-amber-300"
-                      >
-                        x{equippedCount}
-                      </span>
-                    )}
-                    <span className="text-[8px] font-bold text-indigo-500 dark:text-indigo-400">
-                      {isEn ? 'ON' : 'EQP'}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${xpPct}%` }} />
-              </div>
-              <p className="mt-1 text-[9px] text-slate-500 dark:text-slate-500 min-h-4">
-                {weaponEffectText(type, weaponProgress, effectLoadout, isEn)}
-                {equippedCount > 1 && (
-                  <span className="ml-1 font-bold text-amber-500 dark:text-amber-300">
-                    {isEn ? '(x2 stacked)' : '(x2 acumulado)'}
-                  </span>
-                )}
-              </p>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="text-[8px] text-slate-400 dark:text-slate-600 flex-1">
-                  {WEAPON_MATERIAL_LABELS[isEn ? 'en' : 'pt']} T{materialTier}: {owned}/{forgeCost}
-                </span>
-                <button
-                  onClick={() => onForge(type)}
-                  disabled={!canForge}
-                  className={cn(
-                    'px-2 py-1 rounded-md text-[8px] font-black border transition-colors',
-                    canForge
-                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 opacity-60 cursor-not-allowed',
-                  )}
-                >
-                  {isEn ? 'Forge' : 'Forjar'}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
 }
 
 function EmptyEquipSlot({
@@ -1147,7 +927,17 @@ function ChestOpeningPanel({
                   <p className={cn('text-[10px] font-black truncate', RARITY_TEXT[chest.rarity])}>
                     {isEn ? 'Chest' : 'Baú'} Lv.{chest.level}
                   </p>
-                  <p className="text-[8px] text-slate-400">x{chest.qty}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[8px] text-slate-400">x{chest.qty}</p>
+                    <span
+                      className="rounded bg-amber-200/80 px-1 text-[8px] font-black text-amber-900 dark:bg-amber-800/60 dark:text-amber-100"
+                      title={isEn
+                        ? `Can contain Forge Steel up to tier ${treasureMaxWeaponTier(chest.level)}`
+                        : `Pode conter Aço de Forja até o tier ${treasureMaxWeaponTier(chest.level)}`}
+                    >
+                      ⚒ {treasureMaxWeaponTier(chest.level) > 1 ? `T1–T${treasureMaxWeaponTier(chest.level)}` : 'T1'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </button>
@@ -1406,7 +1196,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
         )}
       </div>
 
-      <WeaponMasteryPanel
+      <WeaponsPanel
         progress={weaponProgress}
         equipped={equippedWeapons}
         materials={weaponMaterials}

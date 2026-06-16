@@ -1,6 +1,15 @@
 import type { Attributes, DerivedStats } from '../types/hero'
 import type { EquipBonuses } from '../types/item'
 
+/**
+ * Soft cap: linear up to `knee`, then sublinear (`pow`) growth. Keeps early
+ * investment honest while preventing late-game stats from going vertical.
+ */
+function softcap(value: number, knee: number, pow: number): number {
+  if (value <= knee) return value
+  return knee + Math.pow(value - knee, pow)
+}
+
 const BASE = {
   atk: 5,
   def: 2,
@@ -62,25 +71,25 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
 
     // ── Advanced combat ──────────────────────────────────────────────────────
     //  Destreza: precision → critical hits + accuracy (negates target dodge)
-    critChance:      Math.min(0.50, BASE.critChance + fa.destreza * 0.006),
+    critChance:      Math.min(0.50, BASE.critChance + fa.destreza * 0.006 + (eq?.critChance ?? 0)),
     critDamage:      1.5 + fa.forca * 0.01,        // Força amplifies crit damage
-    accuracy:        Math.min(0.50, fa.destreza * 0.006),
+    accuracy:        Math.min(0.50, fa.destreza * 0.006 + (eq?.accuracy ?? 0)),
     //  Força: brawn → shrugs off blows (all-damage reduction)
     damageReduction: Math.min(0.35, fa.forca * 0.01),
     healBonus:       1 + fa.sabedoria * 0.02,       // Sabedoria: heal potency
 
     // ── Stamina ──────────────────────────────────────────────────────────────
+    // Regen/efficiency soft-capped so the self-sustaining base speed tops out
+    // around 6 — beyond that, drain grows exponentially (see staminaDrainAt).
     maxStamina:        BASE.maxStamina        + fa.forca     * 10  + fa.vitalidade  * 20,
-    staminaRegen:      BASE.staminaRegen      + fa.forca     * 0.5 + fa.vitalidade  * 1,
-    staminaEfficiency: BASE.staminaEfficiency + fa.agilidade * 0.04 + fa.destreza   * 0.025,
+    staminaRegen:      BASE.staminaRegen      + softcap(fa.forca * 0.5 + fa.vitalidade * 1, 60, 0.6),
+    staminaEfficiency: BASE.staminaEfficiency + softcap(fa.agilidade * 0.04 + fa.destreza * 0.025, 1.2, 0.45),
 
     // ── Mana ─────────────────────────────────────────────────────────────────
-      maxMana:        BASE.maxMana        + fa.sabedoria    * 20  + fa.inteligencia * 8,
-    // manaRegen: base + passive level contribution + sabedoria (determines
-    // how many spells are sustainably castable — each ~6 SAB ≈ +1 spell tier)
-    // + a small inteligencia bonus.
-    // Level adds ~0.04/s per level so at Lv30 you get ≈1 free spell baseline.
-    manaRegen:      BASE.manaRegen + lvl * 0.04 + fa.sabedoria * 0.2 + fa.inteligencia * 0.05,
+    maxMana:        BASE.maxMana        + fa.sabedoria    * 20  + fa.inteligencia * 8,
+    // manaRegen sublinear: sustaining one extra spell tier should keep costing
+    // real investment — previously SAB made mana self-sufficient too early.
+    manaRegen:      BASE.manaRegen + lvl * 0.02 + softcap(fa.sabedoria * 0.2 + fa.inteligencia * 0.05, 3, 0.6),
     manaEfficiency: BASE.manaEfficiency + fa.inteligencia * 0.04,
 
     // ── Exploration ──────────────────────────────────────────────────────────
@@ -105,13 +114,23 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
 
 /**
  * Stamina drained per second at speed `s`.
- * Formula: 5*(s-1)*(s) — grows faster than before, making higher speeds costly.
- *   s=1→0  s=2→10  s=3→30  s=4→60  s=5→100  s=6→150  s=7→210 …
+ * Quadratic up to 6 (5*(s-1)*s: s=2→10 s=4→60 s=6→150), then an aggressive
+ * ×2.5 exponential per extra step (s=7→525 s=8→1750 s=9→6 000) so the
+ * self-sustaining base speed effectively tops out at 6.
  */
 export function staminaDrainAt(s: number): number {
   if (s <= 1) return 0
-  const t = s - 1
-  return 5 * t * s
+  const quad = 5 * (s - 1) * s
+  if (s <= 6) return quad
+  return quad * Math.pow(2.5, s - 6)
+}
+
+/**
+ * Tile deck capacity from the vision stat. Slow sqrt growth, hard cap 16:
+ *   vision 100→5  400→7  900→9  1600→11  2500→13  3600→15  4200+→16
+ */
+export function getMaxDeck(vision: number): number {
+  return Math.min(16, 3 + Math.floor(Math.sqrt(Math.max(0, vision)) / 5))
 }
 
 /**

@@ -125,11 +125,15 @@ export function treasureMaxWeaponTier(tileLevel: number): number {
   return Math.min(WEAPON_MAX_TIER, 2 + Math.floor((tileLevel - 10) / 5))
 }
 
-export function rollWeaponMaterialDrop(tileLevel: number, dropBonus = 0): WeaponMaterialDrop | null {
-  const maxTier = treasureMaxWeaponTier(tileLevel)
-  const chance = Math.min(0.10, 0.018 * Math.max(0.5, 1 + dropBonus))
-  if (Math.random() >= chance) return null
-
+/**
+ * Picks a Forge Steel tier for a drop at the given level. Higher tiers within
+ * the level's range are more likely (weights favor the top of the range).
+ * The DROP CHANCE itself is the caller's responsibility (chest loot table) —
+ * the old internal ~2 % gate stacked with the loot-table gate and made the
+ * effective rate ~0.36 % per chest.
+ */
+export function pickWeaponMaterialDrop(level: number): WeaponMaterialDrop {
+  const maxTier = treasureMaxWeaponTier(level)
   const tiers = Array.from({ length: maxTier }, (_, i) => i + 1)
   const weights = tiers.map(t => Math.max(1, 6 - (maxTier - t)))
   const total = weights.reduce((a, b) => a + b, 0)

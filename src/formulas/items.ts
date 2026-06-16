@@ -12,8 +12,11 @@ const RARITY_MULT: Record<ItemRarity, number> = {
 }
 
 export function pickItemRarity(level: number): ItemRarity {
-  const uniqueChance   = Math.min(1.5,  0.1  + level * 0.06)
-  const setChance      = Math.min(4,    0.3  + level * 0.12)
+  // Set/unique deliberately rare: with endgame dropChance (~50 % per kill)
+  // the old caps (4 % / 1.5 %) handed out a set every ~50 kills.
+  // Now: unique ≈ 1 in 1 250 drops, set ≈ 1 in 280 at the cap.
+  const uniqueChance   = Math.min(0.6,  0.03 + level * 0.012)
+  const setChance      = Math.min(1.6,  0.1  + level * 0.035)
   const epicChance     = Math.min(12,   1    + level * 0.4)
   const rareChance     = Math.min(28,   5    + level * 0.9)
   const uncommonChance = Math.min(42,   18   + level * 0.5)
@@ -26,16 +29,47 @@ export function pickItemRarity(level: number): ItemRarity {
   return 'common'
 }
 
+// ─── Sub-attribute registry ───────────────────────────────────────────────────
+// Single source of truth for every rollable sub-attribute: scaling values and
+// formatting. New sub-attributes only need an entry here + a slot pool below.
+
+interface SubAttributeDef {
+  flat: number     // base value at level 0
+  perLv: number    // added per enemy level
+  float?: boolean  // keep 3 decimals instead of rounding to integer
+}
+
+export const SUB_ATTRIBUTES: Record<keyof ItemStats, SubAttributeDef> = {
+  atk:         { flat: 1.5,   perLv: 0.20 },
+  def:         { flat: 1.0,   perLv: 0.15 },
+  hp:          { flat: 25,    perLv: 2.5 },
+  atkSpeed:    { flat: 0.05,  perLv: 0.006,  float: true },
+  magicDamage: { flat: 1.0,   perLv: 0.12 },
+  vision:      { flat: 8,     perLv: 0.5 },
+  moveSpeed:   { flat: 0.05,  perLv: 0.003,  float: true },
+  dropChance:  { flat: 0.005, perLv: 0.0003, float: true },
+  goldMult:    { flat: 0.05,  perLv: 0.004,  float: true },
+  xpBonus:     { flat: 0.03,  perLv: 0.003,  float: true },
+  critChance:  { flat: 0.004, perLv: 0.0004, float: true },
+  accuracy:    { flat: 0.004, perLv: 0.0004, float: true },
+  resIgnea:    { flat: 0.006, perLv: 0.0005, float: true },
+  resGlacial:  { flat: 0.006, perLv: 0.0005, float: true },
+  resSombria:  { flat: 0.006, perLv: 0.0005, float: true },
+  resVital:    { flat: 0.006, perLv: 0.0005, float: true },
+}
+
+export const ALL_SUB_ATTRIBUTES = Object.keys(SUB_ATTRIBUTES) as (keyof ItemStats)[]
+
 // ─── Slot configuration ───────────────────────────────────────────────────────
 
 const SLOT_STATS: Record<EquipSlot, (keyof ItemStats)[]> = {
-  head:     ['def', 'vision', 'magicDamage'],
-  shoulder: ['def', 'atk'],
-  chest:    ['def', 'hp'],
-  gloves:   ['atk', 'atkSpeed'],
-  legs:     ['moveSpeed', 'def'],
-  feet:     ['moveSpeed', 'dropChance'],
-  acc:      ['goldMult', 'xpBonus', 'dropChance', 'vision'],
+  head:     ['def', 'vision', 'magicDamage', 'resSombria'],
+  shoulder: ['def', 'atk', 'resIgnea'],
+  chest:    ['def', 'hp', 'resIgnea', 'resVital'],
+  gloves:   ['atk', 'atkSpeed', 'critChance', 'accuracy'],
+  legs:     ['moveSpeed', 'def', 'resGlacial'],
+  feet:     ['moveSpeed', 'dropChance', 'resGlacial'],
+  acc:      ['goldMult', 'xpBonus', 'dropChance', 'vision', 'critChance', 'accuracy', 'resSombria', 'resVital'],
 }
 
 const ALL_SLOTS: EquipSlot[] = ['head', 'shoulder', 'chest', 'gloves', 'legs', 'feet', 'acc']
@@ -131,23 +165,13 @@ export { ATTR_LABEL_PT, ATTR_LABEL_EN }
  *   ATK 11  DEF 8  HP 112  AtkSpd 0.29  MagicDmg 11
  */
 function statBase(stat: keyof ItemStats, level: number): number {
-  type S = keyof ItemStats
-  const flat: Record<S, number> = {
-    atk:         1.5,   def:         1.0,   hp:          25,
-    atkSpeed:    0.05,  magicDamage: 1.0,   vision:      8,
-    moveSpeed:   0.05,  dropChance:  0.005, goldMult:    0.05,
-    xpBonus:     0.03,
-  }
-  const perLv: Record<S, number> = {
-    atk:         0.20,  def:         0.15,  hp:          2.5,
-    atkSpeed:    0.006, magicDamage: 0.12,  vision:      0.5,
-    moveSpeed:   0.003, dropChance:  0.0003, goldMult:   0.004,
-    xpBonus:     0.003,
-  }
-  return flat[stat] + level * perLv[stat]
+  const def = SUB_ATTRIBUTES[stat]
+  return def.flat + level * def.perLv
 }
 
-const FLOAT_STATS = new Set<keyof ItemStats>(['atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus'])
+const FLOAT_STATS = new Set<keyof ItemStats>(
+  ALL_SUB_ATTRIBUTES.filter(s => SUB_ATTRIBUTES[s].float),
+)
 
 /** Fisher-Yates — the `sort(() => Math.random() - 0.5)` idiom is biased. */
 function shuffled<T>(arr: readonly T[]): T[] {
@@ -161,9 +185,9 @@ function shuffled<T>(arr: readonly T[]): T[] {
 
 function pickStats(slot: EquipSlot, rarity: ItemRarity): (keyof ItemStats)[] {
   const possible  = SLOT_STATS[slot]
-  // set/unique always roll all available stats for the slot
+  // Stat count by rarity (acc slots have a wide pool, so unique caps at 4)
   const count =
-    rarity === 'unique' ? possible.length :
+    rarity === 'unique' ? Math.min(4, possible.length) :
     rarity === 'set'    ? Math.min(3, possible.length) :
     rarity === 'epic'   ? Math.min(3, possible.length) :
     rarity === 'rare'   ? Math.min(2, possible.length) :
@@ -447,6 +471,8 @@ export function generateMarketOffer(level: number): MarketOffer {
 export const ZERO_BONUSES: EquipBonuses = {
   atk: 0, def: 0, hp: 0, atkSpeed: 0, magicDamage: 0,
   vision: 0, moveSpeed: 0, dropChance: 0, goldMult: 0, xpBonus: 0,
+  critChance: 0, accuracy: 0,
+  resIgnea: 0, resGlacial: 0, resSombria: 0, resVital: 0,
   attrBonus: {},
 }
 

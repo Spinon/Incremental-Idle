@@ -19,7 +19,7 @@ import { tryAutoUseConsumable } from '../lib/consumables'
 import { tickChestOpening } from '../lib/chestOpening'
 import { getHeroDerived } from '../lib/heroDerived'
 import { grantVictoryRewards } from '../lib/victoryRewards'
-import { getBaseSpeed } from '../formulas/derived'
+import { getBaseSpeed, getMaxDeck } from '../formulas/derived'
 import { usePartyStore } from '../store/partyStore'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import type { Phase } from '../store/battleStore'
@@ -267,7 +267,7 @@ export function useGameLoop(paused = false) {
         setSpeed(bs)
       }
 
-      const maxDeck   = Math.min(8, 3 + Math.floor(derived.vision / 50))
+      const maxDeck   = getMaxDeck(derived.vision)
       const heroLevel = useHeroStore.getState().level
       useMapStore.getState().tickMap(deltaMs, derived.moveSpeed, maxDeck, derived.vision, heroLevel)
 
@@ -358,7 +358,7 @@ export function useGameLoop(paused = false) {
             // placed (map is geometrically enclosed, not just level-capped).
             const afterPlace = useMapStore.getState()
             const d2         = getHeroDerived()
-            const maxDk      = Math.min(8, 3 + Math.floor(d2.vision / 50))
+            const maxDk      = getMaxDeck(d2.vision)
             if (
               afterPlace.scene === 'map' &&
               afterPlace.deck.length >= maxDk &&
