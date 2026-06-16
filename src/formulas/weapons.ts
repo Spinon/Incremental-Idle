@@ -243,5 +243,33 @@ export function getWeaponCombatProfile(
 }
 
 export function hasWeaponMaterial(materials: WeaponMaterials, tier: number, count: number): boolean {
-  return (materials[tier] ?? 0) >= count
+  return weaponMaterialSpendPlan(materials, tier, count).reduce((sum, entry) => sum + entry.count, 0) >= count
+}
+
+export function countUsableWeaponMaterials(materials: WeaponMaterials, tier: number): number {
+  let total = 0
+  for (let t = Math.max(1, Math.round(tier)); t <= WEAPON_MAX_TIER; t++) {
+    total += materials[t] ?? 0
+  }
+  return total
+}
+
+export function weaponMaterialSpendPlan(
+  materials: WeaponMaterials,
+  tier: number,
+  count: number,
+): Array<{ tier: number; count: number }> {
+  const requiredTier = Math.max(1, Math.round(tier))
+  let remaining = Math.max(0, Math.round(count))
+  const plan: Array<{ tier: number; count: number }> = []
+
+  for (let t = requiredTier; t <= WEAPON_MAX_TIER && remaining > 0; t++) {
+    const available = Math.max(0, Math.round(materials[t] ?? 0))
+    if (available <= 0) continue
+    const used = Math.min(available, remaining)
+    plan.push({ tier: t, count: used })
+    remaining -= used
+  }
+
+  return plan
 }

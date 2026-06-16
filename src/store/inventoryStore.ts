@@ -14,6 +14,7 @@ import {
   normalizeWeaponProgress,
   weaponForgeCost,
   weaponForgeMaterialTier,
+  weaponMaterialSpendPlan,
   weaponMaxLevelForTier,
   weaponXpForLevel,
   WEAPON_MAX_TIER,
@@ -472,7 +473,9 @@ export const useInventoryStore = create<InventoryStore>()(
           const cost = weaponForgeCost(p)
           if (!hasWeaponMaterial(st.weaponMaterials, materialTier, cost)) return
 
-          st.weaponMaterials[materialTier] -= cost
+          for (const spend of weaponMaterialSpendPlan(st.weaponMaterials, materialTier, cost)) {
+            st.weaponMaterials[spend.tier] = Math.max(0, (st.weaponMaterials[spend.tier] ?? 0) - spend.count)
+          }
           p.tier += 1
           p.maxLevel = weaponMaxLevelForTier(p.tier)
           p.xp = 0

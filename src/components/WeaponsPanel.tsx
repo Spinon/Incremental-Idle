@@ -1,5 +1,6 @@
 import {
   canEquipWeapon,
+  countUsableWeaponMaterials,
   getWeaponCombatProfile,
   getWeaponStatBonuses,
   isWeaponAtForgeCap,
@@ -8,6 +9,7 @@ import {
   TWO_HANDED_WEAPONS,
   weaponForgeCost,
   weaponForgeMaterialTier,
+  weaponMaterialSpendPlan,
   WEAPON_EFFECT_LABELS,
   WEAPON_LABELS,
   WEAPON_MATERIAL_LABELS,
@@ -45,6 +47,26 @@ function formatXp(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`
   return String(Math.round(value))
+}
+
+function formatMaterialPlan(plan: Array<{ tier: number; count: number }>): string {
+  return plan.map(entry => `${entry.count}x T${entry.tier}`).join(' + ')
+}
+
+function confirmHigherTierForge(
+  type: WeaponType,
+  requiredTier: number,
+  plan: Array<{ tier: number; count: number }>,
+  isEn: boolean,
+): boolean {
+  if (!plan.some(entry => entry.tier > requiredTier)) return true
+
+  const weaponName = WEAPON_LABELS[type][isEn ? 'en' : 'pt']
+  return window.confirm(
+    isEn
+      ? `${weaponName} needs Forge Steel T${requiredTier}, but this forge will use higher tier material: ${formatMaterialPlan(plan)}. Continue?`
+      : `${weaponName} precisa de Aço de Forja T${requiredTier}, mas esta forja vai usar material de tier superior: ${formatMaterialPlan(plan)}. Continuar?`,
+  )
 }
 
 function weaponEffectText(
@@ -113,6 +135,11 @@ function ForgeSteelStrip({ materials, isEn }: { materials: WeaponMaterials; isEn
             </span>
           ))
         )}
+        <span className="basis-full text-[9px] font-semibold text-amber-700/75 dark:text-amber-300/75">
+          {isEn
+            ? 'Higher tiers can forge lower tiers; exact tiers are spent first.'
+            : 'Tiers superiores podem forjar tiers inferiores; tiers exatos são gastos primeiro.'}
+        </span>
       </div>
     </div>
   )
@@ -146,8 +173,10 @@ function WeaponCard({
   const atCap = isWeaponAtForgeCap(p)
   const materialTier = weaponForgeMaterialTier(p)
   const forgeCost = weaponForgeCost(p)
-  const owned = materials[materialTier] ?? 0
-  const canForge = atCap && owned >= forgeCost
+  const usableMaterials = countUsableWeaponMaterials(materials, materialTier)
+  const forgePlan = weaponMaterialSpendPlan(materials, materialTier, forgeCost)
+  const usesHigherTier = forgePlan.some(entry => entry.tier > materialTier)
+  const canForge = atCap && usableMaterials >= forgeCost
   const maxedOut = p.tier >= WEAPON_MAX_TIER && p.level >= p.maxLevel
 
   const effectLoadout: EquippedWeapons = equippedHere
@@ -156,6 +185,15 @@ function WeaponCard({
 
   const canMain = type !== 'shield'
   const canOff = canEquipWeapon('offHand', type, loadout)
+  const forgeTitle = canForge
+    ? `${WEAPON_MATERIAL_LABELS[isEn ? 'en' : 'pt']} T${materialTier}+: ${formatMaterialPlan(forgePlan)}`
+    : `${WEAPON_MATERIAL_LABELS[isEn ? 'en' : 'pt']} T${materialTier}+: ${usableMaterials}/${forgeCost}`
+
+  function handleForgeClick() {
+    if (!canForge) return
+    if (!confirmHigherTierForge(type, materialTier, forgePlan, isEn)) return
+    onForge(type)
+  }
 
   return (
     <div
@@ -261,9 +299,9 @@ function WeaponCard({
         {!maxedOut && (
           <button
             type="button"
-            onClick={() => onForge(type)}
+            onClick={handleForgeClick}
             disabled={!canForge}
-            title={`${WEAPON_MATERIAL_LABELS[isEn ? 'en' : 'pt']} T${materialTier}: ${owned}/${forgeCost}`}
+            title={forgeTitle}
             className={cn(
               'ml-auto rounded-md border px-2 py-1 text-[9px] font-black uppercase transition-colors',
               canForge
@@ -271,7 +309,12 @@ function WeaponCard({
                 : 'border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600',
             )}
           >
-            ⚒ {isEn ? 'Forge' : 'Forjar'} {owned}/{forgeCost}
+            ⚒ {isEn ? 'Forge' : 'Forjar'} {usableMaterials}/{forgeCost}
+            {usesHigherTier && (
+              <span className="ml-1 text-[8px] text-amber-600 dark:text-amber-300">
+                T{materialTier}+
+              </span>
+            )}
           </button>
         )}
         {maxedOut && (
