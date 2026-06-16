@@ -25,7 +25,7 @@ const CONSUMABLE_EFFECTS: ConsumableEffect[] = [
 ]
 
 // Sell price comes from the store — single source of truth
-import { sellPrice as localSellPrice } from '../store/inventoryStore'
+import { MAX_CONSUMABLES, sellPrice as localSellPrice } from '../store/inventoryStore'
 
 function consumableEffectLabel(effect: ConsumableEffect, isEn: boolean): string {
   const labels: Record<ConsumableEffect, [string, string]> = {
@@ -1427,7 +1427,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
         {/* Header: label + quickslots */}
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold shrink-0">
-            {isEn ? `Consumables (${consumables.length}/8)` : `Consumíveis (${consumables.length}/8)`}
+            {isEn ? `Consumables (${consumables.length}/${MAX_CONSUMABLES})` : `Consumíveis (${consumables.length}/${MAX_CONSUMABLES})`}
           </p>
           {/* Quickslot strip */}
           <div className="flex items-center gap-1.5">

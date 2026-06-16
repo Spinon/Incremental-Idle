@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useHeroStore } from '../store/heroStore'
 import { usePartyStore } from '../store/partyStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { npcClassLabel, npcLevel, npcRaceLabel } from '../formulas/npcs'
+import { npcClassLabel, npcEffectiveAttributes, npcLevel, npcRaceLabel } from '../formulas/npcs'
 import { usePartyAttributeBonus, hasAttributeBonus } from '../lib/partyBonuses'
 import { partySlotColor } from '../lib/partySlots'
 import { cn } from '../lib/utils'
@@ -69,6 +69,7 @@ export default function PartyPanel() {
   }, [ensureStarterNpcs, heroLevel])
 
   const selectedNpc = useMemo(() => knownNpcs.find(npc => npc.id === selectedNpcId) ?? knownNpcs[0] ?? null, [knownNpcs, selectedNpcId])
+  const selectedNpcAttributes = selectedNpc ? npcEffectiveAttributes(heroLevel, selectedNpc) : null
   const assignedIds = new Set(slots.map(slot => slot.memberId).filter(Boolean))
 
   return (
@@ -265,7 +266,7 @@ export default function PartyPanel() {
             {ATTR_KEYS.map(key => (
               <div key={key} className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-1">
                 <p className="text-[9px] font-black text-slate-400">{attrLabels[key]}</p>
-                <p className="text-sm font-black text-slate-700 dark:text-slate-200">{Math.round(selectedNpc.attributes[key])}</p>
+                <p className="text-sm font-black text-slate-700 dark:text-slate-200">{Math.round(selectedNpcAttributes?.[key] ?? 0)}</p>
               </div>
             ))}
           </div>

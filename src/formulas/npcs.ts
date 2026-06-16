@@ -71,6 +71,38 @@ export function npcRaceLabel(race: NpcRace, isEn: boolean): string {
   return isEn ? label.en : label.pt
 }
 
+export function npcAttributesForLevel(
+  id: string,
+  npcClass: NpcClass,
+  race: NpcRace,
+  level: number,
+): Attributes {
+  const hash = hashText(id)
+  const classDef = CLASS_LABELS[npcClass]
+  const raceDef = RACE_LABELS[race]
+  const points = 8 + Math.max(1, level) * 4
+  const weights = classDef.weights
+  const totalWeight = ATTR_KEYS.reduce((sum, key) => sum + weights[key], 0)
+  const attributes = emptyAttrs()
+  let spent = 0
+
+  for (const key of ATTR_KEYS) {
+    const value = Math.max(0, Math.round(points * weights[key] / totalWeight))
+    attributes[key] = value
+    spent += value
+  }
+  attributes[ATTR_KEYS[hash % ATTR_KEYS.length]] += points - spent
+  for (const key of ATTR_KEYS) {
+    attributes[key] += raceDef.bonus[key] ?? 0
+  }
+
+  return attributes
+}
+
+export function npcEffectiveAttributes(playerLevel: number, npc: Pick<PartyNpc, 'id' | 'class' | 'race' | 'levelOffset'>): Attributes {
+  return npcAttributesForLevel(npc.id, npc.class, npc.race, npcLevel(playerLevel, npc))
+}
+
 export function generateNpc(id: string, playerLevel: number, npcClass?: NpcClass, race?: NpcRace): PartyNpc {
   const hash = hashText(id)
   const classes = Object.keys(CLASS_LABELS) as NpcClass[]
@@ -82,20 +114,7 @@ export function generateNpc(id: string, playerLevel: number, npcClass?: NpcClass
   const raceDef = RACE_LABELS[resolvedRace]
   const levelOffset = -1 - (hash % 5)
   const level = Math.max(1, playerLevel + levelOffset)
-  const points = 8 + level * 4
-  const weights = classDef.weights
-  const totalWeight = ATTR_KEYS.reduce((sum, key) => sum + weights[key], 0)
-  const attributes = emptyAttrs()
-  let spent = 0
-  for (const key of ATTR_KEYS) {
-    const value = Math.max(0, Math.round(points * weights[key] / totalWeight))
-    attributes[key] = value
-    spent += value
-  }
-  attributes[ATTR_KEYS[hash % ATTR_KEYS.length]] += points - spent
-  for (const key of ATTR_KEYS) {
-    attributes[key] += raceDef.bonus[key] ?? 0
-  }
+  const attributes = npcAttributesForLevel(id, resolvedClass, resolvedRace, level)
 
   const name = `${namePair[0]} ${raceDef.pt}`
   const nameEn = `${namePair[1]} the ${raceDef.en}`

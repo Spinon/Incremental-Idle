@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { FOREST_MONSTER_MAP, FOREST_RANDOM_MONSTERS } from '../data/monsters'
-import { generateNpc, npcLevel } from '../formulas/npcs'
+import { generateNpc, npcEffectiveAttributes, npcLevel } from '../formulas/npcs'
 import { generateItem } from '../formulas/items'
 import { buildMonster, estimateMonster } from '../formulas/monsters'
 import { getHeroDerived } from '../lib/heroDerived'
@@ -80,13 +80,14 @@ function isNpcExploreTarget(tile: PlacedTile, npcLevelValue: number) {
 }
 
 function npcBattleChance(npc: PartyNpc, npcLevelValue: number, enemy: ReturnType<typeof estimateMonster>) {
+  const attributes = npcEffectiveAttributes(npcLevelValue - npc.levelOffset, npc)
   const npcPower = npcLevelValue * 12
-    + npc.attributes.forca * 3
-    + npc.attributes.vitalidade * 2.2
-    + npc.attributes.agilidade * 2
-    + npc.attributes.destreza * 2
-    + npc.attributes.inteligencia * 2.4
-    + npc.attributes.sabedoria * 1.8
+    + attributes.forca * 3
+    + attributes.vitalidade * 2.2
+    + attributes.agilidade * 2
+    + attributes.destreza * 2
+    + attributes.inteligencia * 2.4
+    + attributes.sabedoria * 1.8
     + npc.spellIds.length * 8
   const enemyPower = enemy.level * 14 + enemy.atk * 2 + enemy.def * 2 + enemy.maxHp * 0.35 + enemy.magicDamage * 2
   return Math.max(0.2, Math.min(0.92, 0.5 + (npcPower - enemyPower) / Math.max(80, enemyPower * 2)))
@@ -260,8 +261,8 @@ export const usePartyStore = create<PartyStore>()(
           if (slot.mode !== 'follow' || !slot.memberId) continue
           const npc = state.knownNpcs.find(n => n.id === slot.memberId)
           if (!npc) continue
-          const scale = Math.max(1, npcLevel(playerLevel, npc)) / Math.max(1, playerLevel)
-          for (const key of ATTR_KEYS) bonus[key] += npc.attributes[key] * scale * 0.05
+          const attributes = npcEffectiveAttributes(playerLevel, npc)
+          for (const key of ATTR_KEYS) bonus[key] += attributes[key] * 0.05
         }
         return bonus
       },

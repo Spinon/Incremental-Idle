@@ -27,7 +27,7 @@ import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 const BASE_SLOTS      = 12
 const EXPAND_SLOTS    = 6
 const EXPAND_BASE     = 50
-const MAX_CONSUMABLES = 8
+export const MAX_CONSUMABLES = 100
 const QUICKSLOT_COUNT = 4
 
 const ACC_KEYS: EquipmentKey[] = ['acc1', 'acc2', 'acc3']
