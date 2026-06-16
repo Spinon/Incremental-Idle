@@ -89,7 +89,7 @@ export function normalizeEquippedWeapons(saved?: Partial<EquippedWeapons>): Equi
 
 export function enforceWeaponLoadout(loadout: EquippedWeapons): EquippedWeapons {
   if (loadout.mainHand === 'shield') return { mainHand: 'sword', offHand: 'shield' }
-  if (TWO_HANDED_WEAPONS.has(loadout.mainHand)) return { mainHand: loadout.mainHand, offHand: null }
+  if (TWO_HANDED_WEAPONS.has(loadout.mainHand)) return { mainHand: loadout.mainHand, offHand: loadout.mainHand }
   if (loadout.offHand && !OFF_HAND_WEAPONS.has(loadout.offHand)) return { ...loadout, offHand: null }
   return loadout
 }

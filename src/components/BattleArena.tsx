@@ -7,6 +7,15 @@ import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellS
 import { useUIStore } from '../store/uiStore'
 import { SPELL_ICONS, SPELL_MAP, WORD_ICONS } from '../data/spells'
 import { getSpellManaCost } from '../formulas/spells'
+import {
+  attackerAtkFromPrecision,
+  attackerCannotCrit,
+  attackerMissChance,
+  attackSpeedMult,
+  damageReductionRemoval,
+  damageTakenMult,
+  defenderCannotDodge,
+} from '../formulas/statusEffects'
 import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getEffectiveDerivedStatsFromBonuses } from '../formulas/effectiveStats'
@@ -30,7 +39,7 @@ import forestFrame008 from '../assets/backgrounds/forest/frame_008.png'
 import UnitSprite from './UnitSprite'
 import HpBar from './HpBar'
 import PartyNpcSprite from './icons/party/PartyNpcSprite'
-import type { DeathRecord } from '../store/battleStore'
+import type { DeathRecord, Unit } from '../store/battleStore'
 import type { Consumable, ItemRarity } from '../types/item'
 import type { SpellRarity, AutoCastConfig } from '../types/spell'
 
@@ -93,6 +102,26 @@ function statusBadgeTone(type: StatusType) {
   return BUFF_STATUS_TYPES.has(type)
     ? 'bg-emerald-950/35 border-emerald-700/35'
     : 'bg-red-950/35 border-red-800/35'
+}
+
+function BleedIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2.8c3.8 4.5 6.4 8.2 6.4 12A6.3 6.3 0 0 1 12 21.2a6.3 6.3 0 0 1-6.4-6.4c0-3.8 2.6-7.5 6.4-12Z"
+        fill="#ef4444"
+        stroke="#fecaca"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M9 15.1c.2 1.5 1.4 2.6 3 2.6"
+        stroke="#fee2e2"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+    </svg>
+  )
 }
 
 const ATTACK_MS = 2000
@@ -207,6 +236,175 @@ function DeathLogPanel({ deaths, isEn }: { deaths: DeathRecord[]; isEn: boolean 
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+type EnemyStatKey =
+  | 'atk'
+  | 'def'
+  | 'maxHp'
+  | 'atkSpeed'
+  | 'dodgeChance'
+  | 'accuracy'
+  | 'critChance'
+  | 'critDamage'
+  | 'damageReduction'
+  | 'magicDamage'
+  | 'resIgnea'
+  | 'resGlacial'
+  | 'resSombria'
+  | 'resVital'
+  | 'missChance'
+  | 'damageTaken'
+
+function formatEnemyStat(key: EnemyStatKey, value: number): string {
+  switch (key) {
+    case 'atkSpeed':
+      return `${value.toFixed(2).replace(/\.00$/, '')}x`
+    case 'dodgeChance':
+    case 'accuracy':
+    case 'critChance':
+    case 'damageReduction':
+    case 'resIgnea':
+    case 'resGlacial':
+    case 'resSombria':
+    case 'resVital':
+    case 'missChance':
+      return formatPercent(value)
+    case 'critDamage':
+    case 'damageTaken':
+      return `${value.toFixed(2).replace(/\.00$/, '')}x`
+    case 'def':
+      return value.toFixed(1).replace(/\.0$/, '')
+    default:
+      return String(Math.round(value))
+  }
+}
+
+function enemyDisplayStats(enemy: Unit, statuses: ReturnType<typeof useBattleStore.getState>['enemyStatuses']) {
+  const missChance = attackerMissChance(statuses)
+  const dmgTaken = damageTakenMult(statuses)
+  const reductionRemoval = damageReductionRemoval(statuses)
+  const effectiveAtk = attackerAtkFromPrecision(statuses)
+    ? Math.max(1, Math.round((enemy.critChance + enemy.accuracy) * 100))
+    : enemy.atk
+
+  return {
+    atk: effectiveAtk,
+    def: enemy.def,
+    maxHp: enemy.maxHp,
+    atkSpeed: Math.max(0.1, enemy.atkSpeed * attackSpeedMult(statuses)),
+    dodgeChance: defenderCannotDodge(statuses) ? 0 : enemy.dodgeChance,
+    accuracy: enemy.accuracy,
+    critChance: attackerCannotCrit(statuses) ? 0 : enemy.critChance,
+    critDamage: enemy.critDamage,
+    damageReduction: Math.max(0, enemy.damageReduction * (1 - reductionRemoval)),
+    magicDamage: enemy.magicDamage,
+    resIgnea: enemy.resIgnea,
+    resGlacial: enemy.resGlacial,
+    resSombria: enemy.resSombria,
+    resVital: enemy.resVital,
+    missChance,
+    damageTaken: dmgTaken,
+  } satisfies Record<EnemyStatKey, number>
+}
+
+function isEnemyBaseUsable(base: Unit, enemy: Unit): boolean {
+  return base.level === enemy.level &&
+    base.monsterType === enemy.monsterType &&
+    base.rarity === enemy.rarity &&
+    base.monsterVariant === enemy.monsterVariant &&
+    base.enraged === enemy.enraged
+}
+
+function EnemyStatsPanel({
+  base,
+  enemy,
+  statuses,
+  activeDebuff,
+  isEn,
+}: {
+  base: Unit
+  enemy: Unit
+  statuses: ReturnType<typeof useBattleStore.getState>['enemyStatuses']
+  activeDebuff: ReturnType<typeof useSpellStore.getState>['activeDebuff']
+  isEn: boolean
+}) {
+  const baseStats = enemyDisplayStats(base, [])
+  const currentStats = enemyDisplayStats(enemy, statuses)
+  const rows: { key: EnemyStatKey; label: string }[] = [
+    { key: 'atk', label: 'ATK' },
+    { key: 'def', label: 'DEF' },
+    { key: 'maxHp', label: isEn ? 'Max HP' : 'HP Max' },
+    { key: 'atkSpeed', label: isEn ? 'Atk Speed' : 'Vel. Atk' },
+    { key: 'dodgeChance', label: isEn ? 'Dodge' : 'Esquiva' },
+    { key: 'accuracy', label: isEn ? 'Accuracy' : 'Precisao' },
+    { key: 'critChance', label: isEn ? 'Crit Chance' : 'Crit' },
+    { key: 'critDamage', label: isEn ? 'Crit Dmg' : 'Dano Crit' },
+    { key: 'damageReduction', label: isEn ? 'Dmg Red.' : 'Red. Dano' },
+    { key: 'magicDamage', label: isEn ? 'Magic' : 'Magico' },
+    { key: 'resIgnea', label: isEn ? 'Fire Res.' : 'Res. Fogo' },
+    { key: 'resGlacial', label: isEn ? 'Cold Res.' : 'Res. Gelo' },
+    { key: 'resSombria', label: isEn ? 'Dark Res.' : 'Res. Sombra' },
+    { key: 'resVital', label: isEn ? 'Bio Res.' : 'Res. Vital' },
+    { key: 'missChance', label: isEn ? 'Miss +' : 'Erro +' },
+    { key: 'damageTaken', label: isEn ? 'Dmg Taken' : 'Dano Receb.' },
+  ]
+  const activeStatusText = statuses.length > 0
+    ? statuses.map(s => `${isEn ? STATUS_LABEL_EN[s.type] : STATUS_LABEL_PT[s.type]} ${s.turnsLeft}t`).join(' / ')
+    : (isEn ? 'No status effects' : 'Sem status ativos')
+
+  return (
+    <div className="w-full rounded-xl border border-slate-700/70 bg-slate-950/95 shadow-xl overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          {isEn ? 'Enemy Attributes' : 'Atributos do Inimigo'}
+        </p>
+        <span className="text-[10px] text-slate-600 tabular-nums">base -&gt; {isEn ? 'current' : 'atual'}</span>
+      </div>
+
+      <div className="p-2">
+        <div className="mb-2 rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-2">
+          <p className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">
+            {isEn ? 'Active modifiers' : 'Modificadores ativos'}
+          </p>
+          <p className="mt-1 text-[10px] leading-4 text-slate-400">{activeStatusText}</p>
+          {activeDebuff && (
+            <p className="mt-1 text-[10px] leading-4 text-purple-300">
+              {isEn ? 'Spell debuff' : 'Debuff de magia'}: ATK {formatDebuffMultiplier(activeDebuff.atkMult)}, {isEn ? 'Speed' : 'Vel.'} {formatDebuffMultiplier(activeDebuff.atkSpeedMult)} ({activeDebuff.remaining}t)
+            </p>
+          )}
+        </div>
+
+        <div className="max-h-64 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          {rows.map(({ key, label }) => {
+            const baseValue = baseStats[key]
+            const currentValue = currentStats[key]
+            const changed = Math.abs(baseValue - currentValue) > 0.0001
+            return (
+              <div key={key} className={cn(
+                'rounded-lg border px-2 py-1.5 flex items-center gap-2',
+                changed
+                  ? 'border-indigo-700/60 bg-indigo-950/25'
+                  : 'border-slate-800 bg-slate-900/55',
+              )}>
+                <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-slate-400">{label}</span>
+                <span className="shrink-0 text-[10px] font-black tabular-nums text-slate-500">
+                  {formatEnemyStat(key, baseValue)}
+                </span>
+                <span className="shrink-0 text-[10px] text-slate-600">-&gt;</span>
+                <span className={cn(
+                  'shrink-0 text-[10px] font-black tabular-nums',
+                  changed ? 'text-indigo-300' : 'text-slate-300',
+                )}>
+                  {formatEnemyStat(key, currentValue)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -349,6 +547,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const [showBattleLog, setShowBattleLog] = useState(true)
   const [showDeathLog, setShowDeathLog] = useState(false)
+  const [showEnemyStats, setShowEnemyStats] = useState(false)
   const [seenDeathId, setSeenDeathId] = useState(() => {
     if (typeof window === 'undefined') return ''
     return window.localStorage.getItem(SEEN_DEATH_KEY) ?? ''
@@ -387,7 +586,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const [impact, setImpact] = useState(false)
 
   // Floating number state — positive value = heal (green), negative = damage
-  interface DmgFloat { id: number; value: number; missed: boolean; isCrit: boolean; side: 'player' | 'enemy'; icon?: string }
+  interface DmgFloat { id: number; value: number; missed: boolean; isCrit: boolean; side: 'player' | 'enemy'; icon?: string; stack: number }
   const [floats, setFloats] = useState<DmgFloat[]>([])
   const floatId = useRef(0)
   const lastLogLen = useRef(0)
@@ -396,35 +595,43 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const logLen = store.log.length
   useEffect(() => {
     if (logLen > lastLogLen.current && store.log.length > 0 && !store.skipAnim) {
-      const entry = store.log[0]
+      const added = Math.min(logLen - lastLogLen.current, store.log.length)
+      const newEntries = store.log.slice(0, added).reverse()
+      const nextFloats: DmgFloat[] = []
 
-      // Float appears on the DEFENDER's side (the unit taking the hit/effect)
-      const side: 'player' | 'enemy' = entry.defender === store.player.name ? 'player' : 'enemy'
+      newEntries.forEach((entry, index) => {
+        // Float appears on the DEFENDER's side (the unit taking the hit/effect)
+        const side: 'player' | 'enemy' = entry.defender === store.player.name ? 'player' : 'enemy'
 
-      let floatValue = 0
-      let floatIcon: string | undefined
-      const isCrit = !!entry.isCrit
+        let floatValue = 0
+        let floatIcon: string | undefined
+        const isCrit = !!entry.isCrit
 
-      if (entry.missed) {
-        floatValue = 0
-      } else if (entry.blocked) {
-        floatIcon = entry.weaponEffect?.icon ?? 'blk'
-      } else if (entry.spell) {
-        if (entry.spell.effectType === 'damage')   floatValue = -(entry.spell.value)
-        else if (entry.spell.effectType === 'heal') floatValue = entry.spell.value
-        else floatIcon = entry.spell.icon
-      } else if (entry.weaponEffect) {
-        floatIcon = entry.weaponEffect.icon
-        if (entry.dmg > 0) floatValue = -entry.dmg
-      } else {
-        floatValue = -entry.dmg
-      }
+        if (entry.missed) {
+          floatValue = 0
+        } else if (entry.blocked) {
+          floatIcon = entry.weaponEffect?.icon ?? 'blk'
+        } else if (entry.spell) {
+          if (entry.spell.effectType === 'damage')   floatValue = -(entry.spell.value)
+          else if (entry.spell.effectType === 'heal') floatValue = entry.spell.value
+          else floatIcon = entry.spell.icon
+        } else if (entry.weaponEffect) {
+          floatIcon = entry.weaponEffect.icon
+          if (entry.dmg > 0) floatValue = -entry.dmg
+        } else {
+          floatValue = -entry.dmg
+        }
 
-      const shouldFloat = entry.missed || floatValue !== 0 || floatIcon !== undefined
-      if (shouldFloat) {
-        const id = ++floatId.current
-        setFloats(prev => [...prev.slice(-6), { id, value: floatValue, missed: !!entry.missed, isCrit, side, icon: floatIcon }])
-        setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1300)
+        const shouldFloat = entry.missed || floatValue !== 0 || floatIcon !== undefined
+        if (shouldFloat) {
+          const id = ++floatId.current
+          nextFloats.push({ id, value: floatValue, missed: !!entry.missed, isCrit, side, icon: floatIcon, stack: index })
+          setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1300)
+        }
+      })
+
+      if (nextFloats.length > 0) {
+        setFloats(prev => [...prev.slice(-6), ...nextFloats].slice(-8))
       }
     }
     lastLogLen.current = logLen
@@ -441,6 +648,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
     setImpact(false)
 
     if (pausedForCloudSave) return
+    if (store.speed <= 0) return
     if (store.skipAnim && store.phase !== 'over') return
 
     let cancelled = false
@@ -498,8 +706,9 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
       return npc ? [{ npc, slotId: slot.id }] : []
     })
 
-  const attackDur = `${ATTACK_MS / store.speed}ms`
-  const hitDur    = `${(ATTACK_MS / store.speed) * 0.22}ms`
+  const animationSpeed = Math.max(0.1, store.speed)
+  const attackDur = `${ATTACK_MS / animationSpeed}ms`
+  const hitDur    = `${(ATTACK_MS / animationSpeed) * 0.22}ms`
   const enemyGroundOffset = ENEMY_GROUND_OFFSET + (MONSTER_GROUND_OFFSETS[store.enemy.monsterType ?? ''] ?? 0)
 
   // Combo indicator dots
@@ -695,7 +904,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
                   title={isEn ? `Bleeding (${Math.round(store.enemyBleedPower)}/t)` : `Sangrando (${Math.round(store.enemyBleedPower)}/t)`}
                   className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-red-950/35 border-red-800/35 text-red-300"
                 >
-                  *
+                  <BleedIcon />
                   <span className="text-[9px] font-bold">{Math.round(store.enemyBleedPower)}</span>
                 </span>
               )}
@@ -763,7 +972,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
             key={f.id}
             className={cn(
               'absolute z-10 anim-dmg-float font-black drop-shadow-lg pointer-events-none leading-none',
-              f.side === 'player' ? 'left-14 bottom-28' : 'right-14 bottom-28',
+              f.side === 'player' ? 'left-14' : 'right-14',
               f.missed
                 ? 'text-slate-400 dark:text-slate-500 text-sm italic'
                 : f.icon
@@ -776,6 +985,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
                         ? 'text-red-500 dark:text-red-400 text-lg'
                         : 'text-yellow-300 dark:text-yellow-200 text-xl',
             )}
+            style={{ bottom: `${112 + f.stack * 18}px` }}
           >
             {f.missed
               ? 'MISS'
@@ -1074,6 +1284,27 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => setShowEnemyStats(v => !v)}
+            title={isEn ? 'Enemy attributes' : 'Atributos do inimigo'}
+            className={cn(
+              'self-start h-8 px-2.5 rounded-lg text-sm flex items-center gap-1.5 transition-colors border',
+              showEnemyStats
+                ? 'bg-slate-800 border-slate-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            <span>◎</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest">
+              {isEn ? 'Stats' : 'Stats'}
+            </span>
+            {store.enemyStatuses.length > 0 && (
+              <span className="min-w-[16px] h-4 px-1 rounded-full border border-indigo-500/40 text-indigo-500/80 bg-transparent text-[9px] font-bold flex items-center justify-center leading-none">
+                {store.enemyStatuses.length}
+              </span>
+            )}
+          </button>
         </div>
 
       {/* Battle log */}
@@ -1154,6 +1385,15 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
         }
       </div>}
         {showDeathLog && <DeathLogPanel deaths={deathHistory} isEn={isEn} />}
+        {showEnemyStats && (
+          <EnemyStatsPanel
+            base={isEnemyBaseUsable(store.enemyBase, store.enemy) ? store.enemyBase : store.enemy}
+            enemy={store.enemy}
+            statuses={store.enemyStatuses}
+            activeDebuff={activeDebuff}
+            isEn={isEn}
+          />
+        )}
       </div>
     </div>
   )

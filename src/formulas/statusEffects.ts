@@ -38,7 +38,7 @@ export const STATUS_RULES: Partial<Record<StatusType, StatusCombatRules>> = {
   distortion: { attackerAtkFromPrecision: true },
   shock:      { defenderCannotDodge: true },
   curse:      { removesDamageReduction: true },
-  marked:     { damageTakenMult: 1.5 },
+  marked:     { defenderCannotDodge: true, damageTakenMult: 1.5 },
   blessed:    { damageTakenMult: 0.5 },
   freeze:     { attackSpeedMult: 0.35 },
   gravity:    { skipsTurn: true },

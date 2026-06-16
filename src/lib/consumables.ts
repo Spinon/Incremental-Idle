@@ -110,7 +110,7 @@ export function applyConsumableEffect(consumable: Consumable): void {
       logConsumableInBattle(consumable, 'utility')
       break
     case 'resetAttrs':
-      hero.resetAttributes()
+      hero.grantAttributeRefunds(consumable.magnitude)
       logConsumableInBattle(consumable, 'utility')
       break
     case 'shield':

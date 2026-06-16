@@ -5,6 +5,7 @@ import AuthGate from './components/AuthGate'
 import CloudSaveConflictModal from './components/CloudSaveConflictModal'
 import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
+import TileMarketInterior from './components/TileMarketInterior'
 import TowerInterior from './components/TowerInterior'
 import HeroPanel from './components/HeroPanel'
 import SettingsMenu from './components/SettingsMenu'
@@ -244,7 +245,7 @@ function GameRoot() {
   // the mini player when the user is currently looking at another tab.
   useEffect(() => {
     if (gamePausedForSync) return
-    if (scene === 'home' || scene === 'market' || scene === 'tower') {
+    if (scene === 'home' || scene === 'market' || scene === 'tileMarket' || scene === 'tower') {
       setShowMini(activeTab !== 'battle')
     }
   }, [activeTab, gamePausedForSync, scene, setShowMini])
@@ -331,7 +332,7 @@ function GameRoot() {
       <StickyBar />
 
       {/* Main layout */}
-      <main className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-24 lg:pb-6">
+      <main className="w-full max-w-5xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 pb-[calc(9rem+env(safe-area-inset-bottom))] sm:pb-[calc(9rem+env(safe-area-inset-bottom))] lg:pb-6">
 
         {/* Battle tab — always mounted (battle timers must keep running) */}
         <div className={activeTab !== 'battle' ? 'hidden' : undefined}>
@@ -339,6 +340,7 @@ function GameRoot() {
             <div className="flex flex-col min-w-0">
               {scene === 'home'   ? <HouseInterior /> :
                scene === 'market' ? <MarketInterior /> :
+               scene === 'tileMarket' ? <TileMarketInterior /> :
                scene === 'tower'  ? <TowerInterior /> :
                                     <BattleArena paused={gamePausedForSync} />}
             </div>

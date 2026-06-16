@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
@@ -24,7 +24,7 @@ const CONSUMABLE_EFFECTS: ConsumableEffect[] = [
   'normalizeTile', 'resetAttrs',
 ]
 
-// Sell price comes from the store — single source of truth
+// Sell price comes from the store â€” single source of truth
 import { sellPrice as localSellPrice } from '../store/inventoryStore'
 
 function consumableEffectLabel(effect: ConsumableEffect, isEn: boolean): string {
@@ -43,7 +43,7 @@ function consumableEffectLabel(effect: ConsumableEffect, isEn: boolean): string 
   return isEn ? labels[effect][1] : labels[effect][0]
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const RARITY_BORDER: Record<ItemRarity, string> = {
   common:   'border-slate-400  dark:border-slate-600',
@@ -73,12 +73,12 @@ const RARITY_LABEL: Record<ItemRarity, [string, string]> = {
   common:   ['Comum',    'Common'],
   uncommon: ['Incomum',  'Uncommon'],
   rare:     ['Raro',     'Rare'],
-  epic:     ['Épico',    'Epic'],
+  epic:     ['Ã‰pico',    'Epic'],
   set:      ['Conjunto', 'Set'],
-  unique:   ['Único',    'Unique'],
+  unique:   ['Ãšnico',    'Unique'],
 }
 
-// 3-col × 6-row body grid — null means an empty ghost cell, string = EquipmentKey
+// 3-col Ã— 6-row body grid â€” null means an empty ghost cell, string = EquipmentKey
 //   Row 1: _       head    _
 //   Row 2: shoulder  _     gloves
 //   Row 3: _       chest   _
@@ -96,18 +96,18 @@ const EQUIP_GRID: (EquipmentKey | null)[] = [
 
 const SLOT_LABEL_PT: Record<EquipmentKey, string> = {
   head: 'CAB', shoulder: 'OMB', chest: 'PEI',
-  gloves: 'LUV', legs: 'PER', feet: 'PÉS',
-  acc1: '◆', acc2: '◆', acc3: '◆',
+  gloves: 'LUV', legs: 'PER', feet: 'PÃ‰S',
+  acc1: 'â—†', acc2: 'â—†', acc3: 'â—†',
 }
 const SLOT_LABEL_EN: Record<EquipmentKey, string> = {
   head: 'HEAD', shoulder: 'SHLDR', chest: 'CHEST',
   gloves: 'GLOVE', legs: 'LEGS', feet: 'FEET',
-  acc1: '◆', acc2: '◆', acc3: '◆',
+  acc1: 'â—†', acc2: 'â—†', acc3: 'â—†',
 }
 const SLOT_FULL_PT: Record<EquipmentKey, string> = {
-  head: 'Cabeça', shoulder: 'Ombro', chest: 'Peitoral',
-  gloves: 'Luvas', legs: 'Pernas', feet: 'Pés',
-  acc1: 'Acessório 1', acc2: 'Acessório 2', acc3: 'Acessório 3',
+  head: 'CabeÃ§a', shoulder: 'Ombro', chest: 'Peitoral',
+  gloves: 'Luvas', legs: 'Pernas', feet: 'PÃ©s',
+  acc1: 'AcessÃ³rio 1', acc2: 'AcessÃ³rio 2', acc3: 'AcessÃ³rio 3',
 }
 const SLOT_FULL_EN: Record<EquipmentKey, string> = {
   head: 'Head', shoulder: 'Shoulder', chest: 'Chest',
@@ -117,10 +117,10 @@ const SLOT_FULL_EN: Record<EquipmentKey, string> = {
 
 const STAT_LABEL_PT: Partial<Record<keyof ItemStats, string>> = {
   atk: 'ATK', def: 'DEF', hp: 'HP', atkSpeed: 'Vel. Atk',
-  magicDamage: 'Dano Mágico', vision: 'Visão', moveSpeed: 'Vel. Mov.',
-  dropChance: 'Chance Drop', goldMult: 'Bônus Ouro', xpBonus: 'Bônus XP',
-  critChance: 'Crítico', accuracy: 'Precisão',
-  resIgnea: 'Res. Ígnea', resGlacial: 'Res. Glacial',
+  magicDamage: 'Dano MÃ¡gico', vision: 'VisÃ£o', moveSpeed: 'Vel. Mov.',
+  dropChance: 'Chance Drop', goldMult: 'BÃ´nus Ouro', xpBonus: 'BÃ´nus XP',
+  critChance: 'CrÃ­tico', accuracy: 'PrecisÃ£o',
+  resIgnea: 'Res. Ãgnea', resGlacial: 'Res. Glacial',
   resSombria: 'Res. Sombria', resVital: 'Res. Vital',
 }
 const STAT_LABEL_EN: Partial<Record<keyof ItemStats, string>> = {
@@ -171,7 +171,7 @@ function itemDisplayName(item: Item, isEn: boolean): string {
   return getItemDisplayName(item, isEn)
 }
 
-// ─── Comparison helpers ───────────────────────────────────────────────────────
+// â”€â”€â”€ Comparison helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ACC_KEYS_ORDERED: EquipmentKey[] = ['acc1', 'acc2', 'acc3']
 
@@ -201,14 +201,14 @@ function computeStatRows(equipped: Item | null, incoming: Item): StatRow[] {
   })
 }
 
-// ─── Selection state ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Selection state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Selection =
   | { src: 'inventory'; id: string }
   | { src: 'equipment'; key: EquipmentKey }
   | null
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ItemCell({
   item,
@@ -247,7 +247,7 @@ function ItemCell({
   )
 }
 
-// ── Slot icon map ──────────────────────────────────────────────────────────────
+// â”€â”€ Slot icon map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type SlotIconComp = React.ComponentType<{ size?: number; className?: string }>
 const SLOT_ICON: Partial<Record<string, SlotIconComp>> = {
   head:     HeadIcon,
@@ -304,7 +304,7 @@ function EmptyEquipSlot({
   )
 }
 
-// ─── Equipment Body ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Equipment Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EquipmentBody({
   equipment,
@@ -330,7 +330,7 @@ function EquipmentBody({
     >
       {EQUIP_GRID.map((key, i) => {
         if (!key) {
-          // Ghost cell — shows the body silhouette background
+          // Ghost cell â€” shows the body silhouette background
           return (
             <div
               key={i}
@@ -365,7 +365,7 @@ function EquipmentBody({
   )
 }
 
-// ─── Inventory Grid ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Inventory Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function InventoryGrid({
   inventory,
@@ -431,7 +431,7 @@ function InventoryGrid({
                   Lv.{item.level}
                 </span>
                 {isChosen && (
-                  <span className="absolute top-0.5 right-0.5 text-[9px] leading-none text-red-500 font-black">✓</span>
+                  <span className="absolute top-0.5 right-0.5 text-[9px] leading-none text-red-500 font-black">âœ“</span>
                 )}
               </button>
             )
@@ -460,7 +460,7 @@ function InventoryGrid({
             : 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500',
         )}
       >
-        {isEn ? `Expand (+6 slots) — ${expandCost} ⬡` : `Expandir (+6 slots) — ${expandCost} ⬡`}
+        {isEn ? `Expand (+6 slots) â€” ${expandCost} â¬¡` : `Expandir (+6 slots) â€” ${expandCost} â¬¡`}
       </button>
       <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-600 text-center tabular-nums">
         {inventory.length}/{maxSlots} {isEn ? 'slots used' : 'slots usados'}
@@ -469,7 +469,7 @@ function InventoryGrid({
   )
 }
 
-// ─── Item Detail Panel ────────────────────────────────────────────────────────
+// â”€â”€â”€ Item Detail Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ItemDetail({
   item,
@@ -515,7 +515,7 @@ function ItemDetail({
             {rarityLabel}
           </span>
           <span className="text-[9px] text-slate-500 dark:text-slate-500">
-            {isEn ? 'Lv.' : 'Nv.'}{item.level} · {slotName}
+            {isEn ? 'Lv.' : 'Nv.'}{item.level} Â· {slotName}
           </span>
         </div>
 
@@ -537,7 +537,7 @@ function ItemDetail({
         {/* Set bonus */}
         {item.setBonus && (
           <div className="mt-1 text-[9px] text-yellow-600 dark:text-yellow-400 font-semibold bg-yellow-50 dark:bg-yellow-900/20 rounded px-1.5 py-0.5 inline-flex items-center gap-1">
-            ◆ {isEn ? 'Set bonus:' : 'Bônus de conjunto:'}{' '}
+            â—† {isEn ? 'Set bonus:' : 'BÃ´nus de conjunto:'}{' '}
             {formatStat(item.setBonus.stat, item.setBonus.value)}{' '}
             {(statLabels[item.setBonus.stat] ?? item.setBonus.stat)}{' '}
             {isEn ? 'per set item' : 'por item do conjunto'}
@@ -587,7 +587,7 @@ function ItemDetail({
                 ? 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'
                 : 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400',
             )}
-            title={canUnequip ? undefined : (isEn ? 'Inventory full' : 'Inventário cheio')}
+            title={canUnequip ? undefined : (isEn ? 'Inventory full' : 'InventÃ¡rio cheio')}
           >
             {isEn ? 'Unequip' : 'Desequipar'}
           </button>
@@ -597,7 +597,7 @@ function ItemDetail({
   )
 }
 
-// ─── Comparison Detail (equipped vs incoming) ─────────────────────────────────
+// â”€â”€â”€ Comparison Detail (equipped vs incoming) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ComparisonDetail({
   equipped,
@@ -653,7 +653,7 @@ function ComparisonDetail({
       {/* Two item cards */}
       <div className="flex items-center gap-2 mb-3">
         <HeaderCard item={equipped} dim />
-        <span className="shrink-0 text-slate-400 dark:text-slate-500 text-sm font-bold">→</span>
+        <span className="shrink-0 text-slate-400 dark:text-slate-500 text-sm font-bold">â†’</span>
         <HeaderCard item={incoming} />
       </div>
 
@@ -681,11 +681,11 @@ function ComparisonDetail({
 
               {/* Old value */}
               <span className="w-16 text-right tabular-nums text-slate-400 dark:text-slate-600 line-through">
-                {oldVal !== 0 ? formatStat(key, oldVal) : '—'}
+                {oldVal !== 0 ? formatStat(key, oldVal) : 'â€”'}
               </span>
 
               {/* Arrow */}
-              <span className="text-slate-300 dark:text-slate-700">›</span>
+              <span className="text-slate-300 dark:text-slate-700">â€º</span>
 
               {/* New value */}
               <span className={cn(
@@ -694,7 +694,7 @@ function ComparisonDetail({
                 down ? 'text-red-500   dark:text-red-400'    :
                        'text-slate-500 dark:text-slate-400',
               )}>
-                {newVal !== 0 ? formatStat(key, newVal) : '—'}
+                {newVal !== 0 ? formatStat(key, newVal) : 'â€”'}
               </span>
 
               {/* Delta badge */}
@@ -704,8 +704,8 @@ function ComparisonDetail({
                 down ? 'text-red-500   dark:text-red-400'    :
                        'text-slate-400 dark:text-slate-600',
               )}>
-                {up   && `▲ ${formatDelta(key, delta)}`}
-                {down && `▼ ${formatDelta(key, delta)}`}
+                {up   && `â–² ${formatDelta(key, delta)}`}
+                {down && `â–¼ ${formatDelta(key, delta)}`}
                 {!up && !down && '='}
               </span>
             </div>
@@ -730,7 +730,7 @@ function ComparisonDetail({
               ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
               : 'opacity-40 cursor-not-allowed bg-slate-300 dark:bg-slate-700 text-slate-500',
           )}
-          title={!canEquip ? (isEn ? 'Inventory full — cannot return equipped item' : 'Inventário cheio — não é possível devolver item equipado') : undefined}
+          title={!canEquip ? (isEn ? 'Inventory full â€” cannot return equipped item' : 'InventÃ¡rio cheio â€” nÃ£o Ã© possÃ­vel devolver item equipado') : undefined}
         >
           {isEn ? 'Equip (replace)' : 'Equipar (substituir)'}
         </button>
@@ -739,7 +739,7 @@ function ComparisonDetail({
   )
 }
 
-// ─── Auto-sell config panel ───────────────────────────────────────────────────
+// â”€â”€â”€ Auto-sell config panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AutoSellPanel({ isEn }: { isEn: boolean }) {
   const autoSell    = useInventoryStore(s => s.autoSell)
@@ -749,9 +749,9 @@ function AutoSellPanel({ isEn }: { isEn: boolean }) {
     common:   ['Comum',    'Common'],
     uncommon: ['Incomum',  'Uncommon'],
     rare:     ['Raro',     'Rare'],
-    epic:     ['Épico',    'Epic'],
+    epic:     ['Ã‰pico',    'Epic'],
     set:      ['Conjunto', 'Set'],
-    unique:   ['Único',    'Unique'],
+    unique:   ['Ãšnico',    'Unique'],
   }
 
   function toggleRarity(r: ItemRarity) {
@@ -812,7 +812,7 @@ function AutoSellPanel({ isEn }: { isEn: boolean }) {
       {/* Max level filter */}
       <div className="flex items-center gap-2">
         <span className="text-[9px] text-slate-400 dark:text-slate-600 shrink-0">
-          {isEn ? 'Max level:' : 'Nível máx.:'}
+          {isEn ? 'Max level:' : 'NÃ­vel mÃ¡x.:'}
         </span>
         <input
           type="number"
@@ -830,7 +830,7 @@ function AutoSellPanel({ isEn }: { isEn: boolean }) {
   )
 }
 
-// ─── Main InventoryPanel ──────────────────────────────────────────────────────
+// â”€â”€â”€ Main InventoryPanel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ChestOpeningPanel({
   chests,
@@ -873,10 +873,10 @@ function ChestOpeningPanel({
           {autoOpenNextChest ? (isEn ? 'Auto next ON' : 'Auto proximo ON') : (isEn ? 'Auto next OFF' : 'Auto proximo OFF')}
         </button>
         <p className="text-[9px] text-yellow-700 dark:text-yellow-300 uppercase tracking-widest font-black">
-          {isEn ? 'Chest Opening' : 'Abertura de Baús'}
+          {isEn ? 'Chest Opening' : 'Abertura de BaÃºs'}
         </p>
         <span className="ml-auto text-[9px] text-slate-500 dark:text-slate-500">
-          {isEn ? 'Drag or click a chest' : 'Arraste ou clique em um baú'}
+          {isEn ? 'Drag or click a chest' : 'Arraste ou clique em um baÃº'}
         </span>
       </div>
 
@@ -896,11 +896,11 @@ function ChestOpeningPanel({
       >
         {openingChest ? (
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🎁</span>
+            <span className="text-2xl">ðŸŽ</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className={cn('text-[11px] font-black', RARITY_TEXT[openingChest.rarity])}>
-                  {isEn ? 'Chest' : 'Baú'} Lv.{openingChest.level}
+                  {isEn ? 'Chest' : 'BaÃº'} Lv.{openingChest.level}
                 </span>
                 <span className="text-[9px] text-slate-400">{remaining}s</span>
               </div>
@@ -938,10 +938,10 @@ function ChestOpeningPanel({
               )}
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">🎁</span>
+                <span className="text-lg">ðŸŽ</span>
                 <div className="min-w-0">
                   <p className={cn('text-[10px] font-black truncate', RARITY_TEXT[chest.rarity])}>
-                    {isEn ? 'Chest' : 'Baú'} Lv.{chest.level}
+                    {isEn ? 'Chest' : 'BaÃº'} Lv.{chest.level}
                   </p>
                   <div className="flex items-center gap-1.5">
                     <p className="text-[8px] text-slate-400">x{chest.qty}</p>
@@ -949,9 +949,9 @@ function ChestOpeningPanel({
                       className="rounded bg-amber-200/80 px-1 text-[8px] font-black text-amber-900 dark:bg-amber-800/60 dark:text-amber-100"
                       title={isEn
                         ? `Can contain Forge Steel up to tier ${treasureMaxWeaponTier(chest.level)}`
-                        : `Pode conter Aço de Forja até o tier ${treasureMaxWeaponTier(chest.level)}`}
+                        : `Pode conter AÃ§o de Forja atÃ© o tier ${treasureMaxWeaponTier(chest.level)}`}
                     >
-                      ⚒ {treasureMaxWeaponTier(chest.level) > 1 ? `T1–T${treasureMaxWeaponTier(chest.level)}` : 'T1'}
+                      âš’ {treasureMaxWeaponTier(chest.level) > 1 ? `T1â€“T${treasureMaxWeaponTier(chest.level)}` : 'T1'}
                     </span>
                   </div>
                 </div>
@@ -1017,13 +1017,13 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
 
   const expandCost = getExpandCost()
 
-  // ── Sell mode derived ──
+  // â”€â”€ Sell mode derived â”€â”€
   const sellSelectedSet = new Set(selectedForSale)
   const sellTotal = inventory
     .filter(i => sellSelectedSet.has(i.id))
     .reduce((acc, i) => acc + localSellPrice(i), 0)
 
-  // ── Derived selection info ──
+  // â”€â”€ Derived selection info â”€â”€
   let selectedItem: Item | null = null
   let selectedEquipKey: EquipmentKey | undefined
   let comparedEquipped: Item | null = null   // the item currently in the target slot
@@ -1039,7 +1039,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
     selectedItem = equipment[selected.key] ?? null
   }
 
-  // ── Equipment stat totals ──
+  // â”€â”€ Equipment stat totals â”€â”€
   const equipBonuses    = getEquipmentBonuses(equipment)
   const hasEquipBonuses =
     Object.entries(equipBonuses).some(([k, v]) => k !== 'attrBonus' && (v as number) !== 0) ||
@@ -1060,7 +1060,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
     return queryMatch && effectMatch && rarityMatch
   })
 
-  // ── Handlers ──
+  // â”€â”€ Handlers â”€â”€
   const partyAttributesForChest = usePartyEffectiveAttributes(attrs, heroLevel)
   const derivedForChest = getDerivedStats(partyAttributesForChest, equipBonuses, heroLevel)
   const openSeconds = openingChest
@@ -1146,7 +1146,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
 
   const canUnequip = inventory.length < maxSlots
 
-  // ── Consumable helpers ──
+  // â”€â”€ Consumable helpers â”€â”€
   function handleUseConsumable(id: string) {
     const result = useConsumableById(id)
     if (result !== 'blocked') setSelectedCon(null)
@@ -1154,7 +1154,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
 
   function consumableEffectDesc(c: Consumable): string {
     const cdSuffix = (c.cooldownTurns ?? 0) > 0
-      ? ` · CD ${c.cooldownTurns} ${isEn ? 'turns' : 'turnos'}`
+      ? ` Â· CD ${c.cooldownTurns} ${isEn ? 'turns' : 'turnos'}`
       : ''
     return consumableEffectBase(c) + cdSuffix
   }
@@ -1165,7 +1165,9 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
       case 'mana':    return `${isEn ? 'Restore' : 'Restaura'} ${Math.round(c.magnitude * 100)}% Mana`
       case 'skip':    return `+${c.magnitude} ${isEn ? 'Skip Charge' : 'Turbo Charge'}${c.magnitude > 1 ? 's' : ''}`
       case 'xp':      return `+${Math.round(c.magnitude)} XP`
-      case 'resetAttrs': return isEn ? 'Refunds spent attributes' : 'Devolve atributos gastos'
+      case 'resetAttrs': return isEn
+        ? `+${Math.round(c.magnitude)} free attribute refund${Math.round(c.magnitude) !== 1 ? 's' : ''}`
+        : `+${Math.round(c.magnitude)} refund${Math.round(c.magnitude) !== 1 ? 's' : ''} gratis`
       case 'normalizeTile': return isEn ? 'Sets a map or deck tile to hero level' : 'Iguala um tile do mapa ou deck ao nivel do heroi'
       case 'shield': return `${isEn ? 'Shield' : 'Escudo'} ${Math.round(c.magnitude)}`
       case 'statBuff': return formatConsumableBuff(c, isEn)
@@ -1197,17 +1199,51 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
     }
   }
 
+  const equipmentBonusesSummary = hasEquipBonuses && (
+    <div className="mt-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
+      <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1.5 font-semibold">
+        {isEn ? 'Total Equipment Bonuses' : 'Bônus de Equipamento'}
+      </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+        {(Object.entries(equipBonuses) as [string, unknown][])
+          .filter(([k, v]) => k !== 'attrBonus' && (v as number) !== 0)
+          .map(([k, v]) => {
+            const sk = k as keyof ItemStats
+            const label = isEn ? STAT_LABEL_EN[sk] : STAT_LABEL_PT[sk]
+            return (
+              <span key={k} className="text-[10px] text-slate-500 dark:text-slate-500">
+                <span className="text-slate-400">{label ?? k}</span>{' '}
+                <span className="font-semibold text-indigo-500 dark:text-indigo-400">
+                  {formatStat(sk, v as number)}
+                </span>
+              </span>
+            )
+          })}
+        {Object.entries(equipBonuses.attrBonus).map(([k, v]) => {
+          const label = isEn
+            ? ATTR_LABEL_EN[k as keyof typeof ATTR_LABEL_EN]
+            : ATTR_LABEL_PT[k as keyof typeof ATTR_LABEL_PT]
+          return (
+            <span key={k} className="text-[10px] text-orange-500 dark:text-orange-400 font-semibold">
+              ★ {label} +{v}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   return (
     <div id="inventory-panel" className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
-      {/* Header + Equipment+Inventory body — hidden when showing consumables only */}
+      {/* Header + Equipment+Inventory body â€” hidden when showing consumables only */}
       {(!section || section === 'equips') && <>
       <div className="flex items-center gap-3 mb-4">
         <p className="text-[10px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
-          {isEn ? 'Equipment & Inventory' : 'Equipamento & Inventário'}
+          {isEn ? 'Equipment & Inventory' : 'Equipamento & InventÃ¡rio'}
         </p>
         {hasEquipBonuses && (
           <span className="text-[10px] text-indigo-500 dark:text-indigo-400 italic">
-            {isEn ? '— bonuses applied to stats' : '— bônus aplicados aos atributos'}
+            {isEn ? 'â€” bonuses applied to stats' : 'â€” bÃ´nus aplicados aos atributos'}
           </span>
         )}
       </div>
@@ -1241,7 +1277,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
           {/* Inventory section header with action buttons */}
           <div className="flex items-center gap-2 mb-2">
             <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold">
-              {isEn ? 'Inventory' : 'Inventário'}
+              {isEn ? 'Inventory' : 'InventÃ¡rio'}
             </p>
             <div className="ml-auto flex items-center gap-1.5">
               {/* Optimize button */}
@@ -1250,7 +1286,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                 className="px-2 py-0.5 rounded text-[9px] font-semibold border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors"
                 title={isEn ? 'Auto-equip best items per slot' : 'Equipa automaticamente os melhores itens por slot'}
               >
-                ⚡ {isEn ? 'Optimize' : 'Otimizar'}
+                âš¡ {isEn ? 'Optimize' : 'Otimizar'}
               </button>
               {/* Auto-sell toggle button */}
               <button
@@ -1262,7 +1298,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                     : 'border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
                 )}
               >
-                🏷 {isEn ? 'Auto-sell' : 'Auto-venda'} {autoSellOpen ? '▲' : '▼'}
+                ðŸ· {isEn ? 'Auto-sell' : 'Auto-venda'} {autoSellOpen ? 'â–²' : 'â–¼'}
               </button>
             </div>
           </div>
@@ -1274,12 +1310,12 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
           {sellMode && (
             <div className="mb-2 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 px-3 py-2 flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-1">
-                🏷 {isEn
-                  ? `Select items to sell — ${selectedForSale.length} selected`
-                  : `Selecione itens para vender — ${selectedForSale.length} selecionado${selectedForSale.length !== 1 ? 's' : ''}`}
+                ðŸ· {isEn
+                  ? `Select items to sell â€” ${selectedForSale.length} selected`
+                  : `Selecione itens para vender â€” ${selectedForSale.length} selecionado${selectedForSale.length !== 1 ? 's' : ''}`}
               </span>
               <span className="text-[10px] text-red-500 dark:text-red-400 font-bold tabular-nums">
-                {sellTotal} ⬡
+                {sellTotal} â¬¡
               </span>
             </div>
           )}
@@ -1317,13 +1353,15 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                 )}
               >
                 {isEn
-                  ? `Sell ${selectedForSale.length} item${selectedForSale.length !== 1 ? 's' : ''} — ${sellTotal} ⬡`
-                  : `Vender ${selectedForSale.length} item${selectedForSale.length !== 1 ? 'ns' : ''} — ${sellTotal} ⬡`}
+                  ? `Sell ${selectedForSale.length} item${selectedForSale.length !== 1 ? 's' : ''} â€” ${sellTotal} â¬¡`
+                  : `Vender ${selectedForSale.length} item${selectedForSale.length !== 1 ? 'ns' : ''} â€” ${sellTotal} â¬¡`}
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {equipmentBonusesSummary}
 
       <ChestOpeningPanel
         chests={chests}
@@ -1337,42 +1375,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
         onAutoOpenChange={setAutoOpenNextChest}
       />
 
-      {/* Equipment bonuses summary */}
-      {hasEquipBonuses && (
-        <div className="mt-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-3 py-2">
-          <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1.5 font-semibold">
-            {isEn ? 'Total Equipment Bonuses' : 'Bônus de Equipamento'}
-          </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            {(Object.entries(equipBonuses) as [string, unknown][])
-              .filter(([k, v]) => k !== 'attrBonus' && (v as number) !== 0)
-              .map(([k, v]) => {
-                const sk = k as keyof ItemStats
-                const label = isEn ? STAT_LABEL_EN[sk] : STAT_LABEL_PT[sk]
-                return (
-                  <span key={k} className="text-[10px] text-slate-500 dark:text-slate-500">
-                    <span className="text-slate-400">{label ?? k}</span>{' '}
-                    <span className="font-semibold text-indigo-500 dark:text-indigo-400">
-                      {formatStat(sk, v as number)}
-                    </span>
-                  </span>
-                )
-              })}
-            {Object.entries(equipBonuses.attrBonus).map(([k, v]) => {
-              const label = isEn
-                ? ATTR_LABEL_EN[k as keyof typeof ATTR_LABEL_EN]
-                : ATTR_LABEL_PT[k as keyof typeof ATTR_LABEL_PT]
-              return (
-                <span key={k} className="text-[10px] text-orange-500 dark:text-orange-400 font-semibold">
-                  ★ {label} +{v}
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Detail area — fixed min-height so the layout above never jumps */}
+      {/* Detail area â€” fixed min-height so the layout above never jumps */}
       <div className="mt-2 min-h-[160px]">
         {selectedItem && selected?.src === 'inventory' && comparedEquipped && (
           <ComparisonDetail
@@ -1397,34 +1400,34 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
           />
         )}
 
-        {/* Empty state hint — only shown when absolutely no items and nothing selected */}
+        {/* Empty state hint â€” only shown when absolutely no items and nothing selected */}
         {!selectedItem && inventory.length === 0 && Object.keys(equipment).length === 0 && (
           <p className="pt-6 text-center text-[10px] text-slate-400 dark:text-slate-600 italic">
             {isEn
-              ? 'No items yet — defeat monsters to find loot!'
-              : 'Nenhum item ainda — derrote monstros para encontrar equipamentos!'}
+              ? 'No items yet â€” defeat monsters to find loot!'
+              : 'Nenhum item ainda â€” derrote monstros para encontrar equipamentos!'}
           </p>
         )}
       </div>
 
       </>}
 
-      {/* ─── Spellbook section ───────────────────────────────────────────── */}
+      {/* â”€â”€â”€ Spellbook section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {!section && (
         <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
           <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold mb-3">
-            {isEn ? 'Spellbook' : 'Grimório'}
+            {isEn ? 'Spellbook' : 'GrimÃ³rio'}
           </p>
           <SpellbookPanel />
         </div>
       )}
 
-      {/* ─── Consumables section ─────────────────────────────────────────── */}
+      {/* â”€â”€â”€ Consumables section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {(!section || section === 'consumables') && <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
         {/* Header: label + quickslots */}
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest font-semibold shrink-0">
-            {isEn ? `Consumables (${consumables.length}/8)` : `Consumíveis (${consumables.length}/8)`}
+            {isEn ? `Consumables (${consumables.length}/8)` : `ConsumÃ­veis (${consumables.length}/8)`}
           </p>
           {/* Quickslot strip */}
           <div className="flex items-center gap-1.5">
@@ -1464,7 +1467,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
             })}
             {selectedCon && (
               <span className="text-[9px] text-indigo-500 dark:text-indigo-400 italic">
-                {isEn ? '← pick a slot' : '← escolha um slot'}
+                {isEn ? 'â† pick a slot' : 'â† escolha um slot'}
               </span>
             )}
           </div>
@@ -1485,7 +1488,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                 : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700',
             )}
           >
-            <span>⚙</span>
+            <span>âš™</span>
             <span>Auto</span>
           </button>
         </div>
@@ -1583,7 +1586,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
         {/* Consumable cards */}
         {consumables.length === 0 ? (
           <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 italic py-3">
-            {isEn ? 'No consumables — buy some at the market!' : 'Sem consumíveis — compre no mercado!'}
+            {isEn ? 'No consumables â€” buy some at the market!' : 'Sem consumÃ­veis â€” compre no mercado!'}
           </p>
         ) : filteredConsumables.length === 0 ? (
           <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 italic py-3">
@@ -1639,7 +1642,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
                       )}
                       title={isEn ? 'Assign to quickslot' : 'Atribuir atalho'}
                     >
-                      {qslot !== -1 ? `⌨ ${isEn ? `Q${qslot + 1}` : `A${qslot + 1}`}` : '⌨'}
+                      {qslot !== -1 ? `âŒ¨ ${isEn ? `Q${qslot + 1}` : `A${qslot + 1}`}` : 'âŒ¨'}
                     </button>
                     {/* Use */}
                     <button

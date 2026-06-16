@@ -43,6 +43,23 @@ export function MarketIcon({ size = 24, className }: IconProps) {
   )
 }
 
+export function TileMarketIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <rect x="4" y="5" width="16" height="14" rx="2" fill="#0e7490" />
+      <rect x="4" y="5" width="16" height="4" rx="2" fill="#155e75" />
+      <path d="M7 12h10M12 8v10" stroke="#67e8f9" strokeWidth="1.4" strokeLinecap="round" />
+      <rect x="7" y="9" width="4" height="4" rx="0.8" fill="#164e63" stroke="#67e8f9" strokeWidth="0.8" />
+      <rect x="13" y="9" width="4" height="4" rx="0.8" fill="#164e63" stroke="#67e8f9" strokeWidth="0.8" />
+      <rect x="7" y="15" width="4" height="3" rx="0.8" fill="#164e63" stroke="#67e8f9" strokeWidth="0.8" />
+      <rect x="13" y="15" width="4" height="3" rx="0.8" fill="#164e63" stroke="#67e8f9" strokeWidth="0.8" />
+      <path d="M8 5V3.5M16 5V3.5" stroke="#a5f3fc" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="19" cy="17" r="3" fill="#facc15" stroke="#854d0e" strokeWidth="0.8" />
+      <path d="M18.2 17h1.6M19 16.2v1.6" stroke="#854d0e" strokeWidth="0.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** Marcador do jogador — losango dourado com dois anéis */
 export function PlayerMarker({ size = 24 }: { size?: number }) {
   const half = size / 2

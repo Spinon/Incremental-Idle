@@ -79,11 +79,13 @@ function resolveInteriorSimulation({ offline }: SimulationContext): boolean {
   if (!offline) return false
   const scene = useMapStore.getState().scene
 
-  if (scene === 'market') {
+  if (scene === 'market' || scene === 'tileMarket') {
     // MarketInterior auto-sells on entry; keep that so offline runs with
     // auto-sell builds don't fill the inventory and block drops.
-    const gold = useInventoryStore.getState().performAutoSell()
-    if (gold > 0) useHeroStore.getState().earnGold(gold)
+    if (scene === 'market') {
+      const gold = useInventoryStore.getState().performAutoSell()
+      if (gold > 0) useHeroStore.getState().earnGold(gold)
+    }
     useMapStore.getState().exitMarket()
     return true
   }
@@ -244,6 +246,7 @@ export function useGameLoop(paused = false) {
 
       const speed    = useBattleStore.getState().speed
       const derived  = getHeroDerived()
+      if (speed <= 0 && !options.offline) return
 
       tickResources(deltaMs, speed, derived)
       useSpellStore.getState().tick(deltaMs / 1000)
@@ -290,7 +293,7 @@ export function useGameLoop(paused = false) {
       // first-encounter rewards, and starts the correct enemy (including the
       // tile-based stealth buff via tilesPlaced).  This also fixes the bug
       // where market exits left the exit tile permanently unexplored.
-      if (prevScene.current === 'market' && scene === 'map') {
+      if ((prevScene.current === 'market' || prevScene.current === 'tileMarket') && scene === 'map') {
         useBattleStore.getState().reset()
         useMapStore.getState().processMarketExitTile()
         const tileXp2 = useMapStore.getState().drainXp()

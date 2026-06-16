@@ -399,6 +399,8 @@ export function generateConsumable(level: number): Consumable {
       magnitude = Math.round((18 + level * 8) * mult)
       break
     case 'resetAttrs':
+      magnitude = Math.max(1, Math.round(mult))
+      break
     case 'normalizeTile':
       magnitude = 1
       break

@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import type { MapTile, PlacedTile, TileContent } from '../../types/map'
 import { gridKey, getVisionRadius, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
-import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, TileMarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 import type { QuestMapMarker, QuestDifficulty } from '../../types/quest'
 import type { PartyExplorerMarker } from '../../types/party'
@@ -57,6 +57,8 @@ function ghostBg(content: TileContent): string {
   if (content.type === 'monster')  return 'bg-red-950/30'
   if (content.type === 'treasure') return 'bg-yellow-950/25'
   if (content.type === 'market')   return 'bg-indigo-950/25'
+  if (content.type === 'tileMarket') return 'bg-sky-950/25'
+  if (content.type === 'quest')    return 'bg-emerald-950/25'
   if (content.type === 'blueTower') return 'bg-sky-950/25'
   if (content.type === 'npcRescue') return 'bg-purple-950/30'
   return ''
@@ -400,14 +402,13 @@ export default function MapViewport({
             >
               {sight && sight.type !== 'empty' && (
                 <div className={cn(
-                  sight.type === 'blueTower'
-                    ? 'absolute top-0.5 right-0.5 pointer-events-none z-30 rounded overflow-hidden'
-                    : 'absolute inset-0 flex items-center justify-center pointer-events-none z-10',
+                  'absolute inset-0 flex items-center justify-center pointer-events-none z-10',
                   vis === 'clear' ? 'opacity-60' : 'opacity-30',
                 )}>
                   {sight.type === 'monster'  && <MonsterIcon  size={previewIconSize} />}
                   {sight.type === 'treasure' && <TreasureIcon size={previewIconSize} />}
                   {sight.type === 'market'   && <MarketIcon   size={previewIconSize} />}
+                  {sight.type === 'tileMarket' && <TileMarketIcon size={previewIconSize} />}
                   {sight.type === 'quest'    && <QuestIcon    size={previewIconSize} />}
                   {sight.type === 'blueTower' && <BlueTowerIcon size={previewIconSize} />}
                   {sight.type === 'npcRescue' && <MonsterIcon size={previewIconSize} />}

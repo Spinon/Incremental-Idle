@@ -14,6 +14,7 @@ interface HeroStore {
   xp: number
   xpToNext: number
   freePoints: number
+  attributeRefundCredits: number
   attributes: Attributes
   stamina: number
   mana: number
@@ -35,6 +36,8 @@ interface HeroStore {
   heroConfig: HeroConfig
 
   spendPoint(attr: keyof Attributes): void
+  refundPoint(attr: keyof Attributes): boolean
+  grantAttributeRefunds(amount: number): void
   setHeroConfig(config: HeroConfig): void
   optimizePoints(): void
   applyPreset(preset: 'combat' | 'explorer' | 'mage'): void
@@ -77,6 +80,12 @@ const INITIAL_ATTRS: Attributes = {
   inteligencia: 0, sabedoria: 0, carisma: 0,
 }
 
+export function attributeRefundCost(freePoints: number, level: number): number {
+  const free = Math.max(0, Math.floor(freePoints))
+  const lvl = Math.max(1, Math.floor(level))
+  return Math.round(25 * lvl + 40 * Math.pow(free + 1, 1.5))
+}
+
 export const useHeroStore = create<HeroStore>()(
   persist(
   immer((set) => ({
@@ -85,6 +94,7 @@ export const useHeroStore = create<HeroStore>()(
     xp: 0,
     xpToNext: xpForLevel(1),
     freePoints: 7,
+    attributeRefundCredits: 0,
     attributes: { ...INITIAL_ATTRS },
     stamina: 100,
     mana: 150,
@@ -195,10 +205,38 @@ export const useHeroStore = create<HeroStore>()(
       if (st.mana > derived.maxMana) st.mana = derived.maxMana
     }),
 
+    refundPoint: (attr) => {
+      let ok = false
+      set((st) => {
+        if (st.attributes[attr] <= 0) return
+
+        if (st.attributeRefundCredits > 0) {
+          st.attributeRefundCredits -= 1
+        } else {
+          const cost = attributeRefundCost(st.freePoints, st.level)
+          if (st.gold < cost) return
+          st.gold -= cost
+        }
+
+        st.attributes[attr] -= 1
+        st.freePoints += 1
+        const derived = getDerivedStats(st.attributes, undefined, st.level)
+        st.stamina = Math.min(st.stamina, derived.maxStamina)
+        st.mana = Math.min(st.mana, derived.maxMana)
+        ok = true
+      })
+      return ok
+    },
+
+    grantAttributeRefunds: (amount) => set((st) => {
+      st.attributeRefundCredits += Math.max(0, Math.floor(amount))
+    }),
+
     resetAttributes: () => set((st) => {
       const spent = Object.values(st.attributes).reduce((sum, value) => sum + value, 0)
       st.attributes = { ...INITIAL_ATTRS }
       st.freePoints += spent
+      st.attributeRefundCredits = 0
       const derived = getDerivedStats(st.attributes, undefined, st.level)
       st.stamina = Math.min(st.stamina, derived.maxStamina)
       st.mana = Math.min(st.mana, derived.maxMana)

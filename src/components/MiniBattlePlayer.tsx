@@ -254,7 +254,7 @@ export default function MiniBattlePlayer() {
   const [enemyHitKey,  setEnemyHitKey]  = useState(0)
 
   // ── Floating texts ────────────────────────────────────────────────────────
-  interface FloatEntry { id: number; text: string; side: 'player' | 'enemy'; color: string }
+  interface FloatEntry { id: number; text: string; side: 'player' | 'enemy'; color: string; stack: number }
   const [floats,     setFloats]     = useState<FloatEntry[]>([])
   const floatIdRef   = useRef(0)
   const lastLogLen   = useRef(0)
@@ -265,56 +265,63 @@ export default function MiniBattlePlayer() {
       lastLogLen.current = logLen
       return
     }
+    const added = Math.min(logLen - lastLogLen.current, log.length)
     lastLogLen.current = logLen
 
-    const entry     = log[0]
-    const hitsPlayer = entry.defender === player.name
+    const nextFloats: FloatEntry[] = []
+    log.slice(0, added).reverse().forEach((entry, index) => {
+      const hitsPlayer = entry.defender === player.name
 
-    let text  = ''
-    let color = ''
+      let text  = ''
+      let color = ''
 
-    if (entry.missed) {
-      text  = 'MISS'
-      color = 'text-slate-400'
-    } else if (entry.spell) {
-      const { spell } = entry
-      if (spell.effectType === 'damage') {
-        text  = `-${spell.value}`
-        color = 'text-yellow-300'
-        setEnemyHitKey(k => k + 1)
-      } else if (spell.effectType === 'heal') {
-        text  = `+${spell.value}`
-        color = 'text-emerald-400'
+      if (entry.missed) {
+        text  = 'MISS'
+        color = 'text-slate-400'
+      } else if (entry.spell) {
+        const { spell } = entry
+        if (spell.effectType === 'damage') {
+          text  = `-${spell.value}`
+          color = 'text-yellow-300'
+          setEnemyHitKey(k => k + 1)
+        } else if (spell.effectType === 'heal') {
+          text  = `+${spell.value}`
+          color = 'text-emerald-400'
+        } else {
+          text  = spell.icon
+          color = 'text-blue-300'
+        }
+      } else if (entry.isCrit) {
+        text  = `⚡-${entry.dmg}`
+        if (entry.weaponEffect) text = `${entry.weaponEffect.icon} ${text}`
+        color = 'text-amber-300 text-[13px]'
+        if (hitsPlayer) setPlayerHitKey(k => k + 1)
+        else            setEnemyHitKey(k => k + 1)
+      } else if (entry.weaponEffect) {
+        text  = entry.dmg > 0 ? `${entry.weaponEffect.icon} -${entry.dmg}` : entry.weaponEffect.icon
+        color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'
+        if (entry.dmg > 0) {
+          if (hitsPlayer) setPlayerHitKey(k => k + 1)
+          else            setEnemyHitKey(k => k + 1)
+        }
       } else {
-        text  = spell.icon
-        color = 'text-blue-300'
-      }
-    } else if (entry.isCrit) {
-      text  = `⚡-${entry.dmg}`
-      if (entry.weaponEffect) text = `${entry.weaponEffect.icon} ${text}`
-      color = 'text-amber-300 text-[13px]'
-      if (hitsPlayer) setPlayerHitKey(k => k + 1)
-      else            setEnemyHitKey(k => k + 1)
-    } else if (entry.weaponEffect) {
-      text  = entry.dmg > 0 ? `${entry.weaponEffect.icon} -${entry.dmg}` : entry.weaponEffect.icon
-      color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'
-      if (entry.dmg > 0) {
+        text  = `-${entry.dmg}`
+        color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'
         if (hitsPlayer) setPlayerHitKey(k => k + 1)
         else            setEnemyHitKey(k => k + 1)
       }
-    } else {
-      text  = `-${entry.dmg}`
-      color = hitsPlayer ? 'text-red-400' : 'text-yellow-300'
-      if (hitsPlayer) setPlayerHitKey(k => k + 1)
-      else            setEnemyHitKey(k => k + 1)
+
+      if (!text) return
+
+      const side: 'player' | 'enemy' = hitsPlayer ? 'player' : 'enemy'
+      const id = ++floatIdRef.current
+      nextFloats.push({ id, text, side, color, stack: index })
+      setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1100)
+    })
+
+    if (nextFloats.length > 0) {
+      setFloats(prev => [...prev.slice(-4), ...nextFloats].slice(-6))
     }
-
-    if (!text) return
-
-    const side: 'player' | 'enemy' = hitsPlayer ? 'player' : 'enemy'
-    const id = ++floatIdRef.current
-    setFloats(prev => [...prev.slice(-4), { id, text, side, color }])
-    setTimeout(() => setFloats(prev => prev.filter(f => f.id !== id)), 1100)
   }, [logLen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Don't render until shown ───────────────────────────────────────────────
@@ -368,14 +375,15 @@ export default function MiniBattlePlayer() {
       )
     }
 
-    if (scene === 'market') {
+    if (scene === 'market' || scene === 'tileMarket') {
+      const isTileMarket = scene === 'tileMarket'
       return (
         <>
           <button
             type="button"
             onClick={openBattleTabAndPause}
             className="w-full text-left px-3 pt-3 pb-2 bg-[linear-gradient(160deg,#0f0c1e_0%,#1a1340_55%,#0c0f1e_100%)] hover:brightness-110 transition"
-            title={isEn ? 'Open market' : 'Abrir mercado'}
+            title={isTileMarket ? (isEn ? 'Open tile market' : 'Abrir mercado de tiles') : (isEn ? 'Open market' : 'Abrir mercado')}
           >
             <div className="h-16 rounded-lg border border-indigo-700/40 bg-indigo-950/40 px-3 py-2 flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg border border-indigo-500/30 bg-indigo-900/50 flex items-center justify-center text-xl">
@@ -383,10 +391,10 @@ export default function MiniBattlePlayer() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-black text-indigo-200 leading-none">
-                  {isEn ? 'Market' : 'Mercado'}
+                  {isTileMarket ? (isEn ? 'Tile Market' : 'Mercado de Tiles') : (isEn ? 'Market' : 'Mercado')}
                 </p>
                 <p className="text-[9px] text-indigo-400/70 mt-1 leading-none">
-                  {isEn ? 'Open shop actions' : 'Abrir a loja'}
+                  {isTileMarket ? (isEn ? 'Open tile offers' : 'Abrir ofertas de tiles') : (isEn ? 'Open shop actions' : 'Abrir a loja')}
                 </p>
               </div>
               <div className="text-right shrink-0">
@@ -474,6 +482,8 @@ export default function MiniBattlePlayer() {
               ? (isEn ? 'Home' : 'Casa')
               : scene === 'market'
                 ? (isEn ? 'Market' : 'Mercado')
+                : scene === 'tileMarket'
+                  ? (isEn ? 'Tile Market' : 'Mercado de Tiles')
                 : scene === 'tower'
                   ? (isEn ? 'Blue Tower' : 'Torre Azul')
                   : `⚔ ${isEn ? 'Battle' : 'Batalha'}`}
@@ -499,9 +509,10 @@ export default function MiniBattlePlayer() {
                 <span
                   key={f.id}
                   className={cn(
-                    'absolute -top-5 left-1/2 -translate-x-1/2 text-[11px] font-black anim-dmg-float whitespace-nowrap pointer-events-none',
+                    'absolute left-1/2 -translate-x-1/2 text-[11px] font-black anim-dmg-float whitespace-nowrap pointer-events-none',
                     f.color,
                   )}
+                  style={{ top: `${-20 - f.stack * 14}px` }}
                 >
                   {f.text}
                 </span>
@@ -544,9 +555,10 @@ export default function MiniBattlePlayer() {
                 <span
                   key={f.id}
                   className={cn(
-                    'absolute -top-5 left-1/2 -translate-x-1/2 text-[11px] font-black anim-dmg-float whitespace-nowrap pointer-events-none',
+                    'absolute left-1/2 -translate-x-1/2 text-[11px] font-black anim-dmg-float whitespace-nowrap pointer-events-none',
                     f.color,
                   )}
+                  style={{ top: `${-20 - f.stack * 14}px` }}
                 >
                   {f.text}
                 </span>

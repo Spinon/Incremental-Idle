@@ -15,7 +15,7 @@ export type StatusType =
   | 'regen'     // vitae:   hero recovers HP/turn
   | 'blessed'   // caelum:  hero crits deal extra (visual + log only for now)
   | 'gravity'   // abyssus: enemy dodgeChance = 0 (stronger than shock, longer)
-  | 'marked'    // eternum: all debuffs on enemy last +50% (display only now)
+  | 'marked'    // eternum: target cannot dodge and takes extra damage
   | 'distortion'// tempus:  visual/display only (tempus debuffs handle speed)
 
 export interface ActiveStatus {
@@ -204,7 +204,7 @@ export const STATUS_LABEL_PT: Record<StatusType, string> = {
   regen:      'Regenerando',      // vitae:   cura o herói/turno
   blessed:    'Abençoado',        // caelum:  recebe 50 % menos dano
   gravity:    'Gravitação',       // abyssus: perde o próximo turno
-  marked:     'Marcado',          // eternum: recebe 1.5× dano
+  marked:     'Marcado',          // eternum: nao esquiva e recebe 1.5x dano
   distortion: 'Distorção',        // tempus:  força e destreza trocadas
 }
 

@@ -659,7 +659,7 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
     // Collect from placed grid tiles. Every non-service tile can lead to a
     // battle; monster lairs that are still unexplored are the enraged variant.
     for (const [, tile] of Object.entries(grid)) {
-      if (tile.content.type === 'market' || tile.content.type === 'quest' || tile.content.type === 'blueTower') continue
+      if (tile.content.type === 'market' || tile.content.type === 'tileMarket' || tile.content.type === 'quest' || tile.content.type === 'blueTower') continue
       const dist = Math.max(Math.abs(tile.x - playerPos.x), Math.abs(tile.y - playerPos.y))
       if (dist > revealRange) continue
       const isBounty = tile.content.type === 'monster' && !!tile.content.bountyQuestId
@@ -840,6 +840,7 @@ function ActiveTileInfoPanel({
   const contentLabel =
     !content                   ? (isEn ? 'Unknown' : 'Desconhecido') :
     content.type === 'market'  ? (isEn ? 'Market' : 'Mercado') :
+    content.type === 'tileMarket' ? (isEn ? 'Tile Market' : 'Mercado de Tiles') :
     content.type === 'npcRescue' ? (isEn ? 'Predator Rescue' : 'Resgate Predator') :
     content.type === 'monster' && content.bountyQuestId ? (isEn ? 'Bounty Target' : 'Alvo de missão') :
     content.type === 'monster' ? (isEn ? 'Monster Lair' : 'Covil') :
@@ -851,13 +852,14 @@ function ActiveTileInfoPanel({
   const headerColor =
     isBlocked                  ? 'text-slate-400' :
     content?.type === 'market' ? 'text-indigo-400' :
+    content?.type === 'tileMarket' ? 'text-sky-400' :
     content?.type === 'npcRescue' ? 'text-purple-400' :
     content?.type === 'monster'? 'text-red-400' :
     content?.type === 'treasure'? 'text-yellow-400' :
     content?.type === 'blueTower'? 'text-sky-400' :
     content?.type === 'quest'  ? 'text-emerald-400' : 'text-slate-400'
 
-  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'quest' && content.type !== 'blueTower'
+  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'tileMarket' && content.type !== 'quest' && content.type !== 'blueTower'
     ? (() => {
         const baseLevel = content.monsterLevel ?? tile.level
         const bounty = content.type === 'monster' && !!content.bountyQuestId
@@ -1002,6 +1004,11 @@ function ActiveTileInfoPanel({
           {isEn ? 'Walk here to enter the shop.' : 'Va ate aqui para entrar na loja.'}
         </div>
       )}
+      {content?.type === 'tileMarket' && (
+        <div className="text-[11px] text-sky-400/80">
+          {isEn ? 'Walk here to buy extra deck tiles.' : 'Va ate aqui para comprar tiles extras para o deck.'}
+        </div>
+      )}
     </div>
   )
 }
@@ -1017,6 +1024,7 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
 
   const headerLabel =
     content.type === 'market'   ? (isEn ? 'Market' : 'Mercado') :
+    content.type === 'tileMarket' ? (isEn ? 'Tile Market' : 'Mercado de Tiles') :
     content.type === 'monster'  ? (isEn ? 'Monster Lair' : 'Covil') :
     content.type === 'treasure' ? (isEn ? 'Treasure' : 'Tesouro') :
     content.type === 'blueTower'? (isEn ? 'Blue Tower' : 'Torre Azul') :
@@ -1024,6 +1032,7 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
 
   const headerColor =
     content.type === 'market'   ? 'text-indigo-400' :
+    content.type === 'tileMarket' ? 'text-sky-400' :
     content.type === 'monster'  ? 'text-red-400' :
     content.type === 'treasure' ? 'text-yellow-400' :
     content.type === 'blueTower'? 'text-sky-400' : 'text-slate-400'
@@ -1083,6 +1092,11 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
       {content.type === 'market' && (
         <div className="text-[11px] text-indigo-400/80">
           {isEn ? 'Walk here to enter the shop.' : 'Vá até aqui para entrar na loja.'}
+        </div>
+      )}
+      {content.type === 'tileMarket' && (
+        <div className="text-[11px] text-sky-400/80">
+          {isEn ? 'Walk here to buy extra deck tiles.' : 'Va ate aqui para comprar tiles extras para o deck.'}
         </div>
       )}
     </div>

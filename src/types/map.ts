@@ -4,7 +4,7 @@ export type Biome = 'forest'
 import type { PartyNpc } from './party'
 
 export interface TileContent {
-  type: 'empty' | 'monster' | 'treasure' | 'market' | 'quest' | 'blueTower' | 'npcRescue'
+  type: 'empty' | 'monster' | 'treasure' | 'market' | 'tileMarket' | 'quest' | 'blueTower' | 'npcRescue'
   xpAmount?: number
   monsterLevel?: number
   /** Monster template ID (e.g. 'goblin', 'wolf') */
@@ -25,6 +25,12 @@ export interface MapTile {
   biome: Biome
   level: number
   content: TileContent
+}
+
+export interface TileMarketOffer {
+  tiles: Array<MapTile & { price: number }>
+  /** IDs already bought from this persisted tile market. */
+  boughtIds?: string[]
 }
 
 export interface PlacedTile extends MapTile {

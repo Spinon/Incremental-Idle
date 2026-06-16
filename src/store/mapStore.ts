@@ -10,7 +10,7 @@ import { createTreasureChest } from '../formulas/chests'
 import { generateNpc } from '../formulas/npcs'
 import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
-import type { Biome, Direction, MapTile, PlacedTile, TileContent } from '../types/map'
+import type { Biome, Direction, MapTile, PlacedTile, TileContent, TileMarketOffer } from '../types/map'
 import type { MarketOffer, TreasureChest } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 import type { PartyNpc } from '../types/party'
@@ -229,8 +229,8 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
   const bounty  = st.bountyTiles[tileKey] ?? bountyFromTileContent(tile)
   let questTileLevel: number | null = null
 
-  if (!bounty && tile.content.type === 'market') {
-    st.scene = 'market'
+  if (!bounty && (tile.content.type === 'market' || tile.content.type === 'tileMarket')) {
+    st.scene = tile.content.type
     if (!tile.explored) tile.explored = true
     return { enemy: null, questTileLevel: null }
   }
@@ -383,8 +383,9 @@ export function generateContent(level: number, tilesPlaced = 0, biome: Biome = '
   const r = Math.random()
   if (r < 0.008) return { type: 'quest' }
   if (r < 0.016) return { type: 'market' }
-  if (r < 0.022) return { type: 'blueTower' }
-  if (r < 0.047) return { type: 'treasure' }
+  if (r < 0.024) return { type: 'tileMarket' }
+  if (r < 0.030) return { type: 'blueTower' }
+  if (r < 0.055) return { type: 'treasure' }
   if (r < 0.10) {
     return {
       type: 'monster',
@@ -429,6 +430,21 @@ export function tileGenerationIntervalMs(moveSpeed: number, tilesPlaced: number)
   const speed = Math.max(0.5, Math.sqrt(Math.max(0.25, moveSpeed)))
   const earlyFactor = Math.min(1, 0.4 + tilesPlaced * 0.03)
   return TILE_GEN_BASE_MS / (speed * earlyFactor)
+}
+
+export function tileMarketPrice(tile: Pick<MapTile, 'level' | 'connections'>): number {
+  const exits = Math.max(1, tile.connections.length)
+  const exitMult = exits === 1 ? 1 : exits === 2 ? 2.2 : exits === 3 ? 4.8 : 9.5
+  const level = Math.max(1, tile.level)
+  return Math.max(250, Math.round((250 + level * 85 + level * level * 8) * exitMult))
+}
+
+export function generateTileMarketOffer(level: number, count = 4): TileMarketOffer {
+  const tiles = Array.from({ length: count }, () => {
+    const tile = generateTile(level)
+    return { ...tile, price: tileMarketPrice(tile) }
+  })
+  return { tiles }
 }
 
 const INITIAL_TILE: PlacedTile = {
@@ -585,7 +601,7 @@ interface MapStore {
    * 'full'     — auto-pathfinding + auto-tile-placement + auto-restart when stuck
    */
   autoExplore: 'manual' | 'move' | 'full'
-  scene: 'map' | 'home' | 'market' | 'tower'
+  scene: 'map' | 'home' | 'market' | 'tileMarket' | 'tower'
   tilesPlaced: number
   defeatPending: boolean
   /**
@@ -613,6 +629,8 @@ interface MapStore {
    * refresh-to-reroll exploits.  Cleared on new journey (resetMap).
    */
   marketOffers: Record<string, MarketOffer>
+  /** Tile market offers keyed by "x,y" of the tile market. */
+  tileMarketOffers: Record<string, TileMarketOffer>
   /** Tiles reserved for bounty quests: key = "x,y", value = bounty data */
   bountyTiles: Record<string, BountyTileEntry>
 
@@ -620,6 +638,8 @@ interface MapStore {
   normalizePlacedTileLevel(x: number, y: number, heroLevel: number): boolean
   normalizeDeckTileLevel(tileId: string, heroLevel: number): boolean
   saveMarketOffer(key: string, offer: MarketOffer): void
+  saveTileMarketOffer(key: string, offer: TileMarketOffer): void
+  addDeckTile(tile: MapTile): void
   setDestination(x: number, y: number): void
   setAutoExplore(v: 'manual' | 'move' | 'full'): void
   toggleRiskMode(): void
@@ -698,7 +718,7 @@ export const useMapStore = create<MapStore>()(
       blueTowerAutoTarget: null,
       blueTowerEntryFrom: null,
       autoExplore: 'move' as 'manual' | 'move' | 'full',
-      scene: 'map' as 'map' | 'home' | 'market' | 'tower',
+      scene: 'map' as 'map' | 'home' | 'market' | 'tileMarket' | 'tower',
       tilesPlaced: 0,
       defeatPending: false,
       stuckPending: false,
@@ -706,11 +726,22 @@ export const useMapStore = create<MapStore>()(
       easyTilesRemaining: 5,
       riskMode: false,
       marketOffers: {},
+      tileMarketOffers: {},
       bountyTiles: {},
 
       setAutoExplore:  (v) => set((st) => { st.autoExplore = v }),
       toggleRiskMode:  ()  => set((st) => { st.riskMode = !st.riskMode }),
       saveMarketOffer: (key, offer) => set((st) => { st.marketOffers[key] = offer }),
+      saveTileMarketOffer: (key, offer) => set((st) => { st.tileMarketOffers[key] = offer }),
+      addDeckTile: (tile) => set((st) => {
+        st.deck.push({
+          id: tile.id,
+          connections: [...tile.connections],
+          biome: tile.biome,
+          level: tile.level,
+          content: { type: 'empty' },
+        })
+      }),
       normalizePlacedTileLevel: (x, y, heroLevel): boolean => {
         let changed = false
         set((st) => {
@@ -1140,8 +1171,8 @@ export const useMapStore = create<MapStore>()(
             }
             const tile = st.grid[gridKey(next.x, next.y)]
             if (tile) {
-              if (tile.content.type === 'market') {
-                st.scene = 'market'
+              if (tile.content.type === 'market' || tile.content.type === 'tileMarket') {
+                st.scene = tile.content.type
                 if (!tile.explored) tile.explored = true
               } else if (tile.content.type === 'blueTower') {
                 st.blueTowerEntryFrom = previous
@@ -1188,6 +1219,7 @@ export const useMapStore = create<MapStore>()(
         st.stuckPending       = false
         st.levelOffset        = 0
         st.marketOffers       = {}   // new journey → fresh shops
+        st.tileMarketOffers   = {}
         st.bountyTiles        = {}
         // 5 more easy tiles generated by tickMap after the 3 initial deck tiles
         st.easyTilesRemaining = 5

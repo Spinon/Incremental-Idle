@@ -58,7 +58,9 @@ function consumableDesc(c: Consumable, isEn: boolean): string {
     case 'xp':
       return `+${Math.round(c.magnitude)} XP`
     case 'resetAttrs':
-      return isEn ? 'Refunds spent attributes' : 'Devolve atributos gastos'
+      return isEn
+        ? `+${Math.round(c.magnitude)} free attribute refund${Math.round(c.magnitude) !== 1 ? 's' : ''}`
+        : `+${Math.round(c.magnitude)} refund${Math.round(c.magnitude) !== 1 ? 's' : ''} gratis`
     case 'normalizeTile':
       return isEn ? 'Sets a map or deck tile to hero level' : 'Iguala um tile do mapa ou deck ao nivel do heroi'
     case 'shield':

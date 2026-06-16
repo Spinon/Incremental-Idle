@@ -432,10 +432,10 @@ export const useInventoryStore = create<InventoryStore>()(
           const equipped = equippedWeaponTypes(st.equippedWeapons)
           if (equipped.length === 0) return
 
-          for (const type of equipped) {
+          for (const [slotIndex, type] of equipped.entries()) {
             const p = st.weaponProgress[type]
             if (isWeaponAtForgeCap(p)) continue
-            const share = equipped.length === 1 ? 1 : (type === st.equippedWeapons.mainHand ? 0.75 : 0.55)
+            const share = equipped.length === 1 ? 1 : (slotIndex === 0 ? 0.75 : 0.55)
             p.xp += Math.max(1, Math.round(amount * share))
 
             while (p.xp >= p.xpToNext && p.level < p.maxLevel) {

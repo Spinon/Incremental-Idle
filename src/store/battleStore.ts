@@ -136,6 +136,7 @@ interface HeroSync {
 interface BattleStore {
   player: Unit
   enemy: Unit
+  enemyBase: Unit
   phase: Phase
   attacker: Side
   speed: Speed
@@ -297,6 +298,7 @@ export const useBattleStore = create<BattleStore>()(
   immer((set) => ({
     player: { ...INITIAL_PLAYER },
     enemy:  makeInitialEnemy(),
+    enemyBase: makeInitialEnemy(),
     phase: 'empty',
     attacker: 'player',
     speed: 1,
@@ -376,6 +378,7 @@ export const useBattleStore = create<BattleStore>()(
         st.enemy.namePt = questName   ?? st.enemy.namePt
         st.enemy.nameEn = questNameEn ?? st.enemy.nameEn
       }
+      st.enemyBase = { ...st.enemy }
       st.activeEnemyQuestId = questId ?? null
       st.phase        = 'idle'
       st.attacker     = 'player'
@@ -863,6 +866,7 @@ export const useBattleStore = create<BattleStore>()(
 
     reset: () => set((st) => {
       st.player.hp    = st.player.maxHp
+      st.enemyBase    = { ...st.enemy }
       st.phase        = 'empty'
       st.attacker     = 'player'
       st.winner       = null
@@ -893,6 +897,7 @@ export const useBattleStore = create<BattleStore>()(
     partialize: (state) => ({
       player:               state.player,
       enemy:                state.enemy,
+      enemyBase:            state.enemyBase,
       phase:                state.phase === 'attacking' ? 'idle' : state.phase,
       attacker:             state.attacker,
       speed:                state.speed,
@@ -904,6 +909,7 @@ export const useBattleStore = create<BattleStore>()(
       nextEnemyBaseLevel:   state.nextEnemyBaseLevel,
       nextEnemyType:        state.nextEnemyType,
       nextEnemyRarity:      state.nextEnemyRarity,
+      nextEnemyVariant:     state.nextEnemyVariant,
       nextTilesPlaced:      state.nextTilesPlaced,
       nextEnemyEnraged:     state.nextEnemyEnraged,
       nextEnemyQuestId:     state.nextEnemyQuestId,

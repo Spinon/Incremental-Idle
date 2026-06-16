@@ -72,6 +72,22 @@ function HandBadge({ label }: { label: string }) {
   )
 }
 
+function previewLoadoutForWeapon(type: WeaponType): EquippedWeapons {
+  if (type === 'shield') return { mainHand: 'sword', offHand: 'shield' }
+  if (TWO_HANDED_WEAPONS.has(type)) return { mainHand: type, offHand: type }
+  return { mainHand: type, offHand: null }
+}
+
+function weaponLoadoutText(loadout: EquippedWeapons, isEn: boolean): string {
+  const mainLabel = WEAPON_LABELS[loadout.mainHand][isEn ? 'en' : 'pt']
+  if (loadout.offHand === loadout.mainHand && TWO_HANDED_WEAPONS.has(loadout.mainHand)) {
+    return `${mainLabel} (${isEn ? 'both hands' : 'duas mãos'})`
+  }
+  return loadout.offHand
+    ? `${mainLabel} + ${WEAPON_LABELS[loadout.offHand][isEn ? 'en' : 'pt']}`
+    : `${mainLabel} (${isEn ? 'two-handed' : 'duas mãos'})`
+}
+
 /** Forge Steel stock per tier — always visible so drops have a clear home. */
 function ForgeSteelStrip({ materials, isEn }: { materials: WeaponMaterials; isEn: boolean }) {
   const tiers = Array.from({ length: WEAPON_MAX_TIER }, (_, i) => i + 1)
@@ -136,7 +152,7 @@ function WeaponCard({
 
   const effectLoadout: EquippedWeapons = equippedHere
     ? loadout
-    : { mainHand: type === 'shield' ? 'sword' : type, offHand: type === 'shield' ? 'shield' : null }
+    : previewLoadoutForWeapon(type)
 
   const canMain = type !== 'shield'
   const canOff = canEquipWeapon('offHand', type, loadout)
@@ -301,10 +317,7 @@ export default function WeaponsPanel({
           {isEn ? 'Weapons' : 'Armas'}
         </p>
         <span className="text-[11px] font-bold text-indigo-500 dark:text-indigo-400">
-          {WEAPON_LABELS[loadout.mainHand][isEn ? 'en' : 'pt']}
-          {loadout.offHand
-            ? ` + ${WEAPON_LABELS[loadout.offHand][isEn ? 'en' : 'pt']}`
-            : ` (${isEn ? 'two-handed' : 'duas mãos'})`}
+          {weaponLoadoutText(loadout, isEn)}
         </span>
         <div className="ml-auto flex flex-wrap gap-1">
           {statChips.map(chip => (

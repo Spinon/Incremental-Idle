@@ -1,7 +1,7 @@
 import type { PlacedTile } from '../../types/map'
 import { estimateMonster } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
-import { MonsterIcon, TreasureIcon, MarketIcon, QuestIcon, BlueTowerIcon, PlayerMarker } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, TileMarketIcon, QuestIcon, BlueTowerIcon, PlayerMarker } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
 export type Visibility = 'clear' | 'penumbra' | 'fog'
@@ -21,14 +21,17 @@ interface Props {
 const PIPE_FRESH    = '#3a3228'   // stone/dirt path — unexplored
 const PIPE_EXPLORED = '#2a2420'   // darker stone — explored
 const PIPE_MARKET   = '#2a2a3a'   // indigo-tinted stone — market
+const PIPE_TILE_MARKET = '#1f3a4a'
+const PIPE_QUEST = '#244a38'
 
 // ── Tile background colours ──────────────────────────────────────────────────
 // Using inline style instead of Tailwind arbitrary values for precise hex control
 function tileBg(content: PlacedTile['content'], explored: boolean): string {
   if (content.type === 'market')   return explored ? '#0c0c18' : '#0d0d1a'
+  if (content.type === 'tileMarket') return explored ? '#061622' : '#071c2a'
   if (content.type === 'monster')  return explored ? '#160b0b' : '#1a0d0d'
   if (content.type === 'treasure') return explored ? '#100f08' : '#14130a'
-  if (content.type === 'quest')    return explored ? '#0f0d08' : '#141008'
+  if (content.type === 'quest')    return explored ? '#06180f' : '#082515'
   if (content.type === 'blueTower') return explored ? '#06192d' : '#07111f'
   if (content.type === 'npcRescue') return explored ? '#13091f' : '#1b0b2e'
   return explored ? '#0b160b' : '#0d1a0d'
@@ -37,9 +40,10 @@ function tileBg(content: PlacedTile['content'], explored: boolean): string {
 // ── Junction node colour ─────────────────────────────────────────────────────
 function nodeColor(content: PlacedTile['content']): string {
   if (content.type === 'market')   return '#353545'
+  if (content.type === 'tileMarket') return '#23566c'
   if (content.type === 'monster')  return '#4a3535'
   if (content.type === 'treasure') return '#5a5035'
-  if (content.type === 'quest')    return '#5a4a20'
+  if (content.type === 'quest')    return '#24734e'
   if (content.type === 'blueTower') return '#1e4c78'
   if (content.type === 'npcRescue') return '#6d3aa0'
   return '#4a4035'
@@ -56,9 +60,10 @@ function levelColor(tileLv: number, heroLv: number): string {
 
 function levelBadgeBg(content: PlacedTile['content']): string {
   if (content.type === 'market')   return 'rgba(10, 10, 26, 0.62)'
+  if (content.type === 'tileMarket') return 'rgba(5, 23, 35, 0.68)'
   if (content.type === 'monster')  return 'rgba(26, 8, 8, 0.62)'
   if (content.type === 'treasure') return 'rgba(26, 24, 8, 0.62)'
-  if (content.type === 'quest')    return 'rgba(26, 20, 5, 0.62)'
+  if (content.type === 'quest')    return 'rgba(5, 35, 18, 0.68)'
   if (content.type === 'blueTower') return 'rgba(5, 18, 40, 0.68)'
   if (content.type === 'npcRescue') return 'rgba(35, 12, 58, 0.7)'
   return 'rgba(10, 26, 10, 0.62)'
@@ -81,6 +86,7 @@ function buildTitle(tile: PlacedTile): string {
   }
   if (tile.content.type === 'treasure') return `${base} — Tesouro: Demon Dourado e baú`
   if (tile.content.type === 'market')   return `${base} — Mercado`
+  if (tile.content.type === 'tileMarket') return `${base} — Mercado de Tiles`
   if (tile.content.type === 'blueTower') return `${base} — Torre Azul`
   if (tile.content.type === 'npcRescue') {
     const lvl      = tile.content.monsterLevel ?? tile.level + 3
@@ -97,6 +103,10 @@ export default function MapTileCell({
   const content  = visualContent(tile, isPlayer)
   const pipe     = content.type === 'market'
     ? PIPE_MARKET
+    : content.type === 'tileMarket'
+    ? PIPE_TILE_MARKET
+    : content.type === 'quest'
+    ? PIPE_QUEST
     : (explored ? PIPE_EXPLORED : PIPE_FRESH)
   const node     = nodeColor(content)
   const bg       = tileBg(content, explored)
@@ -104,11 +114,15 @@ export default function MapTileCell({
   const showContentIcon =
     visibility === 'clear' &&
     content.type !== 'empty' &&
-    (!tile.explored || content.type === 'market' || content.type === 'quest' || content.type === 'blueTower' || content.type === 'npcRescue')
+    (!tile.explored || content.type === 'market' || content.type === 'tileMarket' || content.type === 'quest' || content.type === 'blueTower' || content.type === 'npcRescue')
 
   // Icon opacity: explored service tiles are dimmed; active towers keep their glow.
   const iconOpacity = tile.explored && content.type !== 'blueTower' ? 0.45 : 1
   const contentIconSize = Math.max(9, Math.min(14, Math.floor(tileSize * 0.28)))
+  const centeredContentIcon = content.type === 'blueTower'
+  const effectiveIconSize = centeredContentIcon
+    ? Math.max(15, Math.min(24, Math.floor(tileSize * 0.46)))
+    : contentIconSize
   const playerMarkerSize = Math.max(18, Math.min(32, Math.floor(tileSize * 0.62)))
 
   return (
@@ -141,15 +155,23 @@ export default function MapTileCell({
       {/* Content icon — top-right badge */}
       {showContentIcon && (
         <div
-          className="absolute top-0.5 right-0.5 z-30 rounded overflow-hidden pointer-events-none"
-          style={{ opacity: iconOpacity, width: contentIconSize, height: contentIconSize }}
+          className={cn(
+            'absolute z-30 rounded overflow-hidden pointer-events-none',
+            centeredContentIcon ? 'inset-0 flex items-center justify-center' : 'top-0.5 right-0.5',
+          )}
+          style={{
+            opacity: iconOpacity,
+            width: centeredContentIcon ? undefined : contentIconSize,
+            height: centeredContentIcon ? undefined : contentIconSize,
+          }}
         >
-          {content.type === 'monster'  && <MonsterIcon  size={contentIconSize} />}
-          {content.type === 'treasure' && <TreasureIcon size={contentIconSize} />}
-          {content.type === 'market'   && <MarketIcon   size={contentIconSize} />}
-          {content.type === 'quest'    && <QuestIcon    size={contentIconSize} />}
-          {content.type === 'blueTower' && <BlueTowerIcon size={contentIconSize} />}
-          {content.type === 'npcRescue' && <MonsterIcon size={contentIconSize} />}
+          {content.type === 'monster'  && <MonsterIcon  size={effectiveIconSize} />}
+          {content.type === 'treasure' && <TreasureIcon size={effectiveIconSize} />}
+          {content.type === 'market'   && <MarketIcon   size={effectiveIconSize} />}
+          {content.type === 'tileMarket' && <TileMarketIcon size={effectiveIconSize} />}
+          {content.type === 'quest'    && <QuestIcon    size={effectiveIconSize} />}
+          {content.type === 'blueTower' && <BlueTowerIcon size={effectiveIconSize} />}
+          {content.type === 'npcRescue' && <MonsterIcon size={effectiveIconSize} />}
         </div>
       )}
 
@@ -170,6 +192,10 @@ export default function MapTileCell({
             style={{
               color: content.type === 'market'
                 ? '#5a5aaa'
+                : content.type === 'tileMarket'
+                  ? '#38bdf8'
+                : content.type === 'quest'
+                  ? '#34d399'
                 : content.type === 'blueTower'
                   ? '#60a5fa'
                 : content.type === 'npcRescue'
