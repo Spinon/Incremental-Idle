@@ -325,6 +325,7 @@ export function useGameLoop(paused = false) {
             useMapStore.getState().tilesPlaced,
           )
           useMapStore.getState().handleDefeat()
+          useSpellStore.getState().onBattleEnd()
           resolvedBlockingSystem = true
         } else {
           // ── Victory: advance, rewards, drops ────────────────────────────
@@ -339,6 +340,7 @@ export function useGameLoop(paused = false) {
           // Chest claim, quest kill hooks, tile/monster XP, weapon XP,
           // item drop and word drop all live in the rewards pipeline.
           grantVictoryRewards(derived)
+          useSpellStore.getState().onBattleEnd()
 
           // ── Auto-place tiles (Full Auto mode only) ──────────────────────
           if (useMapStore.getState().autoExplore === 'full') {

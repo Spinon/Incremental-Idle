@@ -132,6 +132,7 @@ export function applyConsumableEffect(consumable: Consumable): void {
       useSpellStore.getState().addConsumableBuff(
         { [buffKey]: consumable.magnitude },
         consumable.durationTurns ?? 1,
+        consumable.durationUnit ?? (consumable.stat === 'xpBonus' ? 'turn' : 'battle'),
       )
       logConsumableInBattle(consumable, 'buff')
       break

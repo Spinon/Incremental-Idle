@@ -1,5 +1,5 @@
 import type { MapTile } from '../../types/map'
-import { TILE_GEN_BASE_MS } from '../../store/mapStore'
+import { tileGenerationIntervalMs } from '../../store/mapStore'
 import { MonsterIcon, TreasureIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
@@ -22,8 +22,7 @@ interface Props {
 export default function TileDeck({
   deck, deckAccum, moveSpeed, maxDeck, tilesPlaced, selectedId, onDragStart, onDragEnd, onSelect,
 }: Props) {
-  const earlyFactor = Math.min(1, 0.4 + tilesPlaced * 0.03)
-  const interval    = TILE_GEN_BASE_MS / (Math.max(0.5, moveSpeed) * earlyFactor)
+  const interval    = tileGenerationIntervalMs(moveSpeed, tilesPlaced)
   const isFull      = deck.length >= maxDeck
   const progress    = isFull ? 100 : Math.min(100, (deckAccum / interval) * 100)
   const timeLeft    = isFull ? 0   : Math.max(0, (interval - deckAccum) / 1000)

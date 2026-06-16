@@ -2,14 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useCloudSaveStore } from '../store/cloudSaveStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useNotifStore } from '../store/notifStore'
-import { CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY, CLOUD_RESTORE_OFFLINE_PENDING_KEY, CLOUD_SAVE_LOCAL_ID_KEY, CLOUD_SAVE_LOCAL_UPDATED_AT_KEY, LOCAL_PLAY_KEY, OFFLINE_LAST_ACTIVE_KEY, SAVE_KEYS, SAVE_SCHEMA_VERSION, markLocalSaveChanged } from '../store/save'
+import { LOCAL_PLAY_KEY, markLocalSaveChanged, resetLocalGameStorage } from '../store/save'
 import { useT } from '../i18n/useT'
 import { cn } from '../lib/utils'
-
-const MID_FIGHT_KEY = 'ii-mid-fight'
-const OFFLINE_SYNC_SNAPSHOT_KEY = 'incremental-idle-offline-sync-snapshot'
-const OFFLINE_SYNC_PENDING_KEY = 'incremental-idle-offline-sync-pending'
-const SEEN_DEATH_KEY = 'incremental_idle_seen_death_id'
 
 export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean }) {
   const [open, setOpen]           = useState(false)
@@ -59,51 +54,9 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
     // local-play mode. The session lock lease covers a missed release.
     if (cloudUser) void signOut()
 
-    for (const key of Object.values(SAVE_KEYS)) localStorage.removeItem(key)
-    ;[
-      CLOUD_SAVE_LOCAL_ID_KEY,
-      CLOUD_SAVE_LOCAL_UPDATED_AT_KEY,
-      OFFLINE_LAST_ACTIVE_KEY,
-      CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY,
-      CLOUD_RESTORE_OFFLINE_PENDING_KEY,
-      MID_FIGHT_KEY,
-      OFFLINE_SYNC_SNAPSHOT_KEY,
-      OFFLINE_SYNC_PENDING_KEY,
-      SEEN_DEATH_KEY,
-    ].forEach(key => localStorage.removeItem(key))
-
-    // Drop any persisted Supabase auth session synchronously so the reload
-    // starts clean (the fire-and-forget signOut above may not finish in time).
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('sb-')) localStorage.removeItem(key)
-    }
-
-    if (keepLocalPlay) localStorage.setItem(LOCAL_PLAY_KEY, '1')
-    else localStorage.removeItem(LOCAL_PLAY_KEY)
-
-    localStorage.setItem(SAVE_KEYS.hero, JSON.stringify({
-      state: {
-        name: 'Hero',
-        level: 1,
-        xp: 0,
-        xpToNext: 102,
-        freePoints: 7,
-        attributes: {
-          forca: 0, agilidade: 0, destreza: 0, vitalidade: 0,
-          inteligencia: 0, sabedoria: 0, carisma: 0,
-        },
-        stamina: 100,
-        mana: 150,
-        skipCharges: 3,
-        maxSkipCharges: 3,
-        gold: 0,
-        lastXpGain: 0,
-        xpGainVersion: 0,
-        lastGoldGain: 0,
-        goldGainVersion: 0,
-      },
-      version: SAVE_SCHEMA_VERSION,
-    }))
+    // Clear every local key owned by the app by prefix, including future save
+    // stores and transient metadata such as death-log acknowledgements.
+    resetLocalGameStorage({ keepLocalPlay })
     markLocalSaveChanged()
 
     // Synchronous from here to reload: no await means the game loop cannot

@@ -96,6 +96,7 @@ export interface Consumable {
   magnitude: number
   stat?: keyof ItemStats
   durationTurns?: number
+  durationUnit?: 'turn' | 'battle'
   cooldownTurns?: number
   rarity:    ItemRarity
   level:     number

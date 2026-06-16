@@ -43,13 +43,14 @@ interface SpellStore {
   setSpellSlot(slotIndex: number, spellId: string | null): void
   setAutoSlot(slotIndex: number, config: AutoCastConfig): void
   castSpell(spellId: string): void
-  addConsumableBuff(statAdds: ActiveBuff['statAdds'], durationTurns: number): void
+  addConsumableBuff(statAdds: ActiveBuff['statAdds'], duration: number, durationUnit: NonNullable<ActiveBuff['durationUnit']>): void
   /**
    * Puts a consumable effect on cooldown, sharing the spell cooldown registry
    * (and its per-turn decrement in onBattleTurn). Key format: consumable_cd_*.
    */
   startConsumableCooldown(key: string, turns: number): void
   onBattleTurn(): void       // called each time battleStore.turn increments
+  onBattleEnd(): void
   clearEnemyDebuff(): void   // called when a new enemy spawns
   tick(deltaS: number): void // only for buff/debuff durations (seconds)
 }
@@ -220,13 +221,14 @@ export const useSpellStore = create<SpellStore>()(
       })
     },
 
-    addConsumableBuff: (statAdds, durationTurns) => set((st) => {
+    addConsumableBuff: (statAdds, duration, durationUnit) => set((st) => {
       const id = `consumable_${Date.now()}`
       st.activeBuffs = st.activeBuffs.filter(b => !b.spellId.startsWith('consumable_'))
       st.activeBuffs.push({
         spellId: id,
         statAdds,
-        remaining: Math.max(1, durationTurns),
+        remaining: Math.max(1, duration),
+        durationUnit,
       })
     }),
 
@@ -251,7 +253,7 @@ export const useSpellStore = create<SpellStore>()(
         }
         // Buff durations
         st.activeBuffs = st.activeBuffs
-          .map(b => ({ ...b, remaining: b.remaining - 1 }))
+          .map(b => b.durationUnit === 'battle' ? b : { ...b, remaining: b.remaining - 1 })
           .filter(b => b.remaining > 0)
         // Debuff duration
         if (st.activeDebuff) {
@@ -283,6 +285,12 @@ export const useSpellStore = create<SpellStore>()(
         get().castSpell(sid)
       })
     },
+
+    onBattleEnd: () => set((st) => {
+      st.activeBuffs = st.activeBuffs
+        .map(b => b.durationUnit === 'battle' ? { ...b, remaining: b.remaining - 1 } : b)
+        .filter(b => b.remaining > 0)
+    }),
 
     clearEnemyDebuff: () => {
       const debuff = get().activeDebuff

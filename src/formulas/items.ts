@@ -12,7 +12,7 @@ const RARITY_MULT: Record<ItemRarity, number> = {
 }
 
 export function pickItemRarity(level: number): ItemRarity {
-  // Set/unique deliberately rare: with endgame dropChance (~50 % per kill)
+  // Set/unique deliberately rare: with endgame dropChance (~30 % per kill)
   // the old caps (4 % / 1.5 %) handed out a set every ~50 kills.
   // Now: unique ≈ 1 in 1 250 drops, set ≈ 1 in 280 at the cap.
   const uniqueChance   = Math.min(0.6,  0.03 + level * 0.012)
@@ -47,7 +47,7 @@ export const SUB_ATTRIBUTES: Record<keyof ItemStats, SubAttributeDef> = {
   magicDamage: { flat: 1.0,   perLv: 0.12 },
   vision:      { flat: 8,     perLv: 0.5 },
   moveSpeed:   { flat: 0.05,  perLv: 0.003,  float: true },
-  dropChance:  { flat: 0.005, perLv: 0.0003, float: true },
+  dropChance:  { flat: 0.003, perLv: 0.00018, float: true },
   goldMult:    { flat: 0.05,  perLv: 0.004,  float: true },
   xpBonus:     { flat: 0.03,  perLv: 0.003,  float: true },
   critChance:  { flat: 0.004, perLv: 0.0004, float: true },
@@ -385,6 +385,7 @@ export function generateConsumable(level: number): Consumable {
   let magnitude: number
   let stat: keyof ItemStats | undefined
   let durationTurns: number | undefined
+  let durationUnit: Consumable['durationUnit']
   let cooldownTurns: number | undefined
   switch (effect) {
     case 'stamina':
@@ -415,6 +416,7 @@ export function generateConsumable(level: number): Consumable {
       // Rounds of combat, scaled by rarity — at 1 turn the tonic expired
       // before it could matter (auto-use fires at battle start)
       durationTurns = rarity === 'epic' ? 6 : rarity === 'rare' ? 5 : rarity === 'uncommon' ? 4 : 3
+      durationUnit = stat === 'xpBonus' ? 'turn' : 'battle'
       // No 100% uptime: cooldown outlasts the buff by 2 turns (same
       // philosophy as spell buffs, which are clamped to their cooldown)
       cooldownTurns = durationTurns + 2
@@ -440,7 +442,7 @@ export function generateConsumable(level: number): Consumable {
     id:        `con_${Date.now()}_${_idSeq++}`,
     name, nameEn,
     icon:      CONSUMABLE_ICONS[effect] ?? '*',
-    effect, magnitude, stat, durationTurns, cooldownTurns, rarity, level, price,
+    effect, magnitude, stat, durationTurns, durationUnit, cooldownTurns, rarity, level, price,
   }
 }
 

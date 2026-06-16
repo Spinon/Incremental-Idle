@@ -151,6 +151,22 @@ function formatDelta(key: keyof ItemStats, delta: number): string {
   return `${sign}${Math.round(delta)}`
 }
 
+function formatConsumableBuff(c: Consumable, isEn: boolean): string {
+  const stat = c.stat
+  const statLabel = stat
+    ? (isEn ? STAT_LABEL_EN[stat] : STAT_LABEL_PT[stat]) ?? stat
+    : (isEn ? 'stat' : 'atributo')
+  const value = stat && PERCENT_STATS.has(stat)
+    ? `+${formatPercent(c.magnitude)}`
+    : `+${Math.round(c.magnitude)}`
+  const duration = c.durationTurns ?? 1
+  const durationUnit = c.durationUnit ?? (c.stat === 'xpBonus' ? 'turn' : 'battle')
+  const unit = durationUnit === 'turn'
+    ? (isEn ? `turn${duration === 1 ? '' : 's'}` : `turno${duration === 1 ? '' : 's'}`)
+    : (isEn ? `battle${duration === 1 ? '' : 's'}` : `combate${duration === 1 ? '' : 's'}`)
+  return `${value} ${statLabel} (${duration} ${unit})`
+}
+
 function itemDisplayName(item: Item, isEn: boolean): string {
   return getItemDisplayName(item, isEn)
 }
@@ -1152,7 +1168,7 @@ export default function InventoryPanel({ section }: { section?: 'equips' | 'cons
       case 'resetAttrs': return isEn ? 'Refunds spent attributes' : 'Devolve atributos gastos'
       case 'normalizeTile': return isEn ? 'Sets a map or deck tile to hero level' : 'Iguala um tile do mapa ou deck ao nivel do heroi'
       case 'shield': return `${isEn ? 'Shield' : 'Escudo'} ${Math.round(c.magnitude)}`
-      case 'statBuff': return `+${c.magnitude}${c.stat ? ` ${c.stat}` : ''} (${c.durationTurns ?? 1} ${isEn ? 'turn' : 'turno'})`
+      case 'statBuff': return formatConsumableBuff(c, isEn)
       case 'physicalDamage': return `${Math.round(c.magnitude)} ${isEn ? 'physical damage' : 'dano fisico'}`
       case 'enemyDebuff': return `${isEn ? 'Weakens enemy' : 'Enfraquece inimigo'} (${c.durationTurns ?? 2} ${isEn ? 'turns' : 'turnos'})`
     }

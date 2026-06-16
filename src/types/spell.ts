@@ -56,7 +56,8 @@ export interface Spell {
 export interface ActiveBuff {
   spellId: string
   statAdds: Partial<Record<keyof BuffableStat, number>>
-  remaining: number   // seconds
+  remaining: number
+  durationUnit?: 'turn' | 'battle'
 }
 
 export interface AutoCastConfig {

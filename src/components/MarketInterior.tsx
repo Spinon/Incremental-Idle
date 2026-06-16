@@ -10,7 +10,7 @@ import { getDerivedStats } from '../formulas/derived'
 import { DROP_WORDS, WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
-import type { Item, Consumable, ItemRarity, MarketOffer, WordOffer } from '../types/item'
+import type { Item, Consumable, ItemRarity, ItemStats, MarketOffer, WordOffer } from '../types/item'
 
 // ─── Rarity colours (minimal palette) ────────────────────────────────────────
 
@@ -64,12 +64,40 @@ function consumableDesc(c: Consumable, isEn: boolean): string {
     case 'shield':
       return `${isEn ? 'Shield' : 'Escudo'} ${Math.round(c.magnitude)}`
     case 'statBuff':
-      return `+${c.magnitude}${c.stat ? ` ${c.stat}` : ''} (${c.durationTurns ?? 1} ${isEn ? 'turn' : 'turno'})`
+      return formatConsumableBuff(c, isEn)
     case 'physicalDamage':
       return `${Math.round(c.magnitude)} ${isEn ? 'physical damage' : 'dano fisico'}`
     case 'enemyDebuff':
       return `${isEn ? 'Weakens enemy' : 'Enfraquece inimigo'} (${c.durationTurns ?? 2} ${isEn ? 'turns' : 'turnos'})`
   }
+}
+
+const PERCENT_CONSUMABLE_STATS = new Set<keyof ItemStats>(['atkSpeed', 'moveSpeed', 'dropChance', 'goldMult', 'xpBonus'])
+
+function formatConsumableStatValue(stat: keyof ItemStats | undefined, value: number): string {
+  if (stat && PERCENT_CONSUMABLE_STATS.has(stat)) {
+    return `+${(value * 100).toFixed(1).replace(/\.0$/, '')}%`
+  }
+  return `+${Math.round(value)}`
+}
+
+function formatConsumableBuff(c: Consumable, isEn: boolean): string {
+  const labels: Partial<Record<keyof ItemStats, [string, string]>> = {
+    atk: ['ATK', 'ATK'],
+    def: ['DEF', 'DEF'],
+    atkSpeed: ['Vel.Atk', 'AtkSpd'],
+    magicDamage: ['Magico', 'Magic'],
+    dropChance: ['Drop', 'Drop'],
+    xpBonus: ['Bonus XP', 'XP Bonus'],
+  }
+  const stat = c.stat
+  const statLabel = stat ? labels[stat]?.[isEn ? 1 : 0] ?? stat : (isEn ? 'stat' : 'atributo')
+  const duration = c.durationTurns ?? 1
+  const durationUnit = c.durationUnit ?? (c.stat === 'xpBonus' ? 'turn' : 'battle')
+  const unit = durationUnit === 'turn'
+    ? (isEn ? `turn${duration === 1 ? '' : 's'}` : `turno${duration === 1 ? '' : 's'}`)
+    : (isEn ? `battle${duration === 1 ? '' : 's'}` : `combate${duration === 1 ? '' : 's'}`)
+  return `${formatConsumableStatValue(stat, c.magnitude)} ${statLabel} (${duration} ${unit})`
 }
 
 // ─── Equipment stat summary (brief) ──────────────────────────────────────────

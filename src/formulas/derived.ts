@@ -24,7 +24,7 @@ const BASE = {
   manaEfficiency: 1,
   moveSpeed: 1,
   vision: 100,
-  dropChance: 0.025,
+  dropChance: 0.015,
   critChance: 0.05,
   goldMultiplier: 1,
   xpBonus: 1,
@@ -97,7 +97,7 @@ export function getDerivedStats(a: Attributes, equip?: EquipBonuses, level = 1):
     vision:    BASE.vision    + fa.inteligencia * 8  + fa.sabedoria * 12  + (eq?.vision    ?? 0),
 
     // ── Economy & drops ──────────────────────────────────────────────────────
-    dropChance:      Math.min(0.5, BASE.dropChance + fa.carisma * 0.005 + (eq?.dropChance ?? 0)),
+    dropChance:      Math.min(0.3, BASE.dropChance + fa.carisma * 0.003 + (eq?.dropChance ?? 0)),
     goldMultiplier:  BASE.goldMultiplier + fa.carisma * 0.05 + (eq?.goldMult   ?? 0),
     goldEfficiency:  1 + fa.carisma * 0.02,
     xpBonus:         BASE.xpBonus       + fa.carisma * 0.03 + (eq?.xpBonus    ?? 0),

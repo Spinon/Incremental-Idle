@@ -53,7 +53,7 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
     loot.gold = Math.round((12 + chest.level * 7) * value * (0.75 + Math.random() * 0.75))
   }
 
-  if (Math.random() < 0.45) {
+  if (Math.random() < 0.28) {
     loot.items.push(generateItem(chest.level))
   }
 
@@ -69,7 +69,7 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
   for (let i = 0; i < extraRolls; i++) {
     const r = Math.random()
     if (r < 0.36) loot.gold += Math.round((8 + chest.level * 4) * value)
-    else if (r < 0.62) loot.items.push(generateItem(chest.level))
+    else if (r < 0.54) loot.items.push(generateItem(chest.level))
     else if (r < 0.86) loot.consumables.push(generateConsumable(chest.level))
     else {
       loot.materials.push(pickWeaponMaterialDrop(chest.level))

@@ -621,15 +621,20 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
                 const icon  = SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'
                 const details = Object.entries(b.statAdds ?? {}).map(([k, v]) => formatBuffValue(k, v)).join(' ')
                 const label = abbreviateSpellName(spell?.name ?? b.spellId)
+                const isBattleBuff = b.durationUnit === 'battle'
+                const remainingUnit = isBattleBuff ? 'c' : 't'
+                const remainingLabel = isBattleBuff
+                  ? (isEn ? `battle${b.remaining === 1 ? '' : 's'}` : `combate${b.remaining === 1 ? '' : 's'}`)
+                  : (isEn ? 'turns' : 'turnos')
                 return (
                   <span
                     key={b.spellId}
-                    title={`${spell?.name ?? b.spellId}${details ? ` - ${details}` : ''}`}
+                    title={`${spell?.name ?? b.spellId}${details ? ` - ${details}` : ''} - ${b.remaining} ${remainingLabel}`}
                     className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-950/35 border border-blue-700/35 text-blue-300"
                   >
                     <span>{icon}</span>
                     <span>{label}</span>
-                    <span className="text-[8px] opacity-60 ml-0.5">{b.remaining}t</span>
+                    <span className="text-[8px] opacity-60 ml-0.5">{b.remaining}{remainingUnit}</span>
                   </span>
                 )
               })}

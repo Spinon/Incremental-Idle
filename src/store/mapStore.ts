@@ -423,6 +423,14 @@ function normalizeTileToLevel(tile: MapTile | PlacedTile | undefined, heroLevel:
 // ms to generate one tile at moveSpeed 1.0 (after early-game factor normalises)
 export const TILE_GEN_BASE_MS = 18000
 
+export function tileGenerationIntervalMs(moveSpeed: number, tilesPlaced: number): number {
+  // Deck generation scales with sqrt(moveSpeed): linear scaling made tile
+  // generation outpace everything once move speed stacked up.
+  const speed = Math.max(0.5, Math.sqrt(Math.max(0.25, moveSpeed)))
+  const earlyFactor = Math.min(1, 0.4 + tilesPlaced * 0.03)
+  return TILE_GEN_BASE_MS / (speed * earlyFactor)
+}
+
 const INITIAL_TILE: PlacedTile = {
   id: 't0', x: 0, y: 0,
   connections: ['N', 'S', 'E', 'W'],
@@ -1232,16 +1240,10 @@ export const useMapStore = create<MapStore>()(
           }
 
           reconcileActiveBounties(st)
-          // Deck generation scales with √moveSpeed: linear scaling made tile
-          // generation outpace everything once move speed stacked up.
-          const speed = Math.max(0.5, Math.sqrt(Math.max(0.25, moveSpeed)))
-
           // Tile deck generation
           if (st.deck.length < maxDeck) {
             st.deckAccum += deltaMs
-            // Early-game slowdown: starts at ~40% speed, normalises around 20 placed tiles
-            const earlyFactor = Math.min(1, 0.4 + st.tilesPlaced * 0.03)
-            const interval = TILE_GEN_BASE_MS / (speed * earlyFactor)
+            const interval = tileGenerationIntervalMs(moveSpeed, st.tilesPlaced)
             while (st.deckAccum >= interval && st.deck.length < maxDeck) {
               st.deckAccum -= interval
               let lvl: number

@@ -26,6 +26,16 @@ export const CLOUD_ACCEPTED_REMOTE_UPDATED_AT_KEY = 'incremental-idle-cloud-acce
 // best-effort recovery copy on this device.
 export const CLOUD_OVERWRITTEN_BACKUP_KEY = 'incremental-idle-cloud-overwritten-backup'
 
+const APP_STORAGE_PREFIXES = [
+  'incremental-idle',
+  'incremental_idle',
+  'ii-',
+] as const
+
+function isAppOwnedStorageKey(key: string): boolean {
+  return APP_STORAGE_PREFIXES.some(prefix => key.startsWith(prefix))
+}
+
 export type SaveKey = typeof SAVE_KEYS[keyof typeof SAVE_KEYS]
 
 let deferredPersistDepth = 0
@@ -57,6 +67,24 @@ export const gameStorage: PersistStorage<unknown> = {
     deferredPersistValues.delete(name)
     localStorage.removeItem(name)
   },
+}
+
+export function resetLocalGameStorage(options: { keepLocalPlay?: boolean } = {}): void {
+  for (const key of [...deferredPersistValues.keys()]) {
+    if (isAppOwnedStorageKey(key)) deferredPersistValues.delete(key)
+  }
+
+  for (const key of Object.keys(localStorage)) {
+    if (isAppOwnedStorageKey(key) || key.startsWith('sb-')) {
+      localStorage.removeItem(key)
+    }
+  }
+
+  if (options.keepLocalPlay) {
+    localStorage.setItem(LOCAL_PLAY_KEY, '1')
+  } else {
+    localStorage.removeItem(LOCAL_PLAY_KEY)
+  }
 }
 
 export function beginDeferredPersistWrites(): void {
