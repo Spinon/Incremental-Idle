@@ -13,6 +13,19 @@ export default defineConfig(({ mode }) => ({
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },
   plugins: [
+    {
+      name: 'incremental-idle-version-manifest',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({
+            version: packageJson.version,
+            builtAt: new Date().toISOString(),
+          }),
+        })
+      },
+    },
     react(),
     tailwindcss(),
   ],

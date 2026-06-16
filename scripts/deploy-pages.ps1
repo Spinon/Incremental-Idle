@@ -120,6 +120,16 @@ if (-not (Test-Path -LiteralPath (Join-Path $distPath 'index.html'))) {
   throw 'Expected dist/index.html after build, but it was not found.'
 }
 
+$versionManifestPath = Join-Path $distPath 'version.json'
+if (-not (Test-Path -LiteralPath $versionManifestPath)) {
+  throw 'Expected dist/version.json after build, but it was not found.'
+}
+
+$versionManifest = Get-Content -Raw $versionManifestPath | ConvertFrom-Json
+if ([string]$versionManifest.version -ne $version) {
+  throw "dist/version.json version mismatch. Expected v$version, got v$($versionManifest.version)."
+}
+
 $deployPath = Join-Path $env:TEMP 'incremental-idle-gh-pages-deploy'
 if ((Test-Path -LiteralPath $deployPath) -and -not $DryRun) {
   Remove-Item -LiteralPath $deployPath -Recurse -Force

@@ -19,6 +19,7 @@ import BottomNav from './components/BottomNav'
 import NotifToast from './components/NotifToast'
 import { useCloudSaveSync } from './hooks/useCloudSaveSync'
 import { useGameLoop } from './hooks/useGameLoop'
+import { useAppVersionRefresh } from './hooks/useAppVersionRefresh'
 import { useCloudSaveStore } from './store/cloudSaveStore'
 import { useHeroStore } from './store/heroStore'
 import { useBattleStore } from './store/battleStore'
@@ -158,6 +159,8 @@ function CloudSyncOverlay({ isEn, status }: { isEn: boolean; status: string }) {
 }
 
 function GameRoot() {
+  useAppVersionRefresh()
+
   const cloudConfigured = useCloudSaveStore(s => s.configured)
   const cloudStatus = useCloudSaveStore(s => s.status)
   const cloudUser = useCloudSaveStore(s => s.user)
