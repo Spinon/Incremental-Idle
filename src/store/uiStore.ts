@@ -14,7 +14,7 @@ export interface AppTabDef {
 export const APP_TABS: AppTabDef[] = [
   { id: 'battle',      label: 'Batalha',     labelEn: 'Battle',      icon: '⚔' },
   { id: 'map',         label: 'Mapa',        labelEn: 'Map',         icon: '🗺' },
-  { id: 'party',       label: 'Party',       labelEn: 'Party',       icon: '?' },
+  { id: 'party',       label: 'Grupo',       labelEn: 'Party',       icon: '👥' },
   { id: 'equips',      label: 'Equips',      labelEn: 'Equips',      icon: '🛡' },
   { id: 'spells',      label: 'Magias',      labelEn: 'Spells',      icon: '✨' },
   { id: 'consumables', label: 'Consumíveis', labelEn: 'Consumables', icon: '🧪' },

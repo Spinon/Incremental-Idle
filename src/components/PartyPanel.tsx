@@ -76,7 +76,7 @@ export default function PartyPanel() {
       <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <h2 className="text-lg font-black tracking-tight">Party</h2>
+            <h2 className="text-lg font-black tracking-tight">{isEn ? 'Party' : 'Grupo'}</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {isEn ? 'Known NPCs can follow you or explore the placed map.' : 'NPCs conhecidos podem seguir voce ou explorar o mapa colocado.'}
             </p>
