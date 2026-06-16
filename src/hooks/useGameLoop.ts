@@ -27,6 +27,9 @@ import type { Phase } from '../store/battleStore'
 const STEP_MS = 200
 const SYNC_PROMPT_MS = 30 * 1000
 const OFFLINE_STEP_MS = 5 * 1000
+// Offline catch-up is capped at 24h: longer absences simulate only the last
+// day, so the player isn't punished for being away and the sim stays bounded.
+const OFFLINE_MAX_MS = 24 * 60 * 60 * 1000
 const SYNC_CHUNK_STEPS = 500
 const SYNC_CHUNK_BUDGET_MS = 40
 const SYNC_PROGRESS_UPDATE_MS = 200
@@ -432,7 +435,8 @@ export function useGameLoop(paused = false) {
     function startOfflineSync(elapsedMs: number) {
       if (syncActive.current || elapsedMs < STEP_MS) return
 
-      const totalMs = Math.floor(elapsedMs / STEP_MS) * STEP_MS
+      const cappedMs = Math.min(elapsedMs, OFFLINE_MAX_MS)
+      const totalMs = Math.floor(cappedMs / STEP_MS) * STEP_MS
       if (totalMs <= 0) return
 
       syncActive.current = true

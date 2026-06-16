@@ -49,8 +49,15 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
-  async function handleReset() {
+  function handleReset() {
     const keepLocalPlay = localPlay || !!cloudUser
+
+    // Fire the cloud sign-out WITHOUT awaiting. Awaiting it (network round-trips
+    // for the lock release + auth sign-out) yields control back to the event
+    // loop, letting the running game loop re-persist the OLD in-memory state
+    // over the fresh save we write below — which is why reset only worked from
+    // local-play mode. The session lock lease covers a missed release.
+    if (cloudUser) void signOut()
 
     for (const key of Object.values(SAVE_KEYS)) localStorage.removeItem(key)
     ;[
@@ -64,6 +71,12 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
       OFFLINE_SYNC_PENDING_KEY,
       SEEN_DEATH_KEY,
     ].forEach(key => localStorage.removeItem(key))
+
+    // Drop any persisted Supabase auth session synchronously so the reload
+    // starts clean (the fire-and-forget signOut above may not finish in time).
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('sb-')) localStorage.removeItem(key)
+    }
 
     if (keepLocalPlay) localStorage.setItem(LOCAL_PLAY_KEY, '1')
     else localStorage.removeItem(LOCAL_PLAY_KEY)
@@ -93,7 +106,8 @@ export default function SettingsMenu({ authOnly = false }: { authOnly?: boolean 
     }))
     markLocalSaveChanged()
 
-    if (cloudUser) await signOut()
+    // Synchronous from here to reload: no await means the game loop cannot
+    // fire a persist tick that would clobber the fresh save written above.
     window.location.reload()
   }
 
