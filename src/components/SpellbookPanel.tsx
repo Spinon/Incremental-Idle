@@ -15,7 +15,7 @@ import { findSpell, SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
 import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapons'
-import { applySpellBuffs, getSpellManaCost } from '../formulas/spells'
+import { applySpellBuffs } from '../formulas/spells'
 import { cn } from '../lib/utils'
 import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
@@ -470,14 +470,12 @@ function WordProgressCard({ word, displayName, subtitle, progressLabel, progress
 function SpellCard({
   spell,
   effectiveCooldown,
-  firstSlotManaCost,
   derived,
   onAssign,
   isAssigning,
 }: {
   spell: Spell
   effectiveCooldown: number
-  firstSlotManaCost: number | null
   derived: DerivedStats
   onAssign: () => void
   isAssigning: boolean
@@ -512,17 +510,6 @@ function SpellCard({
           </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[9px] text-blue-500 dark:text-blue-400 font-semibold">
-            {getSpellManaCost(spell)} mana
-          </span>
-          {firstSlotManaCost !== null && firstSlotManaCost !== getSpellManaCost(spell) && (
-            <span className="text-[9px] text-blue-400 dark:text-blue-300 font-semibold">
-              slot 1: {firstSlotManaCost}
-            </span>
-          )}
-          <span className="text-[9px] text-slate-400 dark:text-slate-500">
-            CD {spell.cooldown}t{effectiveCooldown !== spell.cooldown ? ` -> ${effectiveCooldown}t` : ''}
-          </span>
           <span className="text-[8px] text-slate-400 dark:text-slate-500">
             {spell.word1Id} + {spell.word2Id}
           </span>
@@ -841,7 +828,7 @@ export default function SpellbookPanel() {
                     </span>
                   </div>
                   <p className="text-[9px] text-slate-500 dark:text-slate-500">
-                    {spellDescription(previewSpell, isEn)} · {getSpellManaCost(previewSpell)} mana · CD {previewSpell.cooldown}t
+                    {spellDescription(previewSpell, isEn)}
                   </p>
                   {!craftedSpellIds.includes(previewSpell.id) ? (
                     <button
@@ -1090,9 +1077,6 @@ export default function SpellbookPanel() {
                   key={spell.id}
                   spell={spell}
                   effectiveCooldown={Math.max(1, Math.ceil(spell.cooldown * (1 - weaponProfile.staffCooldownReduction)))}
-                  firstSlotManaCost={spellSlots[0] === spell.id
-                    ? Math.max(1, Math.round(getSpellManaCost(spell) * (1 - weaponProfile.staffSlotOneManaDiscount)))
-                    : null}
                   derived={spellDerived}
                   onAssign={() => setAssigningSpell(a => a === spell.id ? null : spell.id)}
                   isAssigning={assigningSpell === spell.id}
