@@ -284,50 +284,79 @@ const SPELLBOOK_TEXT = {
   },
 } as const
 
-function statList(stats?: Record<string, number>): string {
-  if (!stats) return ''
-  return Object.entries(stats)
-    .map(([stat, value]) => `${value > 0 ? '+' : ''}${value} ${statLabel(stat, true)}`)
-    .join(', ')
+type VisualText = { pt: string; en: string }
+
+const WORD_VISUAL: Record<string, VisualText> = {
+  ignis: { pt: 'chamas vivas', en: 'living flame' },
+  glacies: { pt: 'cristais de gelo', en: 'ice crystals' },
+  vitae: { pt: 'luz verdejante', en: 'verdant light' },
+  fulgur: { pt: 'arcos eletricos', en: 'crackling lightning' },
+  umbra: { pt: 'sombras liquidas', en: 'liquid shadow' },
+  lux: { pt: 'luz pura', en: 'pure light' },
+  toxicum: { pt: 'nevoa venenosa', en: 'venomous mist' },
+  tempus: { pt: 'ecos temporais', en: 'temporal echoes' },
+  mortis: { pt: 'cinzas frias', en: 'cold ash' },
+  caelum: { pt: 'brilho celeste', en: 'celestial radiance' },
+  abyssus: { pt: 'escuridao abissal', en: 'abyssal darkness' },
+  eternum: { pt: 'luz eterna', en: 'eternal light' },
+  sagitta: { pt: 'uma flecha precisa', en: 'a precise arrow' },
+  manus: { pt: 'uma mao espectral', en: 'a spectral hand' },
+  scutum: { pt: 'um escudo circular', en: 'a round shield' },
+  unda: { pt: 'uma onda ampla', en: 'a sweeping wave' },
+  aura: { pt: 'uma aura pulsante', en: 'a pulsing aura' },
+  pluvia: { pt: 'uma chuva fina', en: 'a fine rain' },
+  vortex: { pt: 'um vortice giratorio', en: 'a spinning vortex' },
+  arcanum: { pt: 'sigilos arcanos', en: 'arcane sigils' },
+  fortis: { pt: 'pressao condensada', en: 'condensed force' },
+  chaos: { pt: 'fragmentos instaveis', en: 'unstable fragments' },
 }
 
-function spellDescription(spell: Spell, isEn: boolean): string {
-  if (!isEn) return spell.description
+function visualPhrase(wordId: string, isEn: boolean): string {
+  const text = WORD_VISUAL[wordId]
+  if (text) return isEn ? text.en : text.pt
+  const word = ALL_WORDS.find(w => w.id === wordId)
+  return isEn ? (word?.nameEn ?? wordId) : (word?.namePt ?? wordId)
+}
 
-  const { effect } = spell
-  if (effect.type === 'damage') {
-    const pieces = [`Deals magical damage with ${effect.base ?? 0} base power`]
-    if (effect.scaling) pieces.push(`its power increases with ${statLabel(effect.scalingStat ?? 'magicDamage', true)}`)
-    if (effect.lifesteal) pieces.push(`restores ${Math.round(effect.lifesteal * 100)}% of damage dealt as HP`)
-    if (effect.enemyAtkMult || effect.enemyAtkSpeedMult) pieces.push(`weakens the enemy for ${effect.debuffDuration ?? 0} turns`)
-    if (effect.chaos) pieces.push('damage varies unpredictably')
-    return `${pieces.join(', ')}.`
+function spellVisualDescription(spell: Spell, isEn: boolean): string {
+  const w1 = ALL_WORDS.find(w => w.id === spell.word1Id)
+  const w2 = ALL_WORDS.find(w => w.id === spell.word2Id)
+  const first = visualPhrase(spell.word1Id, isEn)
+  const second = visualPhrase(spell.word2Id, isEn)
+
+  if (spell.effect.type === 'fizzle') {
+    return isEn
+      ? 'The words flicker out of rhythm, leaving only a brief shimmer in the air.'
+      : 'As palavras tremulam fora de ritmo, deixando apenas um brilho breve no ar.'
   }
-  if (effect.type === 'heal') {
-    const pieces = [`Restores HP with ${effect.base ?? 0} base healing`]
-    if (effect.scaling) pieces.push(`its healing increases with ${statLabel(effect.scalingStat ?? 'magicDamage', true)}`)
-    if (effect.statAdds) pieces.push(`also grants ${statList(effect.statAdds)} for ${effect.duration ?? 0} turns`)
-    return `${pieces.join(', ')}.`
+
+  if (w1?.category === 'element' && w2?.category === 'form') {
+    return isEn
+      ? `${first} gathers into ${second}, tracing the spell's shape through the air.`
+      : `${first} se concentra em ${second}, desenhando a forma da magia no ar.`
   }
-  if (effect.type === 'buff') {
-    return `Grants ${statList(effect.statAdds)} for ${effect.duration ?? 0} turns.`
+
+  if (w1?.category === 'form' && w2?.category === 'element') {
+    return isEn
+      ? `${first} forms first, then fills with ${second} until the spell takes hold.`
+      : `${first} se forma primeiro, depois se enche de ${second} ate a magia firmar.`
   }
-  if (effect.type === 'debuff') {
-    const parts = []
-    if (effect.enemyAtkMult !== undefined) parts.push(`enemy ATK ${formatDebuffMult(effect.enemyAtkMult)}`)
-    if (effect.enemyAtkSpeedMult !== undefined) parts.push(`enemy speed ${formatDebuffMult(effect.enemyAtkSpeedMult)}`)
-    return `Weakens the enemy${parts.length ? `: ${parts.join(', ')}` : ''} for ${effect.debuffDuration ?? 0} turns.`
+
+  if (w1?.category === 'element' && w2?.category === 'element') {
+    return isEn
+      ? `${first} and ${second} collide, blooming into a volatile magical surge.`
+      : `${first} e ${second} colidem, abrindo uma explosao magica instavel.`
   }
-  if (effect.tileAction === 'create') {
-    return `Creates ${effect.tileCount ?? 2} new map tiles.`
+
+  if (w1?.category === 'form' && w2?.category === 'form') {
+    return isEn
+      ? `${first} folds into ${second}, shaping raw magic into a strange pattern.`
+      : `${first} se dobra em ${second}, moldando magia bruta em um padrao estranho.`
   }
-  if (effect.tileAction === 'refresh') {
-    return `Refreshes ${effect.tileCount ?? 3} map tiles.`
-  }
-  if (effect.type === 'fizzle') {
-    return 'The magic collapses before producing any practical effect.'
-  }
-  return 'A utility spell with no direct combat effect.'
+
+  return isEn
+    ? `${spell.name} manifests as shifting light and pressure around the caster.`
+    : `${spell.name} se manifesta como luz e pressao movendo ao redor do conjurador.`
 }
 
 function spellSearchText(spell: Spell, isEn: boolean, derived: DerivedStats): string {
@@ -342,8 +371,8 @@ function spellSearchText(spell: Spell, isEn: boolean, derived: DerivedStats): st
     spell.id,
     spell.name,
     spell.description,
-    spellDescription(spell, isEn),
-    spellDescription(spell, !isEn),
+    spellVisualDescription(spell, isEn),
+    spellVisualDescription(spell, !isEn),
     summary.primary,
     ...summary.details,
     alternateSummary.primary,
@@ -515,7 +544,7 @@ function SpellCard({
           </span>
         </div>
         <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-0.5 leading-tight">
-          {spellDescription(spell, isEn)}
+          {spellVisualDescription(spell, isEn)}
         </p>
         <div className="mt-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-white/45 dark:bg-slate-950/25 px-2 py-1">
           <p className={cn('text-[9px] font-bold leading-tight', EFFECT_COLOR[spell.effect.type])}>
@@ -828,7 +857,7 @@ export default function SpellbookPanel() {
                     </span>
                   </div>
                   <p className="text-[9px] text-slate-500 dark:text-slate-500">
-                    {spellDescription(previewSpell, isEn)}
+                    {spellVisualDescription(previewSpell, isEn)}
                   </p>
                   {!craftedSpellIds.includes(previewSpell.id) ? (
                     <button
