@@ -466,13 +466,19 @@ export function wordSandPrice(amount: number, tileLevel: number): number {
   return Math.max(1, Math.round(amount * (1.45 + tileLevel * 0.025)))
 }
 
+export function wordBitPrice(amount: number, tileLevel: number): number {
+  return Math.max(1, Math.round(amount * (72 + tileLevel * 9.5)))
+}
+
 export function generateMarketOffer(level: number): MarketOffer {
   const sandAmount = Math.round(45 + level * 9)
+  const bitAmount = Math.max(1, Math.min(5, Math.floor(1 + level / 18)))
   return {
     consumables: [generateConsumable(level), generateConsumable(level)],
     equipment:   [generateItem(level, true), generateItem(level, true)],
-    words:       [],   // populated by MarketInterior which has access to known words
+    words:       [],   // legacy: markets no longer sell full words
     wordSand:    [{ id: `ws_${Date.now()}_${_idSeq++}`, amount: sandAmount, price: wordSandPrice(sandAmount, level) }],
+    wordBits:    [{ id: `wb_${Date.now()}_${_idSeq++}`, amount: bitAmount, price: wordBitPrice(bitAmount, level) }],
   }
 }
 

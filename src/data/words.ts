@@ -34,10 +34,12 @@ export const ALL_WORDS: Word[] = [
   { id: 'abyssus', nameEn: 'Abyssus', namePt: 'Abismo',    rarity: 'epic',     category: 'element', description: 'Profundezas além da compreensão' },
   // ── Epic forms ───────────────────────────────────────────────────────────
   { id: 'fortis',  nameEn: 'Fortis',  namePt: 'Força',     rarity: 'epic',     category: 'form',    description: 'Potência máxima sem contenção' },
+  { id: 'reformare', nameEn: 'Reformare', namePt: 'Reformar', rarity: 'epic',   category: 'form',    description: 'Reescreve a natureza elemental do corpo' },
   // ── Unique elements ──────────────────────────────────────────────────────
   { id: 'eternum', nameEn: 'Eternum', namePt: 'Eterno',    rarity: 'unique',   category: 'element', description: 'Além do tempo, da morte e da matéria' },
   // ── Unique forms ─────────────────────────────────────────────────────────
   { id: 'chaos',   nameEn: 'Chaos',   namePt: 'Caos',      rarity: 'unique',   category: 'form',    description: 'Efeito imprevisível e devastador' },
+  { id: 'mutare',  nameEn: 'Mutare',  namePt: 'Mutar',     rarity: 'unique',   category: 'form',    description: 'Transforma a natureza do golpe' },
 ]
 
 export const WORD_MAP = new Map(ALL_WORDS.map(w => [w.id, w]))

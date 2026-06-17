@@ -9,7 +9,7 @@ import { useSpellStore } from '../store/spellStore'
 import type { MonsterRarity } from '../types/monster'
 import type { DerivedStats } from '../types/hero'
 
-const WORD_SAND_DROP_CHANCE: Partial<Record<MonsterRarity, number>> = {
+const ARCANE_DROP_CHANCE: Partial<Record<MonsterRarity, number>> = {
   rare: 0.08,
   epic: 0.16,
   unique: 0.32,
@@ -17,8 +17,11 @@ const WORD_SAND_DROP_CHANCE: Partial<Record<MonsterRarity, number>> = {
 
 const WORD_SAND_DROP_MULT: Partial<Record<MonsterRarity, number>> = {
   rare: 1,
-  epic: 2.2,
-  unique: 5,
+}
+
+const WORD_BIT_DROP_AMOUNT: Partial<Record<MonsterRarity, number>> = {
+  epic: 1,
+  unique: 3,
 }
 
 const RARITY_LABEL_PT: Record<string, string> = {
@@ -33,7 +36,7 @@ const RARITY_LABEL_EN: Record<string, string> = {
 /**
  * Everything the player earns when a battle ends in victory:
  * treasure-chest claim, quest kill hooks, tile/monster XP, weapon XP,
- * item drop and Word Sand rewards.
+ * item drop and arcane word-resource rewards.
  */
 export function grantVictoryRewards(derived: DerivedStats): void {
   const gainXp = useHeroStore.getState().gainXp
@@ -109,21 +112,36 @@ export function grantVictoryRewards(derived: DerivedStats): void {
   }
 
   const monsterRarity = defeatedEnemy.rarity as MonsterRarity | undefined
-  const dropChance = monsterRarity ? WORD_SAND_DROP_CHANCE[monsterRarity] : undefined
+  const dropChance = monsterRarity ? ARCANE_DROP_CHANCE[monsterRarity] : undefined
 
   if (dropChance && Math.random() < dropChance) {
-    const mult = WORD_SAND_DROP_MULT[monsterRarity!] ?? 1
-    const amount = Math.round((18 + defeatedEnemy.level * 3) * mult)
-    useSpellStore.getState().addWordSand(amount)
+    if (monsterRarity === 'epic' || monsterRarity === 'unique') {
+      const amount = WORD_BIT_DROP_AMOUNT[monsterRarity] ?? 1
+      useSpellStore.getState().grantRandomWordBits(amount)
 
-    useNotifStore.getState().push({
-      title: 'Areia de palavra!',
-      titleEn: 'Word Sand!',
-      body: `+${amount} AP`,
-      bodyEn: `+${amount} WS`,
-      rarity: monsterRarity === 'unique' ? 'unique' : monsterRarity === 'epic' ? 'epic' : 'rare',
-      scrollTo: 'spells',
-      actions: [{ label: 'Ver Grimorio', labelEn: 'View Spellbook', kind: 'scroll', payload: 'spells' }],
-    })
+      useNotifStore.getState().push({
+        title: 'Pedaço de palavra!',
+        titleEn: 'Word Bit!',
+        body: `+${amount} PB`,
+        bodyEn: `+${amount} WB`,
+        rarity: monsterRarity,
+        scrollTo: 'spells',
+        actions: [{ label: 'Ver Grimorio', labelEn: 'View Spellbook', kind: 'scroll', payload: 'spells' }],
+      })
+    } else {
+      const mult = WORD_SAND_DROP_MULT[monsterRarity!] ?? 1
+      const amount = Math.round((18 + defeatedEnemy.level * 3) * mult)
+      useSpellStore.getState().addWordSand(amount)
+
+      useNotifStore.getState().push({
+        title: 'Areia de palavra!',
+        titleEn: 'Word Sand!',
+        body: `+${amount} AP`,
+        bodyEn: `+${amount} WS`,
+        rarity: 'rare',
+        scrollTo: 'spells',
+        actions: [{ label: 'Ver Grimorio', labelEn: 'View Spellbook', kind: 'scroll', payload: 'spells' }],
+      })
+    }
   }
 }

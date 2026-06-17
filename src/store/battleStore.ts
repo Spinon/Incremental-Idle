@@ -14,7 +14,15 @@ import {
 } from '../formulas/statusEffects'
 import type { MonsterRarity } from '../types/monster'
 import type { ElementType } from '../types/element'
-import { elementalModifier, makeStatus, STATUS_ICONS, STATUS_LABEL_PT, STATUS_LABEL_EN } from '../types/element'
+import {
+  elementalModifier,
+  elementalPrismMultiplier,
+  elementalPrismReaction,
+  makeStatus,
+  STATUS_ICONS,
+  STATUS_LABEL_PT,
+  STATUS_LABEL_EN,
+} from '../types/element'
 import type { ActiveStatus } from '../types/element'
 import type { WeaponType } from '../types/weapon'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
@@ -227,15 +235,25 @@ function makeInitialEnemy(): Unit {
  *
  * Variance ±15 % last.
  */
-function calcDmg(a: Unit, d: Unit): { dmg: number; isCrit: boolean } {
+function calcDmg(a: Unit, d: Unit, attackElement?: ElementType, defenderForm?: ElementType): {
+  dmg: number
+  isCrit: boolean
+  absorbedHeal: number
+} {
   const K = 20
-  const armor  = K / (d.def + K)
-  const defEff = 1 - d.damageReduction
-  let base = Math.max(1, Math.round(a.atk * armor * defEff))
+  const resolvedElement = attackElement ?? a.element
+  let base = 0
 
-  // Elemental modifier for physical attacks (e.g. monster with element)
-  if (a.element) {
-    const mod = elementalModifier(a.element, d.weakTo, d.resIgnea, d.resGlacial, d.resSombria, d.resVital)
+  if (attackElement) {
+    base = Math.max(1, Math.round(a.atk))
+  } else {
+    const armor  = K / (d.def + K)
+    const defEff = 1 - d.damageReduction
+    base = Math.max(1, Math.round(a.atk * armor * defEff))
+  }
+
+  if (resolvedElement) {
+    const mod = elementalModifier(resolvedElement, d.weakTo, d.resIgnea, d.resGlacial, d.resSombria, d.resVital)
     base = Math.max(1, Math.round(base * mod))
   }
 
@@ -246,7 +264,15 @@ function calcDmg(a: Unit, d: Unit): { dmg: number; isCrit: boolean } {
   }
 
   const variance = 0.85 + Math.random() * 0.3
-  return { dmg: Math.max(1, Math.round(base * variance)), isCrit }
+  const varied = Math.max(1, Math.round(base * variance))
+
+  if (resolvedElement && defenderForm) {
+    const reaction = elementalPrismReaction(defenderForm, resolvedElement)
+    if (reaction === 'absorb') return { dmg: 0, isCrit, absorbedHeal: varied }
+    return { dmg: Math.max(0, Math.round(varied * elementalPrismMultiplier(reaction))), isCrit, absorbedHeal: 0 }
+  }
+
+  return { dmg: varied, isCrit, absorbedHeal: 0 }
 }
 
 /** Returns true when the defender dodges the hit. Attacker accuracy negates dodge. */
@@ -490,7 +516,13 @@ export const useBattleStore = create<BattleStore>()(
       // ── Compute base damage ───────────────────────────────────────────────
       const weaponState = useInventoryStore.getState()
       const weaponProfile = getWeaponCombatProfile(weaponState.weaponProgress, weaponState.equippedWeapons)
-      const { dmg: rawDmg, isCrit } = calcDmg(effAtk, effDef)
+      const activeAttackElement = st.attacker === 'player'
+        ? useSpellStore.getState().activeBuffs.find(b => b.attackElement)?.attackElement
+        : undefined
+      const activeDefenderForm = st.attacker === 'enemy'
+        ? useSpellStore.getState().activeBuffs.find(b => b.elementalForm)?.elementalForm
+        : undefined
+      const { dmg: rawDmg, isCrit, absorbedHeal } = calcDmg(effAtk, effDef, activeAttackElement, activeDefenderForm)
 
       // Marked ×1.5, blessed ×0.5 — aggregated from the registry
       const takenMult = damageTakenMult(defSt)
@@ -511,14 +543,24 @@ export const useBattleStore = create<BattleStore>()(
         blocked = true
       }
 
-      const newHp = Math.max(0, defUnit.hp - dmg)
+      const newHp = absorbedHeal > 0
+        ? Math.min(defUnit.maxHp, defUnit.hp + absorbedHeal)
+        : Math.max(0, defUnit.hp - dmg)
       if (st.attacker === 'player') st.enemy.hp  = newHp
       else                          st.player.hp = newHp
 
       st.log.unshift({ attacker: atkUnit.name, defender: defUnit.name, dmg, isCrit, blocked, weaponEffect })
+      if (absorbedHeal > 0) {
+        st.log.unshift({
+          attacker: defUnit.name,
+          defender: defUnit.name,
+          dmg: 0,
+          spell: { name: 'Absorção', nameEn: 'Absorb', icon: '✚', effectType: 'heal', value: absorbedHeal },
+        })
+      }
       if (st.attacker === 'player' && newHp > 0) {
         if (weaponProfile.swordExtraHitChance > 0 && Math.random() < weaponProfile.swordExtraHitChance) {
-          const { dmg: extraRaw, isCrit: extraCrit } = calcDmg(effAtk, st.enemy)
+          const { dmg: extraRaw, isCrit: extraCrit } = calcDmg(effAtk, st.enemy, activeAttackElement)
           const extraDmg = Math.max(1, Math.round(extraRaw * takenMult))
           const hpAfterExtra = Math.max(0, st.enemy.hp - extraDmg)
           st.enemy.hp = hpAfterExtra

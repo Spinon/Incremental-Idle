@@ -43,6 +43,7 @@ export function applySpellBuffs(derived: DerivedStats, buffs: ActiveBuff[]): Der
   if (buffs.length === 0) return derived
   const result = { ...derived }
   for (const buff of buffs) {
+    if (!buff.statAdds) continue
     for (const [key, value] of Object.entries(buff.statAdds)) {
       const k = key as keyof DerivedStats
       ;(result[k] as number) += value as number

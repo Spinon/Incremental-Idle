@@ -524,6 +524,47 @@ function findNextStep(
   return null
 }
 
+function findTeleportCandidates(
+  grid: Record<string, PlacedTile>,
+  from: { x: number; y: number },
+  radius: number,
+  target: 'explored' | 'blueTower',
+): { x: number; y: number }[] {
+  const maxSteps = Math.max(1, Math.floor(radius))
+  const visited = new Set<string>()
+  const queue: Array<{ x: number; y: number; steps: number }> = [{ x: from.x, y: from.y, steps: 0 }]
+  const results: { x: number; y: number }[] = []
+  visited.add(gridKey(from.x, from.y))
+
+  while (queue.length) {
+    const { x, y, steps } = queue.shift()!
+    const tile = grid[gridKey(x, y)]
+    if (!tile?.explored) continue
+
+    if (steps > 0) {
+      const isBlueTower = tile.content.type === 'blueTower'
+      const isInterior = tile.content.type === 'market' || tile.content.type === 'tileMarket' || tile.content.type === 'quest'
+      if (target === 'blueTower' ? isBlueTower : !isInterior) {
+        results.push({ x, y })
+      }
+    }
+
+    if (steps >= maxSteps) continue
+    for (const dir of tile.connections) {
+      const { dx, dy } = DIR_DELTA[dir]
+      const nx = x + dx, ny = y + dy
+      const key = gridKey(nx, ny)
+      if (visited.has(key)) continue
+      const neighbor = grid[key]
+      if (!neighbor?.explored || !neighbor.connections.includes(DIR_OPPOSITE[dir])) continue
+      visited.add(key)
+      queue.push({ x: nx, y: ny, steps: steps + 1 })
+    }
+  }
+
+  return results
+}
+
 /**
  * Returns every valid (tileId, x, y) placement the current deck can make on
  * the grid.  Used by auto-place to pick a random legal move.
@@ -670,6 +711,7 @@ interface MapStore {
   handleDefeat(): void
   registerBountyTile(questId: string, objective: import('../types/quest').QuestObjectiveBounty): void
   activatePendingBlueTower(): boolean
+  teleportBySpell(radius: number, target: 'explored' | 'blueTower'): boolean
   teleportToBlueTower(x: number, y: number): boolean
   /**
    * Try to place a random valid deck tile on the grid.
@@ -1000,6 +1042,27 @@ export const useMapStore = create<MapStore>()(
           delete st.blueTowerBossPending[key]
         })
         return activated
+      },
+
+      teleportBySpell: (radius, target): boolean => {
+        let movedToX: number | null = null
+        let movedToY: number | null = null
+        set((st) => {
+          const candidates = findTeleportCandidates(st.grid, st.playerPos, radius, target)
+          if (candidates.length === 0) return
+          const chosen = candidates[Math.floor(Math.random() * candidates.length)]
+          const tile = st.grid[gridKey(chosen.x, chosen.y)]
+          if (!tile?.explored) return
+          st.playerPos = chosen
+          st.destination = null
+          st.scene = target === 'blueTower' && tile.content.type === 'blueTower' ? 'tower' : 'map'
+          st.blueTowerAutoTarget = null
+          st.blueTowerEntryFrom = null
+          movedToX = chosen.x
+          movedToY = chosen.y
+        })
+        if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
+        return movedToX !== null && movedToY !== null
       },
 
       teleportToBlueTower: (x, y): boolean => {

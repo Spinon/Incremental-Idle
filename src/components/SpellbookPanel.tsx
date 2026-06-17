@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   getKnownWordIds,
   getPlayerSpells,
@@ -19,8 +19,11 @@ import { applySpellBuffs } from '../formulas/spells'
 import { cn } from '../lib/utils'
 import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
+import { ELEMENT_PRISM } from '../types/element'
+import type { ElementType } from '../types/element'
 import type { DerivedStats } from '../types/hero'
 import { useSettingsStore } from '../store/settingsStore'
+import elementBadges from '../assets/elements_spritesheet.png'
 
 // ─── Rarity styling ───────────────────────────────────────────────────────────
 const RARITY_BORDER: Record<SpellRarity, string> = {
@@ -103,9 +106,18 @@ function statLabel(stat: string, isEn: boolean): string {
   return (isEn ? STAT_LABEL[stat]?.en : STAT_LABEL[stat]?.pt) ?? stat
 }
 
+function elementLabel(element: string, isEn: boolean): string {
+  const word = ALL_WORDS.find(w => w.id === element)
+  return isEn ? (word?.nameEn ?? element) : (word?.namePt ?? word?.nameEn ?? element)
+}
+
 function formatStatAdd(stat: string, value: number, isEn: boolean): string {
   const amount = PERCENT_EFFECT_STATS.has(stat) ? fmtPercent(value) : fmtNumber(value)
   return `+${amount} ${statLabel(stat, isEn)}`
+}
+
+function formatElementList(elements: string[], isEn: boolean): string {
+  return elements.map(element => elementLabel(element, isEn)).join(', ')
 }
 
 function formatDebuffMult(mult: number): string {
@@ -164,16 +176,39 @@ function spellEffectSummary(spell: Spell, derived: DerivedStats, isEn: boolean, 
 
   if (e.type === 'buff' || e.type === 'utility') {
     if (e.statAdds) details.push(...Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)))
+    if (e.attackElement) {
+      details.push(`${isEn ? 'Attacks become' : 'Ataques viram'} ${elementLabel(e.attackElement, isEn)}`)
+      details.push(isEn ? 'Uses elemental resistance' : 'Usa resistencia elemental')
+    }
+    if (e.elementalForm) {
+      const prism = ELEMENT_PRISM[e.elementalForm]
+      details.push(`${isEn ? 'Absorbs' : 'Absorve'} ${elementLabel(prism.absorb, isEn)}`)
+      details.push(`${isEn ? 'Immune' : 'Imune'} ${formatElementList(prism.immuneTo, isEn)}`)
+      details.push(`${isEn ? 'Resists' : 'Resiste'} ${formatElementList(prism.resistTo, isEn)}`)
+      details.push(`${isEn ? 'Weak to' : 'Fraco contra'} ${formatElementList(prism.weakTo, isEn)}`)
+    }
     if (e.tileAction) {
       const action = e.tileAction === 'create'
         ? (isEn ? 'Create tiles' : 'Cria tiles')
         : (isEn ? 'Refresh deck' : 'Renova deck')
       details.push(`${action} x${e.tileCount ?? (e.tileAction === 'create' ? 2 : 3)}`)
     }
+    if (e.mapAction) {
+      const radius = e.teleportRadius ?? 4
+      if (e.mapAction === 'teleportBlueTower') {
+        details.push(isEn ? `Teleport to blue tower (${radius})` : `Teleporte para torre azul (${radius})`)
+      } else {
+        details.push(isEn ? `Teleport to explored tile (${radius})` : `Teleporte para tile explorado (${radius})`)
+      }
+    }
     if (duration) details.push(`${duration}t`)
     return {
       primary: e.statAdds
         ? `${isEn ? 'Effect' : 'Efeito'}: ${Object.entries(e.statAdds).map(([k, v]) => formatStatAdd(k, v ?? 0, isEn)).join(' + ')}`
+        : e.attackElement
+          ? `${isEn ? 'Effect' : 'Efeito'}: ${isEn ? 'Elemental attack' : 'Ataque elemental'} - ${elementLabel(e.attackElement, isEn)}`
+        : e.elementalForm
+          ? `${isEn ? 'Effect' : 'Efeito'}: ${isEn ? 'Elemental form' : 'Forma elemental'} - ${elementLabel(e.elementalForm, isEn)}`
         : `${isEn ? 'Effect' : 'Efeito'}: ${isEn ? 'Utility' : 'Utilidade'}`,
       details,
     }
@@ -203,6 +238,7 @@ const SPELLBOOK_TEXT = {
   pt: {
     words: 'Palavras',
     spells: 'Magias',
+    elements: 'Elementos',
     mana: 'Mana',
     effect: {
       damage: 'Dano',
@@ -244,6 +280,7 @@ const SPELLBOOK_TEXT = {
   en: {
     words: 'Words',
     spells: 'Spells',
+    elements: 'Elements',
     mana: 'Mana',
     effect: {
       damage: 'Damage',
@@ -308,8 +345,132 @@ const WORD_VISUAL: Record<string, VisualText> = {
   vortex: { pt: 'um vortice giratorio', en: 'a spinning vortex' },
   arcanum: { pt: 'sigilos arcanos', en: 'arcane sigils' },
   fortis: { pt: 'pressao condensada', en: 'condensed force' },
+  reformare: { pt: 'um corpo refeito', en: 'a remade body' },
   chaos: { pt: 'fragmentos instaveis', en: 'unstable fragments' },
+  mutare: { pt: 'um selo mutavel', en: 'a shifting seal' },
 }
+
+const ELEMENT_ORDER: ElementType[] = [
+  'ignis', 'glacies', 'fulgur', 'umbra', 'lux', 'toxicum',
+  'mortis', 'vitae', 'caelum', 'abyssus', 'eternum', 'tempus',
+]
+
+const ELEMENT_TONE: Record<ElementType, { text: string; border: string; bg: string; line: string }> = {
+  ignis:   { text: 'text-orange-500', border: 'border-orange-500/60', bg: 'bg-orange-500/10', line: '#f97316' },
+  glacies: { text: 'text-sky-400',    border: 'border-sky-400/60',    bg: 'bg-sky-400/10',    line: '#38bdf8' },
+  fulgur:  { text: 'text-amber-400',  border: 'border-amber-400/60',  bg: 'bg-amber-400/10',  line: '#fbbf24' },
+  umbra:   { text: 'text-violet-400', border: 'border-violet-400/60', bg: 'bg-violet-400/10', line: '#a78bfa' },
+  lux:     { text: 'text-yellow-300', border: 'border-yellow-300/60', bg: 'bg-yellow-300/10', line: '#fde047' },
+  toxicum: { text: 'text-lime-400',   border: 'border-lime-400/60',   bg: 'bg-lime-400/10',   line: '#a3e635' },
+  mortis:  { text: 'text-fuchsia-400', border: 'border-fuchsia-400/60', bg: 'bg-fuchsia-400/10', line: '#e879f9' },
+  vitae:   { text: 'text-emerald-400', border: 'border-emerald-400/60', bg: 'bg-emerald-400/10', line: '#34d399' },
+  caelum:  { text: 'text-purple-400', border: 'border-purple-400/60', bg: 'bg-purple-400/10', line: '#c084fc' },
+  abyssus: { text: 'text-cyan-500',   border: 'border-cyan-500/60',   bg: 'bg-cyan-500/10',   line: '#06b6d4' },
+  eternum: { text: 'text-amber-500',  border: 'border-amber-500/60',  bg: 'bg-amber-500/10',  line: '#f59e0b' },
+  tempus:  { text: 'text-blue-400',   border: 'border-blue-400/60',   bg: 'bg-blue-400/10',   line: '#60a5fa' },
+}
+
+const ELEMENT_BADGE_INDEX: Record<ElementType, number> = {
+  ignis: 0,
+  glacies: 1,
+  fulgur: 2,
+  umbra: 3,
+  lux: 4,
+  toxicum: 5,
+  mortis: 6,
+  caelum: 7,
+  vitae: 8,
+  abyssus: 9,
+  eternum: 10,
+  tempus: 11,
+}
+
+const ELEMENT_BADGE_VISUAL_OFFSET: Partial<Record<ElementType, { x: number; y: number }>> = {
+  glacies: { x: 0, y: 1.35 },
+}
+
+function elementBadgeStyle(element: ElementType): CSSProperties {
+  const index = ELEMENT_BADGE_INDEX[element]
+  return {
+    backgroundImage: `url(${elementBadges})`,
+    backgroundSize: '1200% 100%',
+    backgroundPosition: `${(index / 11) * 100}% 0%`,
+  }
+}
+
+function ElementBadge({ element, size = 24, className }: {
+  element: ElementType
+  size?: number
+  className?: string
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('inline-block shrink-0 rounded-full bg-black/40 align-middle shadow-sm', className)}
+      style={{ width: size, height: size, ...elementBadgeStyle(element) }}
+    />
+  )
+}
+
+const ELEMENT_LORE: Record<ElementType, VisualText> = {
+  ignis: {
+    pt: 'Chamas que respiram como feras pequenas, famintas por forma, calor e ruptura.',
+    en: 'Flames that breathe like small beasts, hungry for shape, heat, and rupture.',
+  },
+  glacies: {
+    pt: 'Frio cristalino que silencia o ar e guarda movimento dentro de facetas azuis.',
+    en: 'Crystal cold that silences the air and traps motion inside blue facets.',
+  },
+  fulgur: {
+    pt: 'Relampagos presos em nervos de luz, sempre procurando o caminho mais curto ate o impacto.',
+    en: 'Lightning caught in nerves of light, always seeking the shortest path to impact.',
+  },
+  umbra: {
+    pt: 'Sombra liquida que escorre entre as certezas e apaga bordas antes do golpe chegar.',
+    en: 'Liquid shadow slipping between certainties, erasing edges before the blow arrives.',
+  },
+  lux: {
+    pt: 'Luz pura em laminas suaves, revelando fissuras que a escuridao tentou esconder.',
+    en: 'Pure light in gentle blades, revealing fractures darkness tried to hide.',
+  },
+  toxicum: {
+    pt: 'Nevoa viva e paciente, verde no pulso, transformando resistencia em febre.',
+    en: 'Living, patient mist, green at the pulse, turning resistance into fever.',
+  },
+  mortis: {
+    pt: 'Cinza fria de tudo que terminou, pesada como sino distante sobre a pele.',
+    en: 'Cold ash of everything ended, heavy as a distant bell against the skin.',
+  },
+  vitae: {
+    pt: 'Seiva luminosa que costura carne, folha e vontade com a mesma paciencia.',
+    en: 'Luminous sap stitching flesh, leaf, and will with the same patience.',
+  },
+  caelum: {
+    pt: 'Brilho das alturas, amplo e vertical, como uma promessa caindo do ceu.',
+    en: 'Radiance from above, wide and vertical, like a promise falling from the sky.',
+  },
+  abyssus: {
+    pt: 'Escuridao profunda que puxa o peso do mundo para dentro de um ponto sem fundo.',
+    en: 'Deep darkness pulling the weight of the world into a bottomless point.',
+  },
+  eternum: {
+    pt: 'Luz sem idade, parada no instante entre a memoria e aquilo que ainda nao nasceu.',
+    en: 'Ageless light, still in the instant between memory and what has not yet been born.',
+  },
+  tempus: {
+    pt: 'Ecos do tempo dobrando passos, atrasos e futuros em aneis quase invisiveis.',
+    en: 'Echoes of time folding steps, delays, and futures into nearly invisible rings.',
+  },
+}
+
+const PRISM_RELATION = {
+  absorb: { icon: '♥', pt: 'Absorve', en: 'Absorbs', color: '#84cc16', text: 'text-lime-400', border: 'border-lime-400/40', bg: 'bg-lime-400/10' },
+  immune: { icon: '▣', pt: 'Imune', en: 'Immune', color: '#38bdf8', text: 'text-sky-400', border: 'border-sky-400/40', bg: 'bg-sky-400/10' },
+  resist: { icon: '⬟', pt: 'Resiste', en: 'Resists', color: '#facc15', text: 'text-yellow-300', border: 'border-yellow-300/40', bg: 'bg-yellow-300/10' },
+  weak:   { icon: '✦', pt: 'Fraco', en: 'Weak', color: '#fb4b35', text: 'text-red-400', border: 'border-red-400/40', bg: 'bg-red-400/10' },
+} as const
+
+type PrismRelationKey = keyof typeof PRISM_RELATION
 
 function visualPhrase(wordId: string, isEn: boolean): string {
   const text = WORD_VISUAL[wordId]
@@ -318,40 +479,83 @@ function visualPhrase(wordId: string, isEn: boolean): string {
   return isEn ? (word?.nameEn ?? wordId) : (word?.namePt ?? wordId)
 }
 
+function spellVisualVariant(spell: Spell, count: number): number {
+  const seed = `${spell.word1Id}:${spell.word2Id}`
+  return Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0) % count
+}
+
 function spellVisualDescription(spell: Spell, isEn: boolean): string {
   const w1 = ALL_WORDS.find(w => w.id === spell.word1Id)
   const w2 = ALL_WORDS.find(w => w.id === spell.word2Id)
   const first = visualPhrase(spell.word1Id, isEn)
   const second = visualPhrase(spell.word2Id, isEn)
 
-  if (spell.effect.type === 'fizzle') {
-    return isEn
-      ? 'The words flicker out of rhythm, leaving only a brief shimmer in the air.'
-      : 'As palavras tremulam fora de ritmo, deixando apenas um brilho breve no ar.'
-  }
-
   if (w1?.category === 'element' && w2?.category === 'form') {
-    return isEn
-      ? `${first} gathers into ${second}, tracing the spell's shape through the air.`
-      : `${first} se concentra em ${second}, desenhando a forma da magia no ar.`
+    const templates = isEn
+      ? [
+          `${first} gathers into ${second}, tracing the spell's shape through the air.`,
+          `${second} condenses from ${first}, bright at the edges and restless at the core.`,
+          `${first} threads itself through ${second}, leaving a thin shimmer behind.`,
+          `${second} blooms out of ${first}, held together by a quiet arcane pulse.`,
+        ]
+      : [
+          `${first} se concentra em ${second}, desenhando a forma da magia no ar.`,
+          `${second} se condensa a partir de ${first}, brilhando nas bordas e vibrando no centro.`,
+          `${first} atravessa ${second}, deixando um rastro fino de brilho.`,
+          `${second} floresce de ${first}, sustentada por um pulso arcano discreto.`,
+        ]
+    return templates[spellVisualVariant(spell, templates.length)]
   }
 
   if (w1?.category === 'form' && w2?.category === 'element') {
-    return isEn
-      ? `${first} forms first, then fills with ${second} until the spell takes hold.`
-      : `${first} se forma primeiro, depois se enche de ${second} ate a magia firmar.`
+    const templates = isEn
+      ? [
+          `${first} forms first, then fills with ${second} until the spell takes hold.`,
+          `${second} pours into ${first}, giving the shape a faint inner glow.`,
+          `${first} opens like a vessel, drawing ${second} into its center.`,
+          `${second} coils around ${first}, tightening into a focused sign.`,
+        ]
+      : [
+          `${first} se forma primeiro, depois se enche de ${second} ate a magia firmar.`,
+          `${second} escorre para dentro de ${first}, acendendo um brilho interno suave.`,
+          `${first} se abre como um vaso, puxando ${second} para o centro.`,
+          `${second} se enrola ao redor de ${first}, apertando em um sinal focado.`,
+        ]
+    return templates[spellVisualVariant(spell, templates.length)]
   }
 
   if (w1?.category === 'element' && w2?.category === 'element') {
-    return isEn
-      ? `${first} and ${second} collide, blooming into a volatile magical surge.`
-      : `${first} e ${second} colidem, abrindo uma explosao magica instavel.`
+    const templates = isEn
+      ? [
+          `${first} and ${second} collide, blooming into a volatile magical surge.`,
+          `${first} mixes with ${second}, forming a restless veil around the caster.`,
+          `${second} answers ${first} in sharp pulses, as if the air is breathing.`,
+          `${first} and ${second} spiral together, too bright to read clearly.`,
+        ]
+      : [
+          `${first} e ${second} colidem, abrindo uma explosao magica instavel.`,
+          `${first} se mistura com ${second}, formando um veu inquieto ao redor do conjurador.`,
+          `${second} responde a ${first} em pulsos curtos, como se o ar respirasse.`,
+          `${first} e ${second} giram juntos, brilhantes demais para serem lidos com clareza.`,
+        ]
+    return templates[spellVisualVariant(spell, templates.length)]
   }
 
   if (w1?.category === 'form' && w2?.category === 'form') {
-    return isEn
-      ? `${first} folds into ${second}, shaping raw magic into a strange pattern.`
-      : `${first} se dobra em ${second}, moldando magia bruta em um padrao estranho.`
+    const templates = isEn
+      ? [
+          `${first} folds into ${second}, shaping raw magic into a strange pattern.`,
+          `${second} mirrors ${first}, and the space between them begins to hum.`,
+          `${first} and ${second} overlap, sketching a glyph that refuses to settle.`,
+          `${second} turns through ${first}, leaving a precise mark in the air.`,
+        ]
+      : [
+          `${first} se dobra em ${second}, moldando magia bruta em um padrao estranho.`,
+          `${second} espelha ${first}, e o espaco entre as formas comeca a vibrar.`,
+          `${first} e ${second} se sobrepoem, desenhando um glifo que nao quer assentar.`,
+          `${second} gira atraves de ${first}, deixando uma marca precisa no ar.`,
+        ]
+    return templates[spellVisualVariant(spell, templates.length)]
   }
 
   return isEn
@@ -583,6 +787,251 @@ function SpellCard({
 }
 
 // ─── Main SpellbookPanel ──────────────────────────────────────────────────────
+function ElementPrismPanel({ selected, onSelect }: {
+  selected: ElementType
+  onSelect: (element: ElementType) => void
+}) {
+  const isEn = useSettingsStore(s => s.lang === 'en')
+  const selectedPrism = ELEMENT_PRISM[selected]
+  const center = { x: 180, y: 180 }
+  const radius = 136
+  const ringElements = ELEMENT_ORDER.filter(element => element !== selected)
+  const positions = {
+    [selected]: center,
+    ...Object.fromEntries(ringElements.map((element, index) => {
+      const angle = -Math.PI / 2 + (index / ringElements.length) * Math.PI * 2
+      return [element, { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius }]
+    })),
+  } as Record<ElementType, { x: number; y: number }>
+  const relations: { to: ElementType; kind: PrismRelationKey }[] = [
+    { to: selectedPrism.absorb, kind: 'absorb' },
+    ...selectedPrism.immuneTo.map(to => ({ to, kind: 'immune' as const })),
+    ...selectedPrism.resistTo.map(to => ({ to, kind: 'resist' as const })),
+    ...selectedPrism.weakTo.map(to => ({ to, kind: 'weak' as const })),
+  ]
+  const visibleRelations = relations.filter(rel => rel.kind !== 'absorb')
+  const relationByTarget = new Map(relations.map(rel => [rel.to, rel.kind]))
+  const relationLabel = (kind: PrismRelationKey) => isEn ? PRISM_RELATION[kind].en : PRISM_RELATION[kind].pt
+  const relationList = (elements: ElementType[]) => elements.map(element => elementLabel(element, isEn)).join(', ')
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <div className="overflow-hidden rounded-xl border border-indigo-300/30 bg-slate-950 text-slate-100 shadow-inner">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                {isEn ? 'Elemental Prism' : 'Prisma Elemental'}
+              </p>
+              <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                {isEn ? 'Select a form to inspect its reactions.' : 'Selecione uma forma para inspecionar as reacoes.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(Object.keys(PRISM_RELATION) as PrismRelationKey[]).map(kind => {
+                const rel = PRISM_RELATION[kind]
+                return (
+                  <span key={kind} className={cn('rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide', rel.border, rel.bg, rel.text)}>
+                    {rel.icon} {relationLabel(kind)}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="relative min-h-[320px]">
+              <svg viewBox="-44 -14 448 392" className="h-full min-h-[320px] w-full">
+                <defs>
+                  <radialGradient id="prism-core" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="rgba(165,180,252,0.24)" />
+                    <stop offset="60%" stopColor="rgba(99,102,241,0.08)" />
+                    <stop offset="100%" stopColor="rgba(15,23,42,0)" />
+                  </radialGradient>
+                  <filter id="prism-soft-glow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="1.45" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <filter id="prism-label-shadow" x="-25%" y="-80%" width="150%" height="240%">
+                    <feDropShadow dx="0" dy="1" stdDeviation="0.7" floodColor="#020617" floodOpacity="0.92" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="0.45" floodColor="#ffffff" floodOpacity="0.18" />
+                  </filter>
+                  <pattern id="prism-letter-grain" patternUnits="userSpaceOnUse" width="6" height="6">
+                    <path d="M0 1.5 H6 M1 5 H5" stroke="rgba(255,255,255,0.48)" strokeWidth="0.45" />
+                    <path d="M4 0 L6 2 M0 4 L2 6" stroke="rgba(2,6,23,0.5)" strokeWidth="0.35" />
+                  </pattern>
+                  {(Object.keys(PRISM_RELATION) as PrismRelationKey[]).map(kind => (
+                    <marker key={kind} id={`prism-arrow-${kind}`} markerWidth="5.4" markerHeight="5.4" refX="5" refY="2.7" orient="auto">
+                      <path d="M0,0.35 L5.4,2.7 L0,5.05 Z" fill={PRISM_RELATION[kind].color} opacity="0.82" />
+                    </marker>
+                  ))}
+                </defs>
+                <circle cx={center.x} cy={center.y} r="118" fill="url(#prism-core)" />
+                <circle cx={center.x} cy={center.y} r={radius} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="2" />
+                <circle cx={center.x} cy={center.y} r={radius - 26} fill="none" stroke="rgba(99,102,241,0.10)" strokeWidth="1" strokeDasharray="3 9" />
+                <circle cx={center.x} cy={center.y} r="9" fill="rgba(129,140,248,0.28)" stroke="rgba(199,210,254,0.58)" filter="url(#prism-soft-glow)" />
+                {ringElements.map(element => {
+                  const target = positions[element]
+                  return (
+                    <line
+                      key={`guide-${selected}-${element}`}
+                      x1={center.x}
+                      y1={center.y}
+                      x2={target.x}
+                      y2={target.y}
+                      stroke="rgba(148,163,184,0.07)"
+                      strokeWidth="1"
+                      strokeLinecap="round"
+                    />
+                  )
+                })}
+                {visibleRelations.map(({ to, kind }) => {
+                  const from = kind === 'weak' ? positions[selected] : positions[to]
+                  const target = kind === 'weak' ? positions[to] : positions[selected]
+                  const dx = target.x - from.x, dy = target.y - from.y
+                  const len = Math.max(1, Math.sqrt(dx * dx + dy * dy))
+                  const startPad = kind === 'weak' ? 27 : 22
+                  const endPad = kind === 'weak' ? 22 : 27
+                  const start = { x: from.x + (dx / len) * startPad, y: from.y + (dy / len) * startPad }
+                  const end = { x: target.x - (dx / len) * endPad, y: target.y - (dy / len) * endPad }
+                  const curve = kind === 'immune' ? 10 : kind === 'resist' ? -8 : 14
+                  const mx = (start.x + end.x) / 2 - (dy / len) * curve
+                  const my = (start.y + end.y) / 2 + (dx / len) * curve
+                  return (
+                    <path
+                      key={`${selected}-${kind}-${to}`}
+                      d={`M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`}
+                      fill="none"
+                      stroke={PRISM_RELATION[kind].color}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={kind === 'absorb' ? 2.4 : 1.55}
+                      strokeDasharray={kind === 'immune' ? '6 5' : kind === 'resist' ? '3 5' : undefined}
+                      opacity={kind === 'absorb' ? 0.8 : 0.72}
+                      filter={kind === 'absorb' ? 'url(#prism-soft-glow)' : undefined}
+                      markerEnd={`url(#prism-arrow-${kind})`}
+                    />
+                  )
+                })}
+                {[selected, ...ringElements].map(element => {
+                  const pos = positions[element]
+                  const isSelected = element === selected
+                  const relation = relationByTarget.get(element)
+                  const tone = ELEMENT_TONE[element]
+                  const stroke = relation ? PRISM_RELATION[relation].color : tone.line
+                  const label = elementLabel(element, isEn).toUpperCase()
+                  const labelDx = isSelected ? 0 : pos.x - center.x
+                  const labelDy = isSelected ? 1 : pos.y - center.y
+                  const labelLen = Math.max(1, Math.sqrt(labelDx * labelDx + labelDy * labelDy))
+                  const labelDistance = isSelected ? 47 : 31
+                  const labelX = pos.x + (labelDx / labelLen) * labelDistance
+                  const labelY = pos.y + (labelDy / labelLen) * labelDistance + 4
+                  const labelAnchor = isSelected ? 'middle' : labelDx > 45 ? 'start' : labelDx < -45 ? 'end' : 'middle'
+                  const badgeSize = isSelected ? 44 : 36
+                  const badgeOffset = ELEMENT_BADGE_VISUAL_OFFSET[element] ?? { x: 0, y: 0 }
+                  const badgeCenter = {
+                    x: pos.x + badgeOffset.x,
+                    y: pos.y - (isSelected ? 0.5 : 0.35) + badgeOffset.y,
+                  }
+                  const badgeHalf = badgeSize / 2
+                  return (
+                    <g key={element} role="button" tabIndex={0} onClick={() => onSelect(element)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(element) }} className="cursor-pointer outline-none">
+                      {isSelected && (
+                        <circle cx={badgeCenter.x} cy={badgeCenter.y} r="27" fill="none" stroke={PRISM_RELATION.absorb.color} strokeWidth="1.15" strokeDasharray="3 6" opacity="0.5" />
+                      )}
+                      <circle cx={badgeCenter.x} cy={badgeCenter.y} r={isSelected ? 25 : relation ? 20 : 19} fill={isSelected ? `${stroke}1c` : 'rgba(15,23,42,0.62)'} stroke={stroke} strokeWidth={isSelected ? 1.65 : relation ? 1.25 : 1.05} opacity={isSelected || relation ? 0.82 : 0.9} filter={isSelected || relation ? 'url(#prism-soft-glow)' : undefined} />
+                      <circle cx={badgeCenter.x} cy={badgeCenter.y} r={isSelected ? 23 : 18.2} fill="rgba(2,6,23,0.72)" stroke="rgba(255,255,255,0.08)" strokeWidth="0.9" />
+                      <foreignObject x={badgeCenter.x - badgeHalf} y={badgeCenter.y - badgeHalf} width={badgeSize} height={badgeSize}>
+                        <div
+                          className={cn('rounded-full drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]', isSelected ? 'h-11 w-11' : 'h-9 w-9')}
+                          style={elementBadgeStyle(element)}
+                        />
+                      </foreignObject>
+                      <g opacity={isSelected ? 0.98 : 0.9} filter="url(#prism-label-shadow)">
+                        <text x={labelX} y={labelY} textAnchor={labelAnchor} fontSize={isSelected ? '11' : '10'} fontWeight="900" fill="rgba(2,6,23,0.88)" stroke="rgba(2,6,23,0.88)" strokeWidth="2.1" strokeLinejoin="round">{label}</text>
+                        <text x={labelX} y={labelY} textAnchor={labelAnchor} fontSize={isSelected ? '11' : '10'} fontWeight="900" fill={isSelected ? '#e0e7ff' : tone.line}>{label}</text>
+                        <text x={labelX} y={labelY} textAnchor={labelAnchor} fontSize={isSelected ? '11' : '10'} fontWeight="900" fill="url(#prism-letter-grain)" opacity={isSelected ? 0.52 : 0.46}>{label}</text>
+                        <text x={labelX - 0.35} y={labelY - 0.35} textAnchor={labelAnchor} fontSize={isSelected ? '11' : '10'} fontWeight="900" fill="rgba(255,255,255,0.2)">{label}</text>
+                      </g>
+                      {isSelected && <text x={badgeCenter.x + 34} y={badgeCenter.y - 32} textAnchor="middle" fontSize="13" fill={PRISM_RELATION.absorb.color}>{PRISM_RELATION.absorb.icon}</text>}
+                      {relation && element !== selected && <text x={badgeCenter.x + 18} y={badgeCenter.y - 17} textAnchor="middle" fontSize="12" fill={PRISM_RELATION[relation].color}>{PRISM_RELATION[relation].icon}</text>}
+                    </g>
+                  )
+                })}
+              </svg>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+              <div className={cn('rounded-lg border px-3 py-2', ELEMENT_TONE[selected].border, ELEMENT_TONE[selected].bg)}>
+                <p className={cn('text-[11px] font-black uppercase tracking-widest', ELEMENT_TONE[selected].text)}>{elementLabel(selected, isEn)}</p>
+                <p className="mt-1 text-[10px] font-semibold leading-snug text-slate-300">
+                  {isEn ? ELEMENT_LORE[selected].en : ELEMENT_LORE[selected].pt}
+                </p>
+              </div>
+              <div className="mt-3 space-y-2">
+                {([
+                  ['absorb', [selectedPrism.absorb]],
+                  ['immune', selectedPrism.immuneTo],
+                  ['resist', selectedPrism.resistTo],
+                  ['weak', selectedPrism.weakTo],
+                ] as [PrismRelationKey, ElementType[]][]).map(([kind, elements]) => {
+                  const rel = PRISM_RELATION[kind]
+                  return (
+                    <div key={kind} className={cn('rounded-lg border px-2.5 py-2', rel.border, rel.bg)}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn('text-[9px] font-black uppercase tracking-widest', rel.text)}>{rel.icon} {relationLabel(kind)}</span>
+                        <span className="text-[9px] font-bold text-slate-400">{kind === 'absorb' ? (isEn ? 'heals' : 'cura') : kind === 'immune' ? '0%' : kind === 'resist' ? '50%' : '150%'}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] font-bold text-slate-100">{relationList(elements)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50">
+          <div className="border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{isEn ? 'Prism Table' : 'Tabela do Prisma'}</p>
+          </div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full text-left text-[10px]">
+              <thead className="sticky top-0 bg-slate-100 text-slate-500 dark:bg-slate-950 dark:text-slate-400">
+                <tr>
+                  <th className="px-2 py-2 font-black uppercase">{isEn ? 'Form' : 'Forma'}</th>
+                  <th className="px-2 py-2 font-black uppercase">{relationLabel('absorb')}</th>
+                  <th className="px-2 py-2 font-black uppercase">{relationLabel('immune')}</th>
+                  <th className="px-2 py-2 font-black uppercase">{relationLabel('resist')}</th>
+                  <th className="px-2 py-2 font-black uppercase">{isEn ? 'Weak To' : 'Fraco'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ELEMENT_ORDER.map(element => {
+                  const prism = ELEMENT_PRISM[element]
+                  const active = selected === element
+                  return (
+                    <tr key={element} onClick={() => onSelect(element)} className={cn('cursor-pointer border-t border-slate-200/80 transition-colors dark:border-slate-800', active ? 'bg-indigo-50 dark:bg-indigo-950/35' : 'hover:bg-white dark:hover:bg-slate-800/70')}>
+                      <td className="px-2 py-2"><span className={cn('inline-flex items-center gap-1.5 font-black', ELEMENT_TONE[element].text)}><ElementBadge element={element} size={22} />{elementLabel(element, isEn)}</span></td>
+                      <td className="px-2 py-2 font-semibold text-lime-600 dark:text-lime-400">{elementLabel(prism.absorb, isEn)}</td>
+                      <td className="px-2 py-2 font-semibold text-sky-600 dark:text-sky-400">{relationList(prism.immuneTo)}</td>
+                      <td className="px-2 py-2 font-semibold text-yellow-700 dark:text-yellow-300">{relationList(prism.resistTo)}</td>
+                      <td className="px-2 py-2 font-semibold text-red-600 dark:text-red-400">{relationList(prism.weakTo)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function maskedWordName(name: string, bits: number, required: number): string {
   if (bits >= required) return name
   if (bits <= 0) return '?'.repeat(name.length)
@@ -632,8 +1081,9 @@ export default function SpellbookPanel() {
 
   const wordSandRate = getWordSandPerSecond(level, partyAttributes.inteligencia, partyAttributes.sabedoria)
 
-  const [tab, setTab]           = useState<'words' | 'spells'>('words')
+  const [tab, setTab]           = useState<'words' | 'spells' | 'elements'>('words')
   const [selectedWords, setSelectedWords] = useState<string[]>([])
+  const [selectedElement, setSelectedElement] = useState<ElementType>('ignis')
   const [assigningSpell, setAssigningSpell] = useState<string | null>(null)
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const [spellQuery, setSpellQuery] = useState('')
@@ -701,7 +1151,7 @@ export default function SpellbookPanel() {
     <div>
       {/* Tabs */}
       <div className="flex gap-1 mb-3">
-        {(['words', 'spells'] as const).map(t => (
+        {(['words', 'spells', 'elements'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -712,7 +1162,11 @@ export default function SpellbookPanel() {
                 : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
             )}
           >
-            {t === 'words' ? `${tx.words} (${knownWordIds.length}/${ALL_WORDS.length})` : `${tx.spells} (${availableSpells.length})`}
+            {t === 'words'
+              ? `${tx.words} (${knownWordIds.length}/${ALL_WORDS.length})`
+              : t === 'spells'
+                ? `${tx.spells} (${availableSpells.length})`
+                : tx.elements}
           </button>
         ))}
         <span className="hidden">
@@ -890,6 +1344,10 @@ export default function SpellbookPanel() {
       )}
 
       {/* ── SPELLS TAB ───────────────────────────────────────────────────── */}
+      {tab === 'elements' && (
+        <ElementPrismPanel selected={selectedElement} onSelect={setSelectedElement} />
+      )}
+
       {tab === 'spells' && (
         <div>
           {/* Spell slots strip */}

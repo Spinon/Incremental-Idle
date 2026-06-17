@@ -1,4 +1,5 @@
 import type { DerivedStats } from './hero'
+import type { ElementType } from './element'
 
 export type SpellRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'unique'
 export type WordCategory = 'element' | 'form'
@@ -30,6 +31,10 @@ export interface SpellEffect {
   chaos?: boolean           // ±50% random variance
   // buff (additive to player derived stats for `duration` seconds)
   statAdds?: Partial<Record<keyof BuffableStat, number>>
+  /** Converts the caster's physical attacks into this elemental damage while active. */
+  attackElement?: ElementType
+  /** Turns the target into this elemental form while active. */
+  elementalForm?: ElementType
   duration?: number
   // debuff (direct multipliers on enemy unit)
   enemyAtkMult?: number
@@ -38,6 +43,9 @@ export interface SpellEffect {
   // out-of-combat tile actions
   tileAction?: 'create' | 'refresh'   // create = add tiles to deck; refresh = replace deck
   tileCount?:  number                  // how many tiles to create (default 2)
+  // out-of-combat movement actions
+  mapAction?: 'teleportExplored' | 'teleportBlueTower'
+  teleportRadius?: number
 }
 
 export interface Spell {
@@ -55,7 +63,9 @@ export interface Spell {
 // Runtime active buff on the player
 export interface ActiveBuff {
   spellId: string
-  statAdds: Partial<Record<keyof BuffableStat, number>>
+  statAdds?: Partial<Record<keyof BuffableStat, number>>
+  attackElement?: ElementType
+  elementalForm?: ElementType
   remaining: number
   durationUnit?: 'turn' | 'battle'
 }

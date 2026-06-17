@@ -89,6 +89,51 @@ export const CATEGORY_RES: Record<ElementCategory, 'resIgnea' | 'resGlacial' | '
   pure:    null,   // unresisted
 }
 
+// ─── Elemental prism ─────────────────────────────────────────────────────────
+// Used by Reformare-style effects that turn a unit into an elemental form.
+// Incoming damage of the same element is absorbed as healing; related elements
+// may be ignored or resisted; opposed elements become weaknesses.
+
+export interface ElementPrismEntry {
+  absorb: ElementType
+  immuneTo: ElementType[]
+  resistTo: ElementType[]
+  weakTo: ElementType[]
+}
+
+export type ElementPrismReaction = 'absorb' | 'immune' | 'resist' | 'weak' | 'neutral'
+
+export const ELEMENT_PRISM: Record<ElementType, ElementPrismEntry> = {
+  ignis:   { absorb: 'ignis',   immuneTo: ['caelum'],  resistTo: ['lux', 'toxicum'],      weakTo: ['glacies', 'abyssus'] },
+  glacies: { absorb: 'glacies', immuneTo: ['tempus'],  resistTo: ['fulgur', 'abyssus'],   weakTo: ['ignis', 'mortis'] },
+  fulgur:  { absorb: 'fulgur',  immuneTo: ['tempus'],  resistTo: ['glacies', 'caelum'],   weakTo: ['abyssus', 'ignis'] },
+  umbra:   { absorb: 'umbra',   immuneTo: ['mortis'],  resistTo: ['abyssus', 'tempus'],   weakTo: ['lux', 'caelum'] },
+  lux:     { absorb: 'lux',     immuneTo: ['caelum'],  resistTo: ['eternum', 'vitae'],    weakTo: ['umbra', 'toxicum'] },
+  toxicum: { absorb: 'toxicum', immuneTo: ['vitae'],   resistTo: ['mortis', 'umbra'],     weakTo: ['lux', 'ignis'] },
+  mortis:  { absorb: 'mortis',  immuneTo: ['umbra'],   resistTo: ['toxicum', 'abyssus'],  weakTo: ['vitae', 'caelum'] },
+  vitae:   { absorb: 'vitae',   immuneTo: ['toxicum'], resistTo: ['lux', 'caelum'],       weakTo: ['mortis', 'abyssus'] },
+  caelum:  { absorb: 'caelum',  immuneTo: ['lux'],     resistTo: ['ignis', 'eternum'],    weakTo: ['abyssus', 'umbra'] },
+  abyssus: { absorb: 'abyssus', immuneTo: ['umbra'],   resistTo: ['mortis', 'glacies'],   weakTo: ['fulgur', 'caelum'] },
+  eternum: { absorb: 'eternum', immuneTo: ['lux'],     resistTo: ['caelum', 'vitae'],     weakTo: ['tempus', 'mortis'] },
+  tempus:  { absorb: 'tempus',  immuneTo: ['glacies'], resistTo: ['fulgur', 'abyssus'],   weakTo: ['eternum', 'vitae'] },
+}
+
+export function elementalPrismReaction(form: ElementType, incoming: ElementType): ElementPrismReaction {
+  const prism = ELEMENT_PRISM[form]
+  if (incoming === prism.absorb) return 'absorb'
+  if (prism.immuneTo.includes(incoming)) return 'immune'
+  if (prism.resistTo.includes(incoming)) return 'resist'
+  if (prism.weakTo.includes(incoming)) return 'weak'
+  return 'neutral'
+}
+
+export function elementalPrismMultiplier(reaction: ElementPrismReaction): number {
+  if (reaction === 'absorb' || reaction === 'immune') return 0
+  if (reaction === 'resist') return 0.5
+  if (reaction === 'weak') return 1.5
+  return 1
+}
+
 // ─── Default status config per element ───────────────────────────────────────
 
 interface StatusConfig {

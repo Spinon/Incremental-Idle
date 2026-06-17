@@ -5,12 +5,12 @@ import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
-import { wordPrice, wordSandPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
+import { wordSandPrice, wordBitPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
 import { getDerivedStats } from '../formulas/derived'
-import { DROP_WORDS, WORD_MAP } from '../data/words'
+import { WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
-import type { Item, Consumable, ItemRarity, ItemStats, MarketOffer, WordOffer, WordSandOffer } from '../types/item'
+import type { Item, Consumable, ItemRarity, ItemStats, MarketOffer, WordOffer, WordSandOffer, WordBitOffer } from '../types/item'
 
 // ─── Rarity colours (minimal palette) ────────────────────────────────────────
 
@@ -203,6 +203,7 @@ export default function MarketInterior() {
   const addConsumable  = useInventoryStore(s => s.addConsumable)
 
   const addWordSand   = useSpellStore(s => s.addWordSand)
+  const grantRandomWordBits = useSpellStore(s => s.grantRandomWordBits)
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
   const heroLevel     = useHeroStore(s => s.level)
   const heroAttrs     = useHeroStore(s => s.attributes)
@@ -222,30 +223,16 @@ export default function MarketInterior() {
   const [offer] = useState<MarketOffer>(() => {
     if (savedOffer) return savedOffer
     // First visit: generate at the tile's level (items scale with tile difficulty)
-    const knownIds = new Set(getKnownWordIds(
-      heroLevel, heroAttrs.inteligencia, heroAttrs.sabedoria, earnedWordIds,
-    ))
-    const availableWords = DROP_WORDS.filter(w => {
-      if (knownIds.has(w.id)) return false
-      if (w.rarity === 'unique' && tilesPlaced < 80) return false
-      if (w.rarity === 'epic'   && tilesPlaced < 60) return false
-      if (w.rarity === 'rare'   && tilesPlaced < 40) return false
-      return true
-    })
     // Fisher-Yates pick — sort(() => Math.random() - 0.5) is a biased shuffle
-    const pool = [...availableWords]
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[pool[i], pool[j]] = [pool[j], pool[i]]
-    }
-    const wordOffersList = pool
-      .slice(0, 2)
-      .map(w => ({ wordId: w.id, price: wordPrice(w.rarity as 'rare' | 'epic' | 'unique', tileLevel) }))
+    const sandAmount = Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6)
+    const bitAmount = Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90)))
 
     return {
       consumables: [generateConsumable(tileLevel), generateConsumable(tileLevel)],
       equipment:   [generateItem(tileLevel, true),  generateItem(tileLevel, true)],
-      words:       wordOffersList,
+      words:       [],
+      wordSand:    [{ id: `ws_${marketKey}`, amount: sandAmount, price: wordSandPrice(sandAmount, tileLevel) }],
+      wordBits:    [{ id: `wb_${marketKey}`, amount: bitAmount, price: wordBitPrice(bitAmount, tileLevel) }],
     }
   })
 
@@ -259,8 +246,12 @@ export default function MarketInterior() {
     amount: Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6),
     price: wordSandPrice(Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6), tileLevel),
   }]
+  const wordBitOffers: WordBitOffer[] = offer.wordBits ?? [{
+    id: `wb_${marketKey}`,
+    amount: Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90))),
+    price: wordBitPrice(Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90))), tileLevel),
+  }]
   const wordOffers: WordOffer[] = []
-
   // Track what was bought from this persisted market tile.
   const [bought, setBought]   = useState<Set<string>>(() => new Set(savedOffer?.boughtIds ?? []))
   const [soldGold, setSoldGold] = useState(0)
@@ -336,6 +327,14 @@ export default function MarketInterior() {
     if (bought.has(wo.id)) return
     if (!spendGold(eff(wo.price))) return
     addWordSand(wo.amount)
+    markBought(wo.id)
+  }
+
+  function buyWordBits(wo: WordBitOffer) {
+    pauseSceneAuto()
+    if (bought.has(wo.id)) return
+    if (!spendGold(eff(wo.price))) return
+    grantRandomWordBits(wo.amount)
     markBought(wo.id)
   }
 
@@ -536,13 +535,13 @@ export default function MarketInterior() {
           </div>
         </div>
 
-        {/* Word Sand */}
-        {wordSandOffers.length > 0 && (
+        {/* Arcane resources */}
+        {(wordSandOffers.length > 0 || wordBitOffers.length > 0) && (
           <>
             <div className="h-px bg-indigo-900/40" />
             <div>
               <p className="text-[9px] text-indigo-400/60 uppercase tracking-widest font-semibold mb-2">
-                {isEn ? 'Word Sand' : 'Areia de Palavra'}
+                {isEn ? 'Arcane Resources' : 'Recursos Arcanos'}
               </p>
               <div className="flex flex-col gap-2">
                 {wordSandOffers.map(wo => {
@@ -577,6 +576,54 @@ export default function MarketInterior() {
                         </span>
                         <button
                           onClick={() => buyWordSand(wo)}
+                          disabled={isBought || !canAfford}
+                          className={cn(
+                            'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors',
+                            isBought
+                              ? 'opacity-40 cursor-not-allowed bg-green-900/20 border-green-800/30 text-green-500'
+                              : canAfford
+                                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500'
+                                : 'opacity-30 cursor-not-allowed bg-indigo-900/30 border-indigo-800/30 text-indigo-500',
+                          )}
+                        >
+                          {isBought ? (isEn ? 'Bought' : 'Comprado') : (isEn ? 'Buy' : 'Comprar')}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                {wordBitOffers.map(wo => {
+                  const isBought = bought.has(wo.id)
+                  const canAfford = gold >= eff(wo.price)
+                  return (
+                    <div
+                      key={wo.id}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors bg-indigo-950/40',
+                        isBought ? 'border-green-800/40 opacity-60' : 'border-violet-500/40',
+                      )}
+                    >
+                      <span className="text-xl font-black text-violet-300 shrink-0">WB</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[12px] font-bold text-violet-300">+{wo.amount} WB</span>
+                          <span className="text-[8px] font-semibold uppercase tracking-widest text-violet-500/80">
+                            {isEn ? 'word progress' : 'progresso de palavra'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-indigo-400/60 mt-0.5">
+                          {isEn
+                            ? 'Grants random word bits immediately; completed words are learned.'
+                            : 'Concede pedacos de palavra aleatorios imediatamente; palavras completas sao aprendidas.'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">
+                          â¬¡ {eff(wo.price)}
+                          {eff(wo.price) < wo.price && <span className="text-[9px] text-emerald-400 ml-0.5 line-through opacity-60">{wo.price}</span>}
+                        </span>
+                        <button
+                          onClick={() => buyWordBits(wo)}
                           disabled={isBought || !canAfford}
                           className={cn(
                             'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors',

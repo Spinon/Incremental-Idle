@@ -253,7 +253,7 @@ export const useSpellStore = create<SpellStore>()(
       if (heal > 0) battleStore.healPlayer(heal)
 
       // ── Elemental status application ──────────────────────────────────
-      if (spellElement && effect.type !== 'fizzle') {
+      if (spellElement && effect.type !== 'fizzle' && !effect.attackElement && !effect.elementalForm) {
         const cfg = ELEMENT_DEFAULT_STATUS[spellElement]
         const chance = cfg.chance
         if (Math.random() < chance) {
@@ -279,6 +279,13 @@ export const useSpellStore = create<SpellStore>()(
       // Restore any previous debuff BEFORE capturing savedAtk — otherwise a
       // chained debuff records the already-debuffed value as "original" and
       // the enemy never recovers its true stats.
+      if (effect.mapAction === 'teleportExplored' || effect.mapAction === 'teleportBlueTower') {
+        useMapStore.getState().teleportBySpell(
+          effect.teleportRadius ?? 4,
+          effect.mapAction === 'teleportBlueTower' ? 'blueTower' : 'explored',
+        )
+      }
+
       if (shouldDebuff) {
         const prev = get().activeDebuff
         if (prev) useBattleStore.getState().restoreEnemyStats(prev.savedAtk, prev.savedAtkSpeed)
@@ -300,17 +307,23 @@ export const useSpellStore = create<SpellStore>()(
         st.cooldowns[spellId] = effectiveCooldown
 
         // Buff / utility side-effects
-        if (effect.statAdds && effect.duration) {
+        if ((effect.statAdds || effect.attackElement || effect.elementalForm) && effect.duration) {
           // Combat buffs are clamped to the cooldown (no 100% uptime), but
           // utility/exploration buffs are designed to outlast it — their data
           // durations (40-100 turns) and descriptions assume no clamp.
           const effectiveDuration = effect.type === 'utility'
             ? effect.duration
             : Math.min(effect.duration, effectiveCooldown)
-          st.activeBuffs = st.activeBuffs.filter(b => b.spellId !== spellId)
+          st.activeBuffs = st.activeBuffs.filter(b =>
+            b.spellId !== spellId &&
+            !(effect.attackElement && b.attackElement) &&
+            !(effect.elementalForm && b.elementalForm)
+          )
           st.activeBuffs.push({
             spellId,
             statAdds: effect.statAdds,
+            attackElement: effect.attackElement,
+            elementalForm: effect.elementalForm,
             remaining: effectiveDuration,
           })
         }

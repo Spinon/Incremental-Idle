@@ -3,6 +3,51 @@ import { WORD_MAP } from './words'
 
 // ─── Element / form icons (keyed by spell ID) ─────────────────────────────────
 export const SPELL_ICONS: Record<string, string> = {
+  ignis_reformare:   '🔥',
+  glacies_reformare: '❄',
+  fulgur_reformare:  '⚡',
+  umbra_reformare:   '◐',
+  lux_reformare:     '✦',
+  toxicum_reformare: '☣',
+  mortis_reformare:  '☠',
+  vitae_reformare:   '✚',
+  caelum_reformare:  '★',
+  abyssus_reformare: '◉',
+  eternum_reformare: '∞',
+  tempus_reformare:  '⌛',
+  ignis_mutare:   '🔥',
+  glacies_mutare: '❄',
+  fulgur_mutare:  '⚡',
+  umbra_mutare:   '◐',
+  lux_mutare:     '✦',
+  toxicum_mutare: '☣',
+  mortis_mutare:  '☠',
+  vitae_mutare:   '✚',
+  caelum_mutare:  '★',
+  abyssus_mutare: '◉',
+  eternum_mutare: '∞',
+  tempus_mutare:  '⌛',
+  // batch 3
+  toxicum_mortis: '☣',
+  arcanum_fulgur: '⚡',
+  abyssus_vortex: '◎',
+  chaos_fulgur:   '◇',
+  mortis_pluvia:  '☠',
+  vitae_arcanum:  '✚',
+  caelum_manus:   '✦',
+  eternum_manus:  '∞',
+  fulgur_scutum:  'ϟ',
+  arcanum_scutum: '✧',
+  chaos_aura:     '◈',
+  fortis_manus:   '◆',
+  umbra_pluvia:   '◐',
+  tempus_pluvia:  '⌛',
+  abyssus_scutum: '◉',
+  mortis_unda:    '☠',
+  tempus_lux:     '↯',
+  arcanum_unda:   '≋',
+  tempus_fortis:  '⏩',
+  chaos_vortex:   '◌',
   // damage
   ignis_sagitta:  '🔥',
   fulgur_sagitta: '⚡',
@@ -98,7 +143,7 @@ export const SPELL_ICONS: Record<string, string> = {
   eternum_lux:    '☀',
 }
 
-// 36 spells — all valid word combinations, grouped by effect type.
+// Curated spells grouped by effect type.
 // Rarity = highest rarity of the two words combined.
 // cooldown / duration / debuffDuration are in BATTLE TURNS.
 export const ALL_SPELLS: Spell[] = [
@@ -785,6 +830,344 @@ export const ALL_SPELLS: Spell[] = [
     effect: { type: 'debuff', enemyAtkMult: 0.75, enemyAtkSpeedMult: 0.75, debuffDuration: 8 },
     description: 'Aura de sombras drena as forças do inimigo de forma persistente por 8 turnos.',
   },
+  // BATCH 3 - mais combinacoes reais em todas as categorias
+
+  // DAMAGE
+  {
+    id: 'toxicum_mortis', name: 'Peste Mortal',
+    word1Id: 'toxicum', word2Id: 'mortis', rarity: 'rare',
+    manaCost: 42, cooldown: 9,
+    effect: {
+      type: 'damage', base: 30, scaling: 3.7, scalingStat: 'magicDamage',
+      enemyAtkMult: 0.78, debuffDuration: 5,
+    },
+    description: 'Veneno e morte se unem em uma praga corrosiva.',
+  },
+  {
+    id: 'arcanum_fulgur', name: 'Raio Arcano',
+    word1Id: 'arcanum', word2Id: 'fulgur', rarity: 'rare',
+    manaCost: 40, cooldown: 8,
+    effect: { type: 'damage', base: 27, scaling: 3.4, scalingStat: 'magicDamage' },
+    description: 'Energia arcana conduzida por relampagos concentrados.',
+  },
+  {
+    id: 'abyssus_vortex', name: 'Espiral Abissal',
+    word1Id: 'abyssus', word2Id: 'vortex', rarity: 'epic',
+    manaCost: 64, cooldown: 14,
+    effect: {
+      type: 'damage', base: 52, scaling: 5.8, scalingStat: 'magicDamage',
+      enemyAtkSpeedMult: 0.62, debuffDuration: 6,
+    },
+    description: 'Um redemoinho profundo puxa o inimigo para baixo.',
+  },
+  {
+    id: 'chaos_fulgur', name: 'Relampago Caotico',
+    word1Id: 'chaos', word2Id: 'fulgur', rarity: 'unique',
+    manaCost: 58, cooldown: 13,
+    effect: { type: 'damage', base: 48, scaling: 5.2, scalingStat: 'magicDamage', chaos: true },
+    description: 'Descarga instavel que salta entre possibilidades.',
+  },
+  {
+    id: 'mortis_pluvia', name: 'Chuva Funebre',
+    word1Id: 'mortis', word2Id: 'pluvia', rarity: 'rare',
+    manaCost: 45, cooldown: 10,
+    effect: { type: 'damage', base: 34, scaling: 3.9, scalingStat: 'magicDamage', lifesteal: 0.35 },
+    description: 'Gotas frias roubam calor vital a cada impacto.',
+  },
+
+  // HEAL
+  {
+    id: 'vitae_arcanum', name: 'Selo Restaurador',
+    word1Id: 'vitae', word2Id: 'arcanum', rarity: 'rare',
+    manaCost: 42, cooldown: 10,
+    effect: {
+      type: 'heal', base: 30, scaling: 3.8, scalingStat: 'magicDamage',
+      statAdds: { magicDamage: 6 }, duration: 7,
+    },
+    description: 'Runas de vida restauram o corpo e reacendem a mente.',
+  },
+  {
+    id: 'caelum_manus', name: 'Mao Celestial',
+    word1Id: 'caelum', word2Id: 'manus', rarity: 'epic',
+    manaCost: 55, cooldown: 13,
+    effect: {
+      type: 'heal', base: 48, scaling: 5.6, scalingStat: 'magicDamage',
+      statAdds: { def: 12 }, duration: 6,
+    },
+    description: 'Uma mao de luz desce das alturas e sela ferimentos.',
+  },
+  {
+    id: 'eternum_manus', name: 'Toque Eterno',
+    word1Id: 'eternum', word2Id: 'manus', rarity: 'unique',
+    manaCost: 76, cooldown: 18,
+    effect: {
+      type: 'heal', base: 72, scaling: 8.5, scalingStat: 'magicDamage',
+      statAdds: { healBonus: 0.25 }, duration: 8,
+    },
+    description: 'Um toque impossivel puxa vitalidade de fora do tempo.',
+  },
+
+  // BUFF
+  {
+    id: 'fulgur_scutum', name: 'Escudo Eletrico',
+    word1Id: 'fulgur', word2Id: 'scutum', rarity: 'common',
+    manaCost: 18, cooldown: 7,
+    effect: { type: 'buff', statAdds: { attackSpeed: 0.22, dodgeChance: 0.03 }, duration: 7 },
+    description: 'Faixas eletricas circulam como defesa viva.',
+  },
+  {
+    id: 'arcanum_scutum', name: 'Barreira Arcana',
+    word1Id: 'arcanum', word2Id: 'scutum', rarity: 'rare',
+    manaCost: 36, cooldown: 11,
+    effect: { type: 'buff', statAdds: { def: 14, magicDamage: 10 }, duration: 8 },
+    description: 'Uma barreira de sigilos amplifica defesa e foco.',
+  },
+  {
+    id: 'chaos_aura', name: 'Aura do Caos',
+    word1Id: 'chaos', word2Id: 'aura', rarity: 'unique',
+    manaCost: 62, cooldown: 16,
+    effect: { type: 'buff', statAdds: { critChance: 0.12, critDamage: 0.45, dodgeChance: 0.08 }, duration: 8 },
+    description: 'A sorte se quebra em volta do corpo por alguns instantes.',
+  },
+  {
+    id: 'fortis_manus', name: 'Punho Fortificado',
+    word1Id: 'fortis', word2Id: 'manus', rarity: 'epic',
+    manaCost: 44, cooldown: 12,
+    effect: { type: 'buff', statAdds: { atk: 18, critChance: 0.06 }, duration: 8 },
+    description: 'Forca condensada envolve as maos do heroi.',
+  },
+
+  // DEBUFF
+  {
+    id: 'umbra_pluvia', name: 'Chuva Sombria',
+    word1Id: 'umbra', word2Id: 'pluvia', rarity: 'uncommon',
+    manaCost: 27, cooldown: 8,
+    effect: { type: 'debuff', enemyAtkMult: 0.68, debuffDuration: 6 },
+    description: 'Sombras caem em gotas pesadas sobre o inimigo.',
+  },
+  {
+    id: 'tempus_pluvia', name: 'Chuva Lenta',
+    word1Id: 'tempus', word2Id: 'pluvia', rarity: 'rare',
+    manaCost: 38, cooldown: 11,
+    effect: { type: 'debuff', enemyAtkSpeedMult: 0.42, debuffDuration: 7 },
+    description: 'Cada gota atrasa um fragmento do movimento inimigo.',
+  },
+  {
+    id: 'abyssus_scutum', name: 'Pressao Abissal',
+    word1Id: 'abyssus', word2Id: 'scutum', rarity: 'epic',
+    manaCost: 52, cooldown: 13,
+    effect: { type: 'debuff', enemyAtkMult: 0.55, enemyAtkSpeedMult: 0.70, debuffDuration: 7 },
+    description: 'Uma parede invisivel comprime a ofensiva inimiga.',
+  },
+  {
+    id: 'mortis_unda', name: 'Onda Sepulcral',
+    word1Id: 'mortis', word2Id: 'unda', rarity: 'rare',
+    manaCost: 40, cooldown: 10,
+    effect: { type: 'debuff', enemyAtkMult: 0.62, enemyAtkSpeedMult: 0.78, debuffDuration: 6 },
+    description: 'Uma onda fria enfraquece tudo que toca.',
+  },
+
+  // UTILITY - movimento, teleporte e manipulacao de rota
+  {
+    id: 'tempus_lux', name: 'Teleporte Luminoso',
+    word1Id: 'tempus', word2Id: 'lux', rarity: 'rare',
+    manaCost: 34, cooldown: 18,
+    effect: { type: 'utility', mapAction: 'teleportExplored', teleportRadius: 4 },
+    description: 'Um clarao dobra o caminho ate um ponto conhecido proximo.',
+  },
+  {
+    id: 'arcanum_unda', name: 'Passagem Arcana',
+    word1Id: 'arcanum', word2Id: 'unda', rarity: 'rare',
+    manaCost: 32, cooldown: 28,
+    effect: { type: 'utility', mapAction: 'teleportExplored', teleportRadius: 8 },
+    description: 'Uma corrente de sigilos abre passagem ate um ponto conhecido distante.',
+  },
+  {
+    id: 'tempus_fortis', name: 'Salto Temporal',
+    word1Id: 'tempus', word2Id: 'fortis', rarity: 'epic',
+    manaCost: 48, cooldown: 40,
+    effect: { type: 'utility', mapAction: 'teleportBlueTower', teleportRadius: 12 },
+    description: 'Forca temporal comprime o caminho ate uma torre azul conhecida.',
+  },
+  {
+    id: 'chaos_vortex', name: 'Dobra Instavel',
+    word1Id: 'chaos', word2Id: 'vortex', rarity: 'unique',
+    manaCost: 58, cooldown: 45,
+    effect: { type: 'utility', tileAction: 'refresh', tileCount: 6, statAdds: { moveSpeed: 0.55 }, duration: 30 },
+    description: 'Um vortice caotico dobra o percurso e reorganiza possibilidades.',
+  },
+
+  // MUTARE - converte ataques fisicos do player em dano elemental
+  {
+    id: 'ignis_mutare', name: 'Mutacao Ignea',
+    word1Id: 'ignis', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 28, cooldown: 14,
+    effect: { type: 'buff', attackElement: 'ignis', duration: 7 },
+    description: 'O selo transmuta o golpe em chamas vivas.',
+  },
+  {
+    id: 'glacies_mutare', name: 'Mutacao Glacial',
+    word1Id: 'glacies', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 28, cooldown: 14,
+    effect: { type: 'buff', attackElement: 'glacies', duration: 7 },
+    description: 'O selo transmuta o golpe em frio cristalino.',
+  },
+  {
+    id: 'fulgur_mutare', name: 'Mutacao Eletrica',
+    word1Id: 'fulgur', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 30, cooldown: 14,
+    effect: { type: 'buff', attackElement: 'fulgur', duration: 7 },
+    description: 'O selo transmuta o golpe em relampago concentrado.',
+  },
+  {
+    id: 'umbra_mutare', name: 'Mutacao Sombria',
+    word1Id: 'umbra', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 32, cooldown: 15,
+    effect: { type: 'buff', attackElement: 'umbra', duration: 7 },
+    description: 'O selo transmuta o golpe em sombra liquida.',
+  },
+  {
+    id: 'lux_mutare', name: 'Mutacao Luminosa',
+    word1Id: 'lux', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 32, cooldown: 15,
+    effect: { type: 'buff', attackElement: 'lux', duration: 7 },
+    description: 'O selo transmuta o golpe em luz pura.',
+  },
+  {
+    id: 'toxicum_mutare', name: 'Mutacao Venenosa',
+    word1Id: 'toxicum', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 32, cooldown: 15,
+    effect: { type: 'buff', attackElement: 'toxicum', duration: 7 },
+    description: 'O selo transmuta o golpe em veneno arcano.',
+  },
+  {
+    id: 'mortis_mutare', name: 'Mutacao Mortal',
+    word1Id: 'mortis', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 36, cooldown: 16,
+    effect: { type: 'buff', attackElement: 'mortis', duration: 7 },
+    description: 'O selo transmuta o golpe em energia funebre.',
+  },
+  {
+    id: 'vitae_mutare', name: 'Mutacao Vital',
+    word1Id: 'vitae', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 34, cooldown: 16,
+    effect: { type: 'buff', attackElement: 'vitae', duration: 7 },
+    description: 'O selo transmuta o golpe em energia vital.',
+  },
+  {
+    id: 'caelum_mutare', name: 'Mutacao Celestial',
+    word1Id: 'caelum', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 40, cooldown: 17,
+    effect: { type: 'buff', attackElement: 'caelum', duration: 7 },
+    description: 'O selo transmuta o golpe em brilho celeste.',
+  },
+  {
+    id: 'abyssus_mutare', name: 'Mutacao Abissal',
+    word1Id: 'abyssus', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 40, cooldown: 17,
+    effect: { type: 'buff', attackElement: 'abyssus', duration: 7 },
+    description: 'O selo transmuta o golpe em escuridao abissal.',
+  },
+  {
+    id: 'eternum_mutare', name: 'Mutacao Eterna',
+    word1Id: 'eternum', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 48, cooldown: 18,
+    effect: { type: 'buff', attackElement: 'eternum', duration: 7 },
+    description: 'O selo transmuta o golpe em luz eterna.',
+  },
+  {
+    id: 'tempus_mutare', name: 'Mutacao Temporal',
+    word1Id: 'tempus', word2Id: 'mutare', rarity: 'unique',
+    manaCost: 38, cooldown: 16,
+    effect: { type: 'buff', attackElement: 'tempus', duration: 7 },
+    description: 'O selo transmuta o golpe em ecos temporais.',
+  },
+
+  // REFORMARE - transforma o player em uma forma elemental defensiva
+  {
+    id: 'ignis_reformare', name: 'Forma Ignea',
+    word1Id: 'ignis', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 34, cooldown: 18,
+    effect: { type: 'buff', elementalForm: 'ignis', duration: 6 },
+    description: 'O corpo assume a natureza de chamas vivas.',
+  },
+  {
+    id: 'glacies_reformare', name: 'Forma Glacial',
+    word1Id: 'glacies', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 34, cooldown: 18,
+    effect: { type: 'buff', elementalForm: 'glacies', duration: 6 },
+    description: 'O corpo assume a natureza de cristais de gelo.',
+  },
+  {
+    id: 'fulgur_reformare', name: 'Forma Eletrica',
+    word1Id: 'fulgur', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 36, cooldown: 18,
+    effect: { type: 'buff', elementalForm: 'fulgur', duration: 6 },
+    description: 'O corpo assume a natureza de arcos eletricos.',
+  },
+  {
+    id: 'umbra_reformare', name: 'Forma Sombria',
+    word1Id: 'umbra', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 38, cooldown: 19,
+    effect: { type: 'buff', elementalForm: 'umbra', duration: 6 },
+    description: 'O corpo assume a natureza de sombras liquidas.',
+  },
+  {
+    id: 'lux_reformare', name: 'Forma Luminosa',
+    word1Id: 'lux', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 38, cooldown: 19,
+    effect: { type: 'buff', elementalForm: 'lux', duration: 6 },
+    description: 'O corpo assume a natureza de luz pura.',
+  },
+  {
+    id: 'toxicum_reformare', name: 'Forma Venenosa',
+    word1Id: 'toxicum', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 38, cooldown: 19,
+    effect: { type: 'buff', elementalForm: 'toxicum', duration: 6 },
+    description: 'O corpo assume a natureza de nevoa venenosa.',
+  },
+  {
+    id: 'mortis_reformare', name: 'Forma Mortal',
+    word1Id: 'mortis', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 42, cooldown: 20,
+    effect: { type: 'buff', elementalForm: 'mortis', duration: 6 },
+    description: 'O corpo assume a natureza de cinzas frias.',
+  },
+  {
+    id: 'vitae_reformare', name: 'Forma Vital',
+    word1Id: 'vitae', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 40, cooldown: 20,
+    effect: { type: 'buff', elementalForm: 'vitae', duration: 6 },
+    description: 'O corpo assume a natureza de luz verdejante.',
+  },
+  {
+    id: 'caelum_reformare', name: 'Forma Celestial',
+    word1Id: 'caelum', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 46, cooldown: 21,
+    effect: { type: 'buff', elementalForm: 'caelum', duration: 6 },
+    description: 'O corpo assume a natureza de brilho celeste.',
+  },
+  {
+    id: 'abyssus_reformare', name: 'Forma Abissal',
+    word1Id: 'abyssus', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 46, cooldown: 21,
+    effect: { type: 'buff', elementalForm: 'abyssus', duration: 6 },
+    description: 'O corpo assume a natureza de escuridao abissal.',
+  },
+  {
+    id: 'eternum_reformare', name: 'Forma Eterna',
+    word1Id: 'eternum', word2Id: 'reformare', rarity: 'unique',
+    manaCost: 54, cooldown: 22,
+    effect: { type: 'buff', elementalForm: 'eternum', duration: 6 },
+    description: 'O corpo assume a natureza de luz eterna.',
+  },
+  {
+    id: 'tempus_reformare', name: 'Forma Temporal',
+    word1Id: 'tempus', word2Id: 'reformare', rarity: 'epic',
+    manaCost: 44, cooldown: 20,
+    effect: { type: 'buff', elementalForm: 'tempus', duration: 6 },
+    description: 'O corpo assume a natureza de ecos temporais.',
+  },
 ]
 
 export function arcaneSpellName(wordId1: string, wordId2: string): string {
@@ -806,7 +1189,7 @@ export const WORD_ICONS: Record<string, string> = {
   mortis:  '☠️', caelum:  '✨', abyssus: '🌀', eternum: '♾️',
   sagitta: '🏹', manus:   '🤚', scutum:  '🛡️', unda:    '🌊',
   aura:    '🌟', pluvia:  '🌧️', vortex:  '🌪️', arcanum: '📜',
-  fortis:  '💪', chaos:   '🎲',
+  fortis:  '💪', reformare: '◈', chaos:   '🎲', mutare:  '✧',
 }
 
 // ─── Fallback spell generator ─────────────────────────────────────────────────

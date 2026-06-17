@@ -829,7 +829,11 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
               {activeBuffs.map(b => {
                 const spell = SPELL_MAP.get(b.spellId)
                 const icon  = SPELL_ICONS[b.spellId] ?? WORD_ICONS[spell?.word1Id ?? ''] ?? '▲'
-                const details = Object.entries(b.statAdds ?? {}).map(([k, v]) => formatBuffValue(k, v)).join(' ')
+                const details = [
+                  ...Object.entries(b.statAdds ?? {}).map(([k, v]) => formatBuffValue(k, v)),
+                  ...(b.attackElement ? [isEn ? `Attack: ${b.attackElement}` : `Ataque: ${b.attackElement}`] : []),
+                  ...(b.elementalForm ? [isEn ? `Form: ${b.elementalForm}` : `Forma: ${b.elementalForm}`] : []),
+                ].join(' ')
                 const label = abbreviateSpellName(spell?.name ?? b.spellId)
                 const isBattleBuff = b.durationUnit === 'battle'
                 const remainingUnit = isBattleBuff ? 'c' : 't'
