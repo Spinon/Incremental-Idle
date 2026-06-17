@@ -816,7 +816,7 @@ function ElementPrismPanel({ selected, onSelect }: {
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+      <div className="grid gap-3">
         <div className="overflow-hidden rounded-xl border border-indigo-300/30 bg-slate-950 text-slate-100 shadow-inner">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
             <div>
