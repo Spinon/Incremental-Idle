@@ -4,6 +4,9 @@ import type {
 } from '../types/quest'
 import { FOREST_MONSTERS, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import type { MonsterRarity } from '../types/monster'
+import type { Item, Consumable } from '../types/item'
+import { generateItem, generateConsumable } from './items'
+import { xpForLevel } from '../store/heroStore'
 
 // ── Name tables ───────────────────────────────────────────────────────────────
 
@@ -86,12 +89,56 @@ export const DIFFICULTY_COLOR: Record<QuestDifficulty, string> = {
   hard:   'text-red-500',
 }
 
-function baseRewards(tileLevel: number, difficulty: QuestDifficulty): QuestRewards {
-  const mult = DIFFICULTY_MULT[difficulty]
-  return {
-    xp:   Math.round((20 + tileLevel * 15) * mult * (0.8 + Math.random() * 0.4)),
-    gold: Math.round((25 + tileLevel * 10) * mult * (0.8 + Math.random() * 0.4)),
-  }
+// ── Reward tuning ───────────────────────────────────────────────────────────
+// Quest XP is anchored to the hero level curve (xpForLevel) so it stays
+// meaningful as the curve changes: an easy quest ≈ 10 % of a level at its
+// tile level, a hard bounty ≈ 75 %. Gold, Word Sand, Word Bits, equipment and
+// consumables are layered on so completing quests is worth the detour.
+const XP_FRACTION:        Record<QuestDifficulty, number> = { easy: 0.10, medium: 0.25, hard: 0.50 }
+const BOUNTY_XP_FRACTION: Record<QuestDifficulty, number> = { easy: 0.18, medium: 0.40, hard: 0.75 }
+const SAND_MULT:          Record<QuestDifficulty, number> = { easy: 1,    medium: 2,    hard: 3.5  }
+const WORD_BITS:          Record<QuestDifficulty, number> = { easy: 0,    medium: 1,    hard: 2    }
+const ITEM_CHANCE:        Record<QuestDifficulty, number> = { easy: 0.25, medium: 0.60, hard: 1    }
+const CONSUMABLE_CHANCE:  Record<QuestDifficulty, number> = { easy: 0.35, medium: 0.70, hard: 1    }
+
+/** ±15 % variance applied to every numeric reward. */
+function rewardVariance(): number {
+  return 0.85 + Math.random() * 0.3
+}
+
+function rollQuestRewards(tileLevel: number, difficulty: QuestDifficulty, bounty = false): QuestRewards {
+  const lvl = Math.max(1, tileLevel)
+
+  const xpFrac = (bounty ? BOUNTY_XP_FRACTION : XP_FRACTION)[difficulty]
+  const xp = Math.max(1, Math.round(xpForLevel(lvl) * xpFrac * rewardVariance()))
+
+  const goldMult = DIFFICULTY_MULT[difficulty] * (bounty ? 1.6 : 1)
+  const gold = Math.round((30 + lvl * 14) * goldMult * rewardVariance())
+
+  const rewards: QuestRewards = { xp, gold }
+
+  // Areia de Palavra — always granted.
+  const sandMult = SAND_MULT[difficulty] * (bounty ? 1.5 : 1)
+  rewards.wordSand = Math.max(1, Math.round((8 + lvl * 2.5) * sandMult * rewardVariance()))
+
+  // Pedaços de Palavra — medium quests and up.
+  const bits = WORD_BITS[difficulty] + (bounty ? 1 : 0)
+  if (bits > 0) rewards.wordBits = bits
+
+  // Loot is rolled one or two tile levels above the quest for a slight premium.
+  const lootLevel = lvl + (difficulty === 'hard' ? 2 : difficulty === 'medium' ? 1 : 0) + (bounty ? 1 : 0)
+
+  const items: Item[] = []
+  if (Math.random() < ITEM_CHANCE[difficulty] + (bounty ? 0.25 : 0)) items.push(generateItem(lootLevel))
+  if (bounty && difficulty === 'hard' && Math.random() < 0.5) items.push(generateItem(lootLevel))
+  if (items.length > 0) rewards.items = items
+
+  const consumables: Consumable[] = []
+  if (Math.random() < CONSUMABLE_CHANCE[difficulty]) consumables.push(generateConsumable(lootLevel))
+  if (difficulty === 'hard' && Math.random() < 0.4) consumables.push(generateConsumable(lootLevel))
+  if (consumables.length > 0) rewards.consumables = consumables
+
+  return rewards
 }
 
 function tileDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
@@ -228,7 +275,7 @@ function makeEscort(tileLevel: number, difficulty: QuestDifficulty, grid: Record
     description: `Chegue ao tile (${target.x},${target.y}) sem morrer.`,
     descriptionEn: `Reach tile (${target.x},${target.y}) without dying.`,
     objective:   { type: 'escort', targetX: target.x, targetY: target.y, reached: false },
-    rewards:     baseRewards(tileLevel, difficulty),
+    rewards:     rollQuestRewards(tileLevel, difficulty),
   }
 }
 
@@ -244,7 +291,7 @@ function makeDelivery(tileLevel: number, difficulty: QuestDifficulty, grid: Reco
     description: `Leve os itens até (${target.x},${target.y}).`,
     descriptionEn: `Bring the items to (${target.x},${target.y}).`,
     objective:   { type: 'delivery', targetX: target.x, targetY: target.y, reached: false },
-    rewards:     baseRewards(tileLevel, difficulty),
+    rewards:     rollQuestRewards(tileLevel, difficulty),
   }
 }
 
@@ -264,7 +311,7 @@ function makeExtermination(tileLevel: number, difficulty: QuestDifficulty, grid:
       centerX: center.x, centerY: center.y,
       radius, required, killed: 0,
     },
-    rewards: baseRewards(tileLevel, difficulty),
+    rewards: rollQuestRewards(tileLevel, difficulty),
   }
 }
 
@@ -279,7 +326,6 @@ function makeBountyMonster(tileLevel: number, difficulty: QuestDifficulty, grid:
   const namePt = `${template.namePt} ${epithetPt}`
   const nameEn = `${epithetEn} ${template.nameEn}`
   const rarity = pickBountyRarity(tileLevel)
-  const rewardMult = difficulty === 'easy' ? 1.5 : difficulty === 'medium' ? 3 : 6
   return {
     id: uid(), type: 'bounty_monster', difficulty, status: 'active', tileLevel,
     title:       `Caçada: ${namePt}`,
@@ -295,10 +341,7 @@ function makeBountyMonster(tileLevel: number, difficulty: QuestDifficulty, grid:
       targetRarity: rarity,
       isNpc: false, defeated: false,
     },
-    rewards: {
-      xp:   Math.round((40 + tileLevel * 20) * rewardMult * (0.8 + Math.random() * 0.4)),
-      gold: Math.round((50 + tileLevel * 15) * rewardMult * (0.8 + Math.random() * 0.4)),
-    },
+    rewards: rollQuestRewards(tileLevel, difficulty, true),
   }
 }
 
@@ -310,7 +353,6 @@ function makeBountyNpc(tileLevel: number, difficulty: QuestDifficulty, grid: Rec
   const namePt     = `${firstName} ${NPC_TITLES_PT[titleIdx]}`
   const nameEn     = `${firstName} ${NPC_TITLES_EN[titleIdx]}`
   const rarity     = pickBountyRarity(tileLevel)
-  const rewardMult = difficulty === 'easy' ? 1.5 : difficulty === 'medium' ? 3 : 6
   return {
     id: uid(), type: 'bounty_npc', difficulty, status: 'active', tileLevel,
     title:       `Fugitivo: ${namePt}`,
@@ -326,10 +368,7 @@ function makeBountyNpc(tileLevel: number, difficulty: QuestDifficulty, grid: Rec
       targetRarity: rarity,
       isNpc: true, defeated: false,
     },
-    rewards: {
-      xp:   Math.round((40 + tileLevel * 20) * rewardMult * (0.8 + Math.random() * 0.4)),
-      gold: Math.round((50 + tileLevel * 15) * rewardMult * (0.8 + Math.random() * 0.4)),
-    },
+    rewards: rollQuestRewards(tileLevel, difficulty, true),
   }
 }
 
@@ -353,7 +392,7 @@ function makeCollection(tileLevel: number, difficulty: QuestDifficulty, grid: Re
       ? `Defeat ${required} ${nameEn}s.`
       : `Defeat ${required} creatures.`,
     objective: { type: 'collection', monsterType, required, collected: 0 },
-    rewards: baseRewards(tileLevel, difficulty),
+    rewards: rollQuestRewards(tileLevel, difficulty),
   }
 }
 

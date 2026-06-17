@@ -24,6 +24,7 @@ export function chestBracket(level: number): number {
 
 export interface ChestLoot {
   gold: number
+  wordSand: number
   items: Item[]
   consumables: Consumable[]
   materials: WeaponMaterialDrop[]
@@ -47,7 +48,7 @@ export function chestOpenSeconds(chest: TreasureChest, goldMult = 1, dropChance 
 
 export function rollChestLoot(chest: TreasureChest): ChestLoot {
   const value = RARITY_VALUE[chest.rarity]
-  const loot: ChestLoot = { gold: 0, items: [], consumables: [], materials: [] }
+  const loot: ChestLoot = { gold: 0, wordSand: 0, items: [], consumables: [], materials: [] }
 
   if (Math.random() < 0.85) {
     loot.gold = Math.round((12 + chest.level * 7) * value * (0.75 + Math.random() * 0.75))
@@ -65,18 +66,23 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
     loot.materials.push(pickWeaponMaterialDrop(chest.level))
   }
 
+  if (Math.random() < 0.65) {
+    loot.wordSand = Math.round((8 + chest.level * 2.8) * value * (0.8 + Math.random() * 0.7))
+  }
+
   const extraRolls = chest.rarity === 'unique' ? 3 : chest.rarity === 'set' ? 2 : chest.rarity === 'epic' ? 2 : chest.rarity === 'rare' ? 1 : 0
   for (let i = 0; i < extraRolls; i++) {
     const r = Math.random()
     if (r < 0.36) loot.gold += Math.round((8 + chest.level * 4) * value)
     else if (r < 0.54) loot.items.push(generateItem(chest.level))
-    else if (r < 0.86) loot.consumables.push(generateConsumable(chest.level))
+    else if (r < 0.72) loot.consumables.push(generateConsumable(chest.level))
+    else if (r < 0.88) loot.wordSand += Math.round((5 + chest.level * 1.8) * value)
     else {
       loot.materials.push(pickWeaponMaterialDrop(chest.level))
     }
   }
 
-  if (loot.gold <= 0 && loot.items.length === 0 && loot.consumables.length === 0 && loot.materials.length === 0) {
+  if (loot.gold <= 0 && loot.wordSand <= 0 && loot.items.length === 0 && loot.consumables.length === 0 && loot.materials.length === 0) {
     loot.gold = Math.round((10 + chest.level * 6) * value)
   }
 

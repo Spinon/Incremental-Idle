@@ -462,11 +462,17 @@ export function wordPrice(rarity: 'rare' | 'epic' | 'unique', tileLevel: number)
   return Math.round((20 + tileLevel * 6) * base[rarity])
 }
 
+export function wordSandPrice(amount: number, tileLevel: number): number {
+  return Math.max(1, Math.round(amount * (1.45 + tileLevel * 0.025)))
+}
+
 export function generateMarketOffer(level: number): MarketOffer {
+  const sandAmount = Math.round(45 + level * 9)
   return {
     consumables: [generateConsumable(level), generateConsumable(level)],
     equipment:   [generateItem(level, true), generateItem(level, true)],
     words:       [],   // populated by MarketInterior which has access to known words
+    wordSand:    [{ id: `ws_${Date.now()}_${_idSeq++}`, amount: sandAmount, price: wordSandPrice(sandAmount, level) }],
   }
 }
 

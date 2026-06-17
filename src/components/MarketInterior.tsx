@@ -5,12 +5,12 @@ import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
-import { wordPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
+import { wordPrice, wordSandPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
 import { getDerivedStats } from '../formulas/derived'
 import { DROP_WORDS, WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
 import { cn } from '../lib/utils'
-import type { Item, Consumable, ItemRarity, ItemStats, MarketOffer, WordOffer } from '../types/item'
+import type { Item, Consumable, ItemRarity, ItemStats, MarketOffer, WordOffer, WordSandOffer } from '../types/item'
 
 // ─── Rarity colours (minimal palette) ────────────────────────────────────────
 
@@ -202,7 +202,7 @@ export default function MarketInterior() {
   const addItem        = useInventoryStore(s => s.addItem)
   const addConsumable  = useInventoryStore(s => s.addConsumable)
 
-  const earnWord      = useSpellStore(s => s.earnWord)
+  const addWordSand   = useSpellStore(s => s.addWordSand)
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
   const heroLevel     = useHeroStore(s => s.level)
   const heroAttrs     = useHeroStore(s => s.attributes)
@@ -254,8 +254,12 @@ export default function MarketInterior() {
     if (!savedOffer) saveOffer(marketKey, offer)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep a separate alias for clarity in word-offer JSX
-  const wordOffers = offer.words
+  const wordSandOffers: WordSandOffer[] = offer.wordSand ?? [{
+    id: `ws_${marketKey}`,
+    amount: Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6),
+    price: wordSandPrice(Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6), tileLevel),
+  }]
+  const wordOffers: WordOffer[] = []
 
   // Track what was bought from this persisted market tile.
   const [bought, setBought]   = useState<Set<string>>(() => new Set(savedOffer?.boughtIds ?? []))
@@ -324,8 +328,15 @@ export default function MarketInterior() {
     pauseSceneAuto()
     if (bought.has(wo.wordId)) return
     if (!spendGold(eff(wo.price))) return
-    earnWord(wo.wordId)
     markBought(wo.wordId)
+  }
+
+  function buyWordSand(wo: WordSandOffer) {
+    pauseSceneAuto()
+    if (bought.has(wo.id)) return
+    if (!spendGold(eff(wo.price))) return
+    addWordSand(wo.amount)
+    markBought(wo.id)
   }
 
   function buyEquipment(item: Item) {
@@ -524,6 +535,68 @@ export default function MarketInterior() {
             })}
           </div>
         </div>
+
+        {/* Word Sand */}
+        {wordSandOffers.length > 0 && (
+          <>
+            <div className="h-px bg-indigo-900/40" />
+            <div>
+              <p className="text-[9px] text-indigo-400/60 uppercase tracking-widest font-semibold mb-2">
+                {isEn ? 'Word Sand' : 'Areia de Palavra'}
+              </p>
+              <div className="flex flex-col gap-2">
+                {wordSandOffers.map(wo => {
+                  const isBought = bought.has(wo.id)
+                  const canAfford = gold >= eff(wo.price)
+                  return (
+                    <div
+                      key={wo.id}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-colors bg-indigo-950/40',
+                        isBought ? 'border-green-800/40 opacity-60' : 'border-cyan-500/40',
+                      )}
+                    >
+                      <span className="text-xl font-black text-cyan-300 shrink-0">WS</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[12px] font-bold text-cyan-300">+{wo.amount} WS</span>
+                          <span className="text-[8px] font-semibold uppercase tracking-widest text-cyan-500/80">
+                            {isEn ? 'magic resource' : 'recurso magico'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-indigo-400/60 mt-0.5">
+                          {isEn
+                            ? 'Used to generate word bits and create spells.'
+                            : 'Usada para gerar pedacos de palavra e criar magias.'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">
+                          ⬡ {eff(wo.price)}
+                          {eff(wo.price) < wo.price && <span className="text-[9px] text-emerald-400 ml-0.5 line-through opacity-60">{wo.price}</span>}
+                        </span>
+                        <button
+                          onClick={() => buyWordSand(wo)}
+                          disabled={isBought || !canAfford}
+                          className={cn(
+                            'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors',
+                            isBought
+                              ? 'opacity-40 cursor-not-allowed bg-green-900/20 border-green-800/30 text-green-500'
+                              : canAfford
+                                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500'
+                                : 'opacity-30 cursor-not-allowed bg-indigo-900/30 border-indigo-800/30 text-indigo-500',
+                          )}
+                        >
+                          {isBought ? (isEn ? 'Bought' : 'Comprado') : (isEn ? 'Buy' : 'Comprar')}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* ── Spellbook words ── */}
         {wordOffers.length > 0 && (

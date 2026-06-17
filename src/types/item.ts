@@ -114,11 +114,18 @@ export interface WordOffer {
   price:  number
 }
 
+export interface WordSandOffer {
+  id: string
+  amount: number
+  price: number
+}
+
 /** Fresh offer generated each time the player enters a market. */
 export interface MarketOffer {
   consumables: Consumable[]   // 2 entries
   equipment:   Item[]         // 2 entries
   words:       WordOffer[]    // 0-2 entries, filtered by progression
+  wordSand?:   WordSandOffer[]
   /** IDs already bought from this persisted market tile. */
   boughtIds?:   string[]
 }

@@ -164,6 +164,8 @@ export default function MiniBattlePlayer() {
   const quickslots = useInventoryStore(s => s.quickslots)
   const consumableAutoSlots = useInventoryStore(s => s.consumableAutoSlots)
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
+  const wordBits = useSpellStore(s => s.wordBits)
+  const craftedSpellIds = useSpellStore(s => s.craftedSpellIds)
   const spellSlots = useSpellStore(s => s.spellSlots)
   const cooldowns = useSpellStore(s => s.cooldowns)
   const autoSlots = useSpellStore(s => s.autoSlots)
@@ -184,8 +186,8 @@ export default function MiniBattlePlayer() {
     equippedWeapons,
     activeBuffs,
   )
-  const knownWordIds = getKnownWordIds(heroLevel, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
-  const availableSpells = getPlayerSpells(knownWordIds)
+  const knownWordIds = getKnownWordIds(earnedWordIds, wordBits)
+  const availableSpells = getPlayerSpells(knownWordIds, craftedSpellIds)
 
   // ── Drag ──────────────────────────────────────────────────────────────────
   const [miniWidth, setMiniWidth] = useState(() => clampMiniWidth(MINI_PLAYER_DEFAULT_WIDTH))

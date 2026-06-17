@@ -249,6 +249,12 @@ export function useGameLoop(paused = false) {
       if (speed <= 0 && !options.offline) return
 
       tickResources(deltaMs, speed, derived)
+      useSpellStore.getState().tickWordSand(
+        deltaMs / 1000,
+        useHeroStore.getState().level,
+        useHeroStore.getState().attributes.inteligencia,
+        useHeroStore.getState().attributes.sabedoria,
+      )
       useSpellStore.getState().tick(deltaMs / 1000)
       tickChestOpening(deltaMs, derived)
       if (!options.offline) tryAutoUseConsumable()

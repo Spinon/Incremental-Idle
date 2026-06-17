@@ -2,6 +2,7 @@ import { chestOpenSeconds, rollChestLoot } from '../formulas/chests'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
 import { useNotifStore } from '../store/notifStore'
+import { useSpellStore } from '../store/spellStore'
 import type { DerivedStats } from '../types/hero'
 
 /**
@@ -30,6 +31,7 @@ export function tickChestOpening(deltaMs: number, derived: DerivedStats): void {
   let lostItems = 0
   let lostConsumables = 0
   if (loot.gold > 0) useHeroStore.getState().earnGold(loot.gold)
+  if (loot.wordSand > 0) useSpellStore.getState().addWordSand(loot.wordSand)
   for (const item of loot.items) {
     if (!useInventoryStore.getState().addItem(item)) lostItems++
   }
@@ -41,6 +43,7 @@ export function tickChestOpening(deltaMs: number, derived: DerivedStats): void {
   const parts: string[] = []
   const partsEn: string[] = []
   if (loot.gold > 0) { parts.push(`⬡ ${loot.gold}`); partsEn.push(`⬡ ${loot.gold}`) }
+  if (loot.wordSand > 0) { parts.push(`${loot.wordSand} AP`); partsEn.push(`${loot.wordSand} WS`) }
   if (loot.items.length > 0) { parts.push(`${loot.items.length} item${loot.items.length > 1 ? 'ns' : ''}`); partsEn.push(`${loot.items.length} item${loot.items.length > 1 ? 's' : ''}`) }
   if (loot.consumables.length > 0) { parts.push(`${loot.consumables.length} consumível${loot.consumables.length > 1 ? 'is' : ''}`); partsEn.push(`${loot.consumables.length} consumable${loot.consumables.length > 1 ? 's' : ''}`) }
   if (loot.materials.length > 0) {

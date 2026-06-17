@@ -112,7 +112,7 @@ function QuestCard({ quest, isEn }: { quest: Quest; isEn: boolean }) {
       </div>
 
       {/* Rewards */}
-      <div className="flex items-center gap-2 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 pt-0.5 border-t border-slate-100 dark:border-slate-800">
         <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-wide">
           {isEn ? 'Rewards' : 'Recompensas'}
         </span>
@@ -122,6 +122,26 @@ function QuestCard({ quest, isEn }: { quest: Quest; isEn: boolean }) {
         <span className="text-[10px] font-semibold text-yellow-500 dark:text-yellow-400">
           +{quest.rewards.gold} ⬡
         </span>
+        {!!quest.rewards.wordSand && (
+          <span className="text-[10px] font-semibold text-sky-500 dark:text-sky-400">
+            +{quest.rewards.wordSand} {isEn ? 'WS' : 'AP'}
+          </span>
+        )}
+        {!!quest.rewards.wordBits && (
+          <span className="text-[10px] font-semibold text-fuchsia-500 dark:text-fuchsia-400">
+            +{quest.rewards.wordBits} {isEn ? '📜 Bits' : '📜 Pedaços'}
+          </span>
+        )}
+        {!!quest.rewards.items?.length && (
+          <span className="text-[10px] font-semibold text-emerald-500 dark:text-emerald-400">
+            ⚔ {quest.rewards.items.length}
+          </span>
+        )}
+        {!!quest.rewards.consumables?.length && (
+          <span className="text-[10px] font-semibold text-rose-500 dark:text-rose-400">
+            🧪 {quest.rewards.consumables.length}
+          </span>
+        )}
       </div>
     </div>
   )

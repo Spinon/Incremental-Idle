@@ -1,3 +1,5 @@
+import type { Item, Consumable } from './item'
+
 export type QuestType =
   | 'escort'
   | 'delivery'
@@ -62,6 +64,14 @@ export type QuestObjective =
 export interface QuestRewards {
   xp: number
   gold: number
+  /** Areia de Palavra / Word Sand. */
+  wordSand?: number
+  /** Pedaços de Palavra / Word Bits — progress toward random words. */
+  wordBits?: number
+  /** Pre-rolled equipment granted on completion. */
+  items?: Item[]
+  /** Pre-rolled consumables granted on completion. */
+  consumables?: Consumable[]
 }
 
 export interface Quest {

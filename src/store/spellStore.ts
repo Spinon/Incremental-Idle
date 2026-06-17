@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import { LEARNABLE_WORDS, WORD_MAP, getAutoWordSlots } from '../data/words'
-import { SPELL_MAP, SPELL_ICONS, getAvailableSpells } from '../data/spells'
+import { ALL_WORDS, WORD_MAP } from '../data/words'
+import { SPELL_MAP, SPELL_ICONS, findSpell, getAvailableSpells } from '../data/spells'
 import { calcSpellDamage, calcSpellHeal, getSpellManaCost } from '../formulas/spells'
 import { useHeroStore } from './heroStore'
 import { useBattleStore } from './battleStore'
@@ -29,9 +29,48 @@ function getSpellElement(spell: Spell): ElementType | null {
 export const SPELL_SLOT_COUNT = 6
 
 const DEFAULT_AUTO: AutoCastConfig = { enabled: false, hpThreshold: 0.7 }
+export const WORD_BIT_BASE_COST = 180
+
+export const WORD_BIT_REQUIREMENTS: Record<string, number> = {
+  common: 2,
+  uncommon: 4,
+  rare: 6,
+  epic: 10,
+  unique: 20,
+}
+
+export const SPELL_CREATION_COST: Record<string, number> = {
+  common: 80,
+  uncommon: 140,
+  rare: 240,
+  epic: 420,
+  unique: 750,
+}
+
+export function getWordBitRequirement(wordId: string): number {
+  const rarity = WORD_MAP.get(wordId)?.rarity ?? 'common'
+  return WORD_BIT_REQUIREMENTS[rarity] ?? 2
+}
+
+export function getWordBitCost(knownWordCount: number): number {
+  const known = Math.max(0, knownWordCount)
+  return Math.round(WORD_BIT_BASE_COST + Math.pow(known, 1.45) * 55)
+}
+
+export function getSpellCreationCost(spell: Spell, knownSpellCount = 0): number {
+  const base = SPELL_CREATION_COST[spell.rarity] ?? 100
+  return Math.round(base * (1 + Math.max(0, knownSpellCount) * 0.32))
+}
+
+export function getWordSandPerSecond(level: number, inteligencia: number, sabedoria: number): number {
+  return 0.04 + Math.max(1, level) * 0.012 + Math.max(0, inteligencia) * 0.018 + Math.max(0, sabedoria) * 0.026
+}
 
 interface SpellStore {
   earnedWordIds:  string[]
+  wordBits:       Record<string, number>
+  wordSand:       number
+  craftedSpellIds: string[]
   spellSlots:     (string | null)[]
   // Cooldowns in battle TURNS (integer ≥ 0; key absent = ready)
   cooldowns:      Record<string, number>
@@ -40,6 +79,12 @@ interface SpellStore {
   autoSlots:      AutoCastConfig[]
 
   earnWord(wordId: string): void
+  addWordSand(amount: number): void
+  /** Grants `count` bits to random words for free (quest rewards / Pedaços de Palavra). */
+  grantRandomWordBits(count: number): void
+  tickWordSand(deltaS: number, level: number, inteligencia: number, sabedoria: number): void
+  generateWordBit(): string | null
+  createSpellFromWords(wordId1: string, wordId2: string): boolean
   setSpellSlot(slotIndex: number, spellId: string | null): void
   setAutoSlot(slotIndex: number, config: AutoCastConfig): void
   castSpell(spellId: string): void
@@ -59,6 +104,9 @@ export const useSpellStore = create<SpellStore>()(
   persist(
   immer((set, get) => ({
     earnedWordIds: [],
+    wordBits:      {},
+    wordSand:      0,
+    craftedSpellIds: [],
     spellSlots:    Array(SPELL_SLOT_COUNT).fill(null),
     cooldowns:     {},
     activeBuffs:   [],
@@ -70,10 +118,70 @@ export const useSpellStore = create<SpellStore>()(
       set((st) => {
         if (!st.earnedWordIds.includes(wordId)) {
           st.earnedWordIds.push(wordId)
+          st.wordBits[wordId] = Math.max(st.wordBits[wordId] ?? 0, getWordBitRequirement(wordId))
           earned = true
         }
       })
       if (earned) requestCriticalCloudSave()
+    },
+
+    addWordSand: (amount) => set((st) => {
+      st.wordSand = Math.max(0, st.wordSand + amount)
+    }),
+
+    grantRandomWordBits: (count) => {
+      set((st) => {
+        for (let i = 0; i < Math.max(0, Math.floor(count)); i++) {
+          const word = ALL_WORDS[Math.floor(Math.random() * ALL_WORDS.length)]
+          const req = getWordBitRequirement(word.id)
+          const next = Math.min(req, (st.wordBits[word.id] ?? 0) + 1)
+          st.wordBits[word.id] = next
+          if (next >= req && !st.earnedWordIds.includes(word.id)) {
+            st.earnedWordIds.push(word.id)
+          }
+        }
+      })
+      requestCriticalCloudSave()
+    },
+
+    tickWordSand: (deltaS, level, inteligencia, sabedoria) => set((st) => {
+      st.wordSand += Math.max(0, deltaS) * getWordSandPerSecond(level, inteligencia, sabedoria)
+    }),
+
+    generateWordBit: () => {
+      const cost = getWordBitCost(getKnownWordIds(get().earnedWordIds, get().wordBits).length)
+      if (get().wordSand < cost) return null
+      const word = ALL_WORDS[Math.floor(Math.random() * ALL_WORDS.length)]
+      set((st) => {
+        st.wordSand -= cost
+        const req = getWordBitRequirement(word.id)
+        const next = Math.min(req, (st.wordBits[word.id] ?? 0) + 1)
+        st.wordBits[word.id] = next
+        if (next >= req && !st.earnedWordIds.includes(word.id)) {
+          st.earnedWordIds.push(word.id)
+        }
+      })
+      requestCriticalCloudSave()
+      return word.id
+    },
+
+    createSpellFromWords: (wordId1, wordId2) => {
+      if (wordId1 === wordId2) return false
+      const known = new Set(getKnownWordIds(get().earnedWordIds, get().wordBits))
+      if (!known.has(wordId1) || !known.has(wordId2)) return false
+
+      const spell = findSpell(wordId1, wordId2)
+      if (get().craftedSpellIds.includes(spell.id)) return true
+
+      const cost = getSpellCreationCost(spell, get().craftedSpellIds.length)
+      if (get().wordSand < cost) return false
+
+      set((st) => {
+        st.wordSand -= cost
+        if (!st.craftedSpellIds.includes(spell.id)) st.craftedSpellIds.push(spell.id)
+      })
+      requestCriticalCloudSave()
+      return true
     },
 
     setSpellSlot: (slotIndex, spellId) => set((st) => {
@@ -85,8 +193,9 @@ export const useSpellStore = create<SpellStore>()(
     }),
 
     castSpell: (spellId) => {
-      const spell = SPELL_MAP.get(spellId)
+      const spell = getSpellById(spellId)
       if (!spell) return
+      if (!get().craftedSpellIds.includes(spellId)) return
 
       // ── Guards ──────────────────────────────────────────────────────
       if ((get().cooldowns[spellId] ?? 0) > 0) return
@@ -279,7 +388,7 @@ export const useSpellStore = create<SpellStore>()(
         const cfg = autoSlots[i] ?? DEFAULT_AUTO
         if (!cfg.enabled) return
         if ((cooldowns[sid] ?? 0) > 0) return
-        const spell = SPELL_MAP.get(sid)
+        const spell = getSpellById(sid)
         if (!spell) return
         if (spell.effect.type === 'heal' && hpRatio >= cfg.hpThreshold) return
         get().castSpell(sid)
@@ -312,6 +421,9 @@ export const useSpellStore = create<SpellStore>()(
     merge: mergeSave,
     partialize: (s) => ({
       earnedWordIds: s.earnedWordIds,
+      wordBits:      s.wordBits,
+      wordSand:      s.wordSand,
+      craftedSpellIds: s.craftedSpellIds,
       spellSlots:    s.spellSlots,
       cooldowns:     s.cooldowns,
       activeBuffs:   s.activeBuffs,
@@ -325,13 +437,32 @@ export const useSpellStore = create<SpellStore>()(
 // ─── Selectors ────────────────────────────────────────────────────────────────
 
 export function getKnownWordIds(
-  level: number, inteligencia: number, sabedoria: number, earnedWordIds: string[],
+  earnedWordIdsOrLevel: string[] | number = [],
+  wordBitsOrInt: Record<string, number> | number = {},
+  _sabedoria?: number,
+  legacyEarnedWordIds?: string[],
 ): string[] {
-  const slots     = getAutoWordSlots(level, inteligencia, sabedoria)
-  const autoWords = LEARNABLE_WORDS.slice(0, slots).map(w => w.id)
-  return [...new Set([...autoWords, ...earnedWordIds])]
+  const earnedWordIds = Array.isArray(earnedWordIdsOrLevel)
+    ? earnedWordIdsOrLevel
+    : legacyEarnedWordIds ?? []
+  const wordBits = typeof wordBitsOrInt === 'object' && !Array.isArray(wordBitsOrInt)
+    ? wordBitsOrInt
+    : {}
+  const fromBits = ALL_WORDS
+    .filter(w => (wordBits[w.id] ?? 0) >= getWordBitRequirement(w.id))
+    .map(w => w.id)
+  return [...new Set([...earnedWordIds, ...fromBits])]
 }
 
-export function getPlayerSpells(knownWordIds: string[]) {
-  return getAvailableSpells(knownWordIds)
+export function getPlayerSpells(knownWordIds: string[], craftedSpellIds: string[] = []) {
+  const crafted = new Set(craftedSpellIds)
+  return getAvailableSpells(knownWordIds).filter(spell => crafted.has(spell.id))
+}
+
+export function getSpellById(spellId: string): Spell | null {
+  const crafted = SPELL_MAP.get(spellId)
+  if (crafted) return crafted
+  const [wordId1, wordId2] = spellId.split('_')
+  if (!wordId1 || !wordId2 || !WORD_MAP.has(wordId1) || !WORD_MAP.has(wordId2)) return null
+  return findSpell(wordId1, wordId2)
 }

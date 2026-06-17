@@ -475,8 +475,9 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
   const consumableAutoSlots = useInventoryStore(s => s.consumableAutoSlots)
 
   // Spell quickslots
-  const level           = useHeroStore(s => s.level)
   const earnedWordIds   = useSpellStore(s => s.earnedWordIds)
+  const wordBits        = useSpellStore(s => s.wordBits)
+  const craftedSpellIds = useSpellStore(s => s.craftedSpellIds)
   const spellSlots      = useSpellStore(s => s.spellSlots)
   const cooldowns       = useSpellStore(s => s.cooldowns)
   const castSpell       = useSpellStore(s => s.castSpell)
@@ -494,8 +495,8 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
     equippedWeapons,
     activeBuffs,
   )
-  const knownWordIds    = getKnownWordIds(level, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
-  const availableSpells = getPlayerSpells(knownWordIds)
+  const knownWordIds    = getKnownWordIds(earnedWordIds, wordBits)
+  const availableSpells = getPlayerSpells(knownWordIds, craftedSpellIds)
   const statusLabels = isEn ? STATUS_LABEL_EN : STATUS_LABEL_PT
   const currentEnemyTemplate = FOREST_MONSTER_MAP.get(store.enemy.monsterType ?? '')
   const enemyDisplayName = isEn

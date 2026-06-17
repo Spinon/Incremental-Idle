@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSpellStore, getKnownWordIds, getPlayerSpells } from '../store/spellStore'
+import {
+  getKnownWordIds,
+  getPlayerSpells,
+  getSpellCreationCost,
+  getWordBitCost,
+  getWordBitRequirement,
+  getWordSandPerSecond,
+  useSpellStore,
+} from '../store/spellStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
-import { ALL_WORDS, LEARNABLE_WORDS, getAutoWordSlots } from '../data/words'
+import { ALL_WORDS } from '../data/words'
 import { findSpell, SPELL_ICONS, WORD_ICONS } from '../data/spells'
 import { getDerivedStats } from '../formulas/derived'
 import { getEquipmentBonuses } from '../formulas/items'
@@ -205,7 +213,7 @@ const SPELLBOOK_TEXT = {
       fizzle: 'Falha',
     },
     category: {
-      element: 'Elem',
+      element: 'Elemento',
       form: 'Forma',
     },
     assignTitle: 'Atribuir a slot de magia',
@@ -246,7 +254,7 @@ const SPELLBOOK_TEXT = {
       fizzle: 'Fizzle',
     },
     category: {
-      element: 'Elem',
+      element: 'Element',
       form: 'Form',
     },
     assignTitle: 'Assign to spell slot',
@@ -371,7 +379,7 @@ function spellMatchesFilters(
 }
 
 // ─── Word card ────────────────────────────────────────────────────────────────
-function WordCard({ word, isSelected, onClick }: {
+export function WordCard({ word, isSelected, onClick }: {
   word: Word
   isSelected: boolean
   onClick: () => void
@@ -400,6 +408,60 @@ function WordCard({ word, isSelected, onClick }: {
       <span className={cn('text-[7px] uppercase tracking-widest mt-1 font-semibold opacity-60', RARITY_TEXT[word.rarity])}>
         {word.category === 'element' ? tx.category.element : tx.category.form}
       </span>
+    </button>
+  )
+}
+
+function WordProgressCard({ word, displayName, subtitle, progressLabel, progressPct, isKnown, isHighlighted, isSelected, onClick }: {
+  word: Word
+  displayName: string
+  subtitle: string
+  progressLabel: string
+  progressPct: number
+  isKnown: boolean
+  isHighlighted: boolean
+  isSelected: boolean
+  onClick: () => void
+}) {
+  const isEn = useSettingsStore(s => s.lang === 'en')
+  const tx = SPELLBOOK_TEXT[isEn ? 'en' : 'pt']
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!isKnown}
+      className={cn(
+        'relative flex min-h-[104px] w-[150px] shrink-0 flex-col overflow-hidden rounded-xl border-2 px-3 py-3 text-left transition-all',
+        isKnown ? RARITY_BORDER[word.rarity] : 'border-slate-300 dark:border-slate-700 border-dashed',
+        isKnown ? RARITY_BG[word.rarity] : 'bg-slate-100/70 dark:bg-slate-900/60',
+        !isKnown && 'cursor-not-allowed',
+        isSelected && 'ring-2 ring-offset-1 ring-white dark:ring-slate-300 shadow-lg scale-105',
+        isHighlighted && 'ring-2 ring-cyan-300 dark:ring-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.55)]',
+      )}
+      title={isKnown ? (isEn || word.namePt === word.nameEn ? word.nameEn : `${word.nameEn} - ${word.namePt}`) : progressLabel}
+    >
+      {isHighlighted && (
+        <span className="absolute right-2 top-2 rounded-full border border-cyan-300/70 bg-cyan-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-200">
+          {isEn ? '+1 Bit' : '+1 Pedaco'}
+        </span>
+      )}
+      <span className={cn('text-[14px] font-black leading-tight', isKnown ? RARITY_TEXT[word.rarity] : 'text-slate-500 dark:text-slate-400')}>
+        {displayName}
+      </span>
+      <span className="mt-1 text-[10px] font-semibold text-slate-500 dark:text-slate-500">
+        {subtitle}
+      </span>
+      <span className={cn('mt-2 text-[9px] uppercase tracking-widest font-bold', isKnown ? RARITY_TEXT[word.rarity] : 'text-slate-500')}>
+        {isKnown ? `${isEn ? RARITY_LABEL_EN[word.rarity] : RARITY_LABEL[word.rarity]} - ${word.category === 'element' ? tx.category.element : tx.category.form}` : progressLabel}
+      </span>
+      <div className="mt-auto pt-2">
+        <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+          <div
+            className={cn('h-full rounded-full transition-all', isKnown ? 'bg-emerald-400' : 'bg-cyan-400')}
+            style={{ width: `${Math.max(4, Math.min(100, progressPct))}%` }}
+          />
+        </div>
+      </div>
     </button>
   )
 }
@@ -505,6 +567,17 @@ function SpellCard({
 }
 
 // ─── Main SpellbookPanel ──────────────────────────────────────────────────────
+function maskedWordName(name: string, bits: number, required: number): string {
+  if (bits >= required) return name
+  if (bits <= 0) return '?'.repeat(name.length)
+  const chars = Array.from({ length: name.length }, () => '?')
+  const revealCount = Math.max(1, Math.min(name.length, Math.ceil((bits / required) * name.length)))
+  const positions = [0, name.length - 1]
+  for (let i = 1; positions.length < revealCount && i < name.length - 1; i += 2) positions.push(i)
+  for (const pos of positions.slice(0, revealCount)) chars[pos] = name[pos]
+  return chars.join('')
+}
+
 export default function SpellbookPanel() {
   const lang       = useSettingsStore(s => s.lang)
   const isEn       = lang === 'en'
@@ -517,6 +590,11 @@ export default function SpellbookPanel() {
   const equippedWeapons = useInventoryStore(s => s.equippedWeapons)
 
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
+  const wordBits     = useSpellStore(s => s.wordBits)
+  const wordSand     = useSpellStore(s => s.wordSand)
+  const craftedSpellIds = useSpellStore(s => s.craftedSpellIds)
+  const generateWordBit = useSpellStore(s => s.generateWordBit)
+  const createSpellFromWords = useSpellStore(s => s.createSpellFromWords)
   const spellSlots    = useSpellStore(s => s.spellSlots)
   const cooldowns     = useSpellStore(s => s.cooldowns)
   const setSpellSlot  = useSpellStore(s => s.setSpellSlot)
@@ -525,8 +603,8 @@ export default function SpellbookPanel() {
   const setAutoSlot    = useSpellStore(s => s.setAutoSlot)
 
   const partyAttributes = usePartyEffectiveAttributes(attrs, level)
-  const knownWordIds    = getKnownWordIds(level, partyAttributes.inteligencia, partyAttributes.sabedoria, earnedWordIds)
-  const availableSpells = getPlayerSpells(knownWordIds)
+  const knownWordIds    = getKnownWordIds(earnedWordIds, wordBits)
+  const availableSpells = getPlayerSpells(knownWordIds, craftedSpellIds)
   const equipBonuses = getEquipmentBonuses(equipment)
   const weaponStats = getWeaponStatBonuses(weaponProgress, equippedWeapons)
   const weaponProfile = getWeaponCombatProfile(weaponProgress, equippedWeapons)
@@ -536,8 +614,7 @@ export default function SpellbookPanel() {
     magicDamage: baseDerived.magicDamage + weaponStats.magicDamage,
   }, activeBuffs)
 
-  const wordSlotCount = getAutoWordSlots(level, partyAttributes.inteligencia, partyAttributes.sabedoria)
-  const nextSlotAt  = (Math.floor(level / 5) + 1) * 5  // next level milestone
+  const wordSandRate = getWordSandPerSecond(level, partyAttributes.inteligencia, partyAttributes.sabedoria)
 
   const [tab, setTab]           = useState<'words' | 'spells'>('words')
   const [selectedWords, setSelectedWords] = useState<string[]>([])
@@ -546,10 +623,22 @@ export default function SpellbookPanel() {
   const [spellQuery, setSpellQuery] = useState('')
   const [effectFilter, setEffectFilter] = useState<SpellEffectFilter>('all')
   const [rarityFilter, setRarityFilter] = useState<SpellRarityFilter>('all')
+  const [lastWordBitId, setLastWordBitId] = useState<string | null>(null)
   const autoConfigRef = useRef<HTMLDivElement>(null)
+  const wordBitCost = getWordBitCost(knownWordIds.length)
+  const wordSandLabel = isEn ? 'Word Sand' : 'Areia de Palavra'
+  const wordBitLabel = isEn ? 'Word Bit' : 'Pedaco de Palavra'
+  const wordBitsLabel = isEn ? 'Word Bits' : 'Pedacos de Palavra'
+
+  function handleGenerateWordBit() {
+    const wordId = generateWordBit()
+    if (!wordId) return
+    setLastWordBitId(wordId)
+  }
 
   // ── Word selection for preview combo ──
   function toggleWord(id: string) {
+    if (!knownWordIds.includes(id)) return
     setSelectedWords(prev => {
       if (prev.includes(id)) return prev.filter(x => x !== id)
       if (prev.length >= 2)  return [prev[1], id]
@@ -579,7 +668,13 @@ export default function SpellbookPanel() {
     return () => document.removeEventListener('mousedown', closeAutoConfig)
   }, [showAutoConfig])
 
-  const knownWords = ALL_WORDS.filter(w => knownWordIds.includes(w.id))
+  useEffect(() => {
+    if (!lastWordBitId) return
+    const id = window.setTimeout(() => setLastWordBitId(null), 2200)
+    return () => window.clearTimeout(id)
+  }, [lastWordBitId])
+
+  const knownWords = ALL_WORDS
   const filteredSpells = useMemo(
     () => availableSpells.filter(spell => spellMatchesFilters(spell, isEn, spellDerived, spellQuery, effectFilter, rarityFilter)),
     [availableSpells, effectFilter, isEn, rarityFilter, spellDerived, spellQuery],
@@ -601,11 +696,11 @@ export default function SpellbookPanel() {
                 : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
             )}
           >
-            {t === 'words' ? `${tx.words} (${knownWords.length})` : `${tx.spells} (${availableSpells.length})`}
+            {t === 'words' ? `${tx.words} (${knownWordIds.length}/${ALL_WORDS.length})` : `${tx.spells} (${availableSpells.length})`}
           </button>
         ))}
-        <span className="ml-auto text-[9px] text-slate-400 dark:text-slate-600 self-center">
-          {tx.mana}: {Math.floor(mana)}
+        <span className="hidden">
+          {wordSandLabel}: {Math.floor(wordSand)} - {tx.mana}: {Math.floor(mana)}
         </span>
       </div>
 
@@ -613,25 +708,71 @@ export default function SpellbookPanel() {
       {tab === 'words' && (
         <div>
           {/* Progress info */}
-          <div className="mb-2 text-[9px] text-slate-400 dark:text-slate-600 flex gap-3 flex-wrap">
-            <span>{tx.levelSlots}: {wordSlotCount}/{LEARNABLE_WORDS.length} ({tx.nextLevel}{nextSlotAt})</span>
-            <span>+INT: +{Math.floor(attrs.inteligencia / 10)} &nbsp; +SAB: +{Math.floor(attrs.sabedoria / 10)}</span>
-            {earnedWordIds.length > 0 && (
-              <span className="text-purple-500 dark:text-purple-400">
-                +{earnedWordIds.length} {earnedWordIds.length === 1 ? tx.obtainedWord : tx.obtainedWords}
+          <div className="mb-3 grid gap-2 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto] md:items-stretch">
+            <div className="rounded-xl border border-cyan-400/40 bg-cyan-50/80 px-3 py-2 dark:bg-cyan-950/25">
+              <span className="block text-[8px] font-black uppercase tracking-widest text-cyan-700/70 dark:text-cyan-300/70">{wordSandLabel}</span>
+              <span className="mt-0.5 block text-[22px] font-black leading-none text-cyan-700 dark:text-cyan-200">{Math.floor(wordSand)}</span>
+              <span className="mt-1 block text-[10px] font-semibold text-cyan-700/70 dark:text-cyan-300/70">
+                +{wordSandRate.toFixed(2)} {isEn ? 'per second' : 'por segundo'}
               </span>
-            )}
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
+              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                {isEn ? `Next ${wordBitLabel}` : `Proximo ${wordBitLabel}`}
+              </span>
+              <span className="mt-0.5 block text-[16px] font-black text-slate-700 dark:text-slate-200">{wordBitCost} {wordSandLabel}</span>
+              <span className={cn('mt-1 block text-[10px] font-bold', wordSand >= wordBitCost ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}>
+                {wordSand >= wordBitCost ? (isEn ? 'Ready to generate' : 'Pronto para gerar') : (isEn ? 'Collect more sand' : 'Junte mais areia')}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
+              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                {isEn ? 'Known Words' : 'Palavras Conhecidas'}
+              </span>
+              <span className="mt-0.5 block text-[16px] font-black text-slate-700 dark:text-slate-200">{knownWordIds.length}/{ALL_WORDS.length}</span>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.max(4, (knownWordIds.length / ALL_WORDS.length) * 100)}%` }} />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateWordBit}
+              disabled={wordSand < wordBitCost}
+              className={cn(
+                'rounded-xl border px-4 py-2 text-[11px] font-black transition-colors md:min-w-[128px]',
+                wordSand >= wordBitCost
+                  ? 'border-cyan-400 bg-cyan-500 text-white shadow-[0_0_14px_rgba(34,211,238,0.35)] hover:bg-cyan-400'
+                  : 'border-slate-300 dark:border-slate-700 text-slate-400 opacity-50 cursor-not-allowed',
+              )}
+            >
+              {isEn ? `Generate ${wordBitLabel}` : `Gerar ${wordBitLabel}`}
+            </button>
           </div>
 
           {/* Known words grid */}
           <div className="flex flex-wrap gap-2 mb-3">
             {knownWords.map(w => (
-              <WordCard
-                key={w.id}
-                word={w}
-                isSelected={selectedWords.includes(w.id)}
-                onClick={() => toggleWord(w.id)}
-              />
+              (() => {
+                const bits = Math.min(wordBits[w.id] ?? 0, getWordBitRequirement(w.id))
+                const required = getWordBitRequirement(w.id)
+                const isKnown = knownWordIds.includes(w.id)
+                return (
+                  <WordProgressCard
+                    key={w.id}
+                    word={w}
+                    displayName={isKnown ? w.nameEn : maskedWordName(w.nameEn, bits, required)}
+                    subtitle={isKnown
+                      ? (!isEn && w.namePt !== w.nameEn ? w.namePt : w.description)
+                      : (isEn ? 'Unknown word' : 'Palavra desconhecida')}
+                    progressLabel={isKnown ? (isEn ? 'Ready' : 'Pronta') : `${bits}/${required} ${wordBitsLabel}`}
+                    progressPct={(bits / required) * 100}
+                    isKnown={isKnown}
+                    isHighlighted={lastWordBitId === w.id}
+                    isSelected={isKnown && selectedWords.includes(w.id)}
+                    onClick={() => toggleWord(w.id)}
+                  />
+                )
+              })()
             ))}
             {knownWords.length === 0 && (
               <p className="text-[10px] text-slate-400 dark:text-slate-600 italic">
@@ -646,7 +787,38 @@ export default function SpellbookPanel() {
               <p className="text-[9px] text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-2">
                 {tx.combination}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch">
+                {[0, 1].map(slot => {
+                  const selected = selectedWords[slot]
+                  const word = selected ? ALL_WORDS.find(x => x.id === selected) : null
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => selected && toggleWord(selected)}
+                      className={cn(
+                        'min-h-[64px] rounded-xl border-2 px-3 py-2 text-left transition-colors',
+                        slot === 0 ? 'sm:order-1' : 'sm:order-3',
+                        word
+                          ? cn(RARITY_BORDER[word.rarity], RARITY_BG[word.rarity])
+                          : 'border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-950/30',
+                      )}
+                    >
+                      <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
+                        {isEn ? `Word Slot ${slot + 1}` : `Slot de Palavra ${slot + 1}`}
+                      </span>
+                      <span className={cn('mt-1 block text-[13px] font-black', word ? RARITY_TEXT[word.rarity] : 'text-slate-400 dark:text-slate-600')}>
+                        {word ? word.nameEn : (isEn ? 'Choose a word' : 'Escolha uma palavra')}
+                      </span>
+                      {word && !isEn && word.namePt !== word.nameEn && (
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-500">{word.namePt}</span>
+                      )}
+                    </button>
+                  )
+                })}
+                <div className="hidden items-center justify-center text-slate-400 sm:order-2 sm:flex">+</div>
+              </div>
+              <div className="hidden">
                 {selectedWords.map((id, i) => {
                   const w = ALL_WORDS.find(x => x.id === id)!
                   return (
@@ -661,19 +833,43 @@ export default function SpellbookPanel() {
                 )}
               </div>
               {previewSpell && (
-                <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-1">
-                  {spellDescription(previewSpell, isEn)} · {getSpellManaCost(previewSpell)} mana · CD {previewSpell.cooldown}t
-                </p>
+                <div className="mt-3 rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-white/50 dark:bg-slate-950/30 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className={cn('text-[13px] font-black', RARITY_TEXT[previewSpell.rarity])}>{previewSpell.name}</span>
+                    <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                      {getSpellCreationCost(previewSpell, craftedSpellIds.length)} {wordSandLabel}
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-slate-500 dark:text-slate-500">
+                    {spellDescription(previewSpell, isEn)} · {getSpellManaCost(previewSpell)} mana · CD {previewSpell.cooldown}t
+                  </p>
+                  {!craftedSpellIds.includes(previewSpell.id) ? (
+                    <button
+                      type="button"
+                      onClick={() => createSpellFromWords(previewSpell.word1Id, previewSpell.word2Id)}
+                      disabled={wordSand < getSpellCreationCost(previewSpell, craftedSpellIds.length)}
+                      className={cn(
+                        'mt-2 rounded-lg border px-3 py-1.5 text-[10px] font-bold transition-colors',
+                        wordSand >= getSpellCreationCost(previewSpell, craftedSpellIds.length)
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300'
+                          : 'border-slate-300 dark:border-slate-700 text-slate-400 opacity-50 cursor-not-allowed',
+                      )}
+                    >
+                      {isEn ? 'Create spell' : 'Criar magia'}
+                    </button>
+                  ) : (
+                    <span className="mt-2 inline-block text-[10px] font-bold text-emerald-500">{isEn ? 'Spell created' : 'Magia criada'}</span>
+                  )}
+                </div>
               )}
             </div>
           )}
 
-          {/* Locked words hint */}
-          {LEARNABLE_WORDS.length - knownWords.filter(w => ['common','uncommon'].includes(w.rarity)).length > 0 && (
-            <p className="mt-2 text-[9px] text-slate-400 dark:text-slate-600 italic">
-              {tx.rareHint}
-            </p>
-          )}
+          <p className="mt-2 text-[9px] text-slate-400 dark:text-slate-600 italic">
+            {isEn
+              ? 'Level, Intelligence and Wisdom increase Word Sand generation; words come from Word Bit progress.'
+              : 'Nivel, Inteligencia e Sabedoria aumentam a geracao de Areia de Palavra; palavras vêm do progresso de Pedacos de Palavra.'}
+          </p>
         </div>
       )}
 

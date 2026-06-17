@@ -5,6 +5,8 @@ import type { Quest, QuestObjectiveExtermination, QuestObjectiveBounty } from '.
 import { DIFFICULTY_LABEL_PT, DIFFICULTY_LABEL_EN } from '../formulas/quests'
 import { useHeroStore } from './heroStore'
 import { useNotifStore } from './notifStore'
+import { useSpellStore } from './spellStore'
+import { useInventoryStore } from './inventoryStore'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import { requestCriticalCloudSave } from '../lib/cloudAutosave'
 
@@ -50,14 +52,28 @@ export const useQuestStore = create<QuestStore>()(
         requestCriticalCloudSave()
         // Grant rewards after current tick to avoid state mutation ordering issues
         Promise.resolve().then(() => {
-          useHeroStore.getState().gainXp(quest.rewards.xp)
-          useHeroStore.getState().earnGold(quest.rewards.gold)
+          const r = quest.rewards
+          useHeroStore.getState().gainXp(r.xp)
+          useHeroStore.getState().earnGold(r.gold)
+          if (r.wordSand) useSpellStore.getState().addWordSand(r.wordSand)
+          if (r.wordBits) useSpellStore.getState().grantRandomWordBits(r.wordBits)
+          for (const item of r.items ?? []) useInventoryStore.getState().addItem(item)
+          for (const c of r.consumables ?? []) useInventoryStore.getState().addConsumable(c)
           requestCriticalCloudSave()
+
+          const parts: string[] = [`+${r.xp} XP`, `+${r.gold} ⬡`]
+          const partsEn: string[] = [`+${r.xp} XP`, `+${r.gold} ⬡`]
+          if (r.wordSand) { parts.push(`+${r.wordSand} AP`); partsEn.push(`+${r.wordSand} WS`) }
+          if (r.wordBits) { parts.push(`+${r.wordBits} Pedaço${r.wordBits > 1 ? 's' : ''} de Palavra`); partsEn.push(`+${r.wordBits} Word Bit${r.wordBits > 1 ? 's' : ''}`) }
+          if (r.items?.length)       { parts.push(`${r.items.length} item${r.items.length > 1 ? 'ns' : ''}`); partsEn.push(`${r.items.length} item${r.items.length > 1 ? 's' : ''}`) }
+          if (r.consumables?.length) { parts.push(`${r.consumables.length} consumível${r.consumables.length > 1 ? 'is' : ''}`); partsEn.push(`${r.consumables.length} consumable${r.consumables.length > 1 ? 's' : ''}`) }
+
           useNotifStore.getState().push({
             title:   `✅ Missão Concluída!`,
             titleEn: `✅ Quest Complete!`,
-            body:    `${quest.title} — +${quest.rewards.xp} XP, +${quest.rewards.gold} ⬡  (${DIFFICULTY_LABEL_PT[quest.difficulty]})`,
-            bodyEn:  `${quest.titleEn} — +${quest.rewards.xp} XP, +${quest.rewards.gold} ⬡  (${DIFFICULTY_LABEL_EN[quest.difficulty]})`,
+            body:    `${quest.title} — ${parts.join(' · ')}  (${DIFFICULTY_LABEL_PT[quest.difficulty]})`,
+            bodyEn:  `${quest.titleEn} — ${partsEn.join(' · ')}  (${DIFFICULTY_LABEL_EN[quest.difficulty]})`,
+            scrollTo: 'equips',
             actions: [],
           })
         })

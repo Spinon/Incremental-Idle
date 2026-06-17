@@ -54,7 +54,7 @@ interface HeroStore {
   consumeSkipCharge(): void
 }
 
-function xpForLevel(level: number): number {
+export function xpForLevel(level: number): number {
   // Steep curve: ~100 XP at L1, ~5k at L10, ~32k at L20, ~110k at L30.
   // Past 50 an extra ×1.05 per level kicks in (L80 ≈ ×4.3, L100 ≈ ×11.5,
   // L130 ≈ ×49) so late game slows to under a level per hour and keeps
