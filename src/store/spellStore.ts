@@ -70,6 +70,8 @@ interface SpellStore {
   earnedWordIds:  string[]
   wordBits:       Record<string, number>
   wordSand:       number
+  /** Free uses of the "generate word bit" button (bought as WB in the market). */
+  wordBitCredits: number
   craftedSpellIds: string[]
   spellSlots:     (string | null)[]
   // Cooldowns in battle TURNS (integer ≥ 0; key absent = ready)
@@ -82,6 +84,8 @@ interface SpellStore {
   addWordSand(amount: number): void
   /** Grants `count` bits to random words for free (quest rewards / Pedaços de Palavra). */
   grantRandomWordBits(count: number): void
+  /** Grants `count` free uses of the generate-word-bit button (market WB purchase). */
+  grantWordBitCredits(count: number): void
   tickWordSand(deltaS: number, level: number, inteligencia: number, sabedoria: number): void
   generateWordBit(): string | null
   createSpellFromWords(wordId1: string, wordId2: string): boolean
@@ -106,6 +110,7 @@ export const useSpellStore = create<SpellStore>()(
     earnedWordIds: [],
     wordBits:      {},
     wordSand:      0,
+    wordBitCredits: 0,
     craftedSpellIds: [],
     spellSlots:    Array(SPELL_SLOT_COUNT).fill(null),
     cooldowns:     {},
@@ -144,16 +149,26 @@ export const useSpellStore = create<SpellStore>()(
       requestCriticalCloudSave()
     },
 
+    grantWordBitCredits: (count) => {
+      set((st) => {
+        st.wordBitCredits += Math.max(0, Math.floor(count))
+      })
+      requestCriticalCloudSave()
+    },
+
     tickWordSand: (deltaS, level, inteligencia, sabedoria) => set((st) => {
       st.wordSand += Math.max(0, deltaS) * getWordSandPerSecond(level, inteligencia, sabedoria)
     }),
 
     generateWordBit: () => {
+      const useCredit = get().wordBitCredits > 0
       const cost = getWordBitCost(getKnownWordIds(get().earnedWordIds, get().wordBits).length)
-      if (get().wordSand < cost) return null
+      // A free credit skips the sand cost; otherwise the player must afford it.
+      if (!useCredit && get().wordSand < cost) return null
       const word = ALL_WORDS[Math.floor(Math.random() * ALL_WORDS.length)]
       set((st) => {
-        st.wordSand -= cost
+        if (useCredit) st.wordBitCredits -= 1
+        else st.wordSand -= cost
         const req = getWordBitRequirement(word.id)
         const next = Math.min(req, (st.wordBits[word.id] ?? 0) + 1)
         st.wordBits[word.id] = next
@@ -436,6 +451,7 @@ export const useSpellStore = create<SpellStore>()(
       earnedWordIds: s.earnedWordIds,
       wordBits:      s.wordBits,
       wordSand:      s.wordSand,
+      wordBitCredits: s.wordBitCredits,
       craftedSpellIds: s.craftedSpellIds,
       spellSlots:    s.spellSlots,
       cooldowns:     s.cooldowns,

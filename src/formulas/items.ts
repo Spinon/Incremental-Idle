@@ -466,13 +466,26 @@ export function wordSandPrice(amount: number, tileLevel: number): number {
   return Math.max(1, Math.round(amount * (1.45 + tileLevel * 0.025)))
 }
 
+// A Word Bit is sold as free uses of the generate-bit button. Each use is worth
+// a full word-bit roll (otherwise paid in Word Sand), so it is priced well above
+// the old "instant random bit" value and scales steeply with the shop level.
 export function wordBitPrice(amount: number, tileLevel: number): number {
-  return Math.max(1, Math.round(amount * (72 + tileLevel * 9.5)))
+  return Math.max(1, Math.round(amount * (300 + tileLevel * 55)))
+}
+
+/** Word Sand sold per shop — large bundles that scale with the shop level. */
+export function wordSandOfferAmount(tileLevel: number, tilesPlaced = 0): number {
+  return Math.round(120 + tileLevel * 22 + Math.min(tilesPlaced, 150) * 0.8)
+}
+
+/** Word Bit generation credits sold per shop (1–5, scaling with progress). */
+export function wordBitOfferAmount(tileLevel: number, tilesPlaced = 0): number {
+  return Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90)))
 }
 
 export function generateMarketOffer(level: number): MarketOffer {
-  const sandAmount = Math.round(45 + level * 9)
-  const bitAmount = Math.max(1, Math.min(5, Math.floor(1 + level / 18)))
+  const sandAmount = wordSandOfferAmount(level)
+  const bitAmount = wordBitOfferAmount(level)
   return {
     consumables: [generateConsumable(level), generateConsumable(level)],
     equipment:   [generateItem(level, true), generateItem(level, true)],

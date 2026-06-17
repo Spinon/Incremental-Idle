@@ -18,6 +18,7 @@ import { getWeaponCombatProfile, getWeaponStatBonuses } from '../formulas/weapon
 import { applySpellBuffs } from '../formulas/spells'
 import { cn } from '../lib/utils'
 import { usePartyEffectiveAttributes } from '../lib/partyBonuses'
+import { WordSandIcon, WordBitIcon } from './icons/ArcaneIcons'
 import type { Word, Spell, SpellRarity, AutoCastConfig } from '../types/spell'
 import { ELEMENT_PRISM } from '../types/element'
 import type { ElementType } from '../types/element'
@@ -664,7 +665,7 @@ function WordProgressCard({ word, displayName, subtitle, progressLabel, progress
       onClick={onClick}
       disabled={!isKnown}
       className={cn(
-        'relative flex min-h-[104px] w-[150px] shrink-0 flex-col overflow-hidden rounded-xl border-2 px-3 py-3 text-left transition-all',
+        'relative flex min-h-[104px] w-full flex-col overflow-hidden rounded-xl border-2 px-3 py-3 text-left transition-all',
         isKnown ? RARITY_BORDER[word.rarity] : 'border-slate-300 dark:border-slate-700 border-dashed',
         isKnown ? RARITY_BG[word.rarity] : 'bg-slate-100/70 dark:bg-slate-900/60',
         !isKnown && 'cursor-not-allowed',
@@ -1057,6 +1058,7 @@ export default function SpellbookPanel() {
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
   const wordBits     = useSpellStore(s => s.wordBits)
   const wordSand     = useSpellStore(s => s.wordSand)
+  const wordBitCredits = useSpellStore(s => s.wordBitCredits)
   const craftedSpellIds = useSpellStore(s => s.craftedSpellIds)
   const generateWordBit = useSpellStore(s => s.generateWordBit)
   const createSpellFromWords = useSpellStore(s => s.createSpellFromWords)
@@ -1180,23 +1182,38 @@ export default function SpellbookPanel() {
           {/* Progress info */}
           <div className="mb-3 grid gap-2 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto] md:items-stretch">
             <div className="rounded-xl border border-cyan-400/40 bg-cyan-50/80 px-3 py-2 dark:bg-cyan-950/25">
-              <span className="block text-[8px] font-black uppercase tracking-widest text-cyan-700/70 dark:text-cyan-300/70">{wordSandLabel}</span>
+              <span className="flex items-center gap-1 leading-none text-[8px] font-black uppercase tracking-widest text-cyan-700/70 dark:text-cyan-300/70">
+                <WordSandIcon className="shrink-0" size={9} />{wordSandLabel}
+              </span>
               <span className="mt-0.5 block text-[22px] font-black leading-none text-cyan-700 dark:text-cyan-200">{Math.floor(wordSand)}</span>
               <span className="mt-1 block text-[10px] font-semibold text-cyan-700/70 dark:text-cyan-300/70">
                 +{wordSandRate.toFixed(2)} {isEn ? 'per second' : 'por segundo'}
               </span>
             </div>
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
-              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                {isEn ? `Next ${wordBitLabel}` : `Proximo ${wordBitLabel}`}
+              <span className="flex items-center gap-1 leading-none text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                <WordBitIcon className="shrink-0" size={9} />{isEn ? `Next ${wordBitLabel}` : `Proximo ${wordBitLabel}`}
               </span>
-              <span className="mt-0.5 block text-[16px] font-black text-slate-700 dark:text-slate-200">{wordBitCost} {wordSandLabel}</span>
-              <span className={cn('mt-1 block text-[10px] font-bold', wordSand >= wordBitCost ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}>
-                {wordSand >= wordBitCost ? (isEn ? 'Ready to generate' : 'Pronto para gerar') : (isEn ? 'Collect more sand' : 'Junte mais areia')}
-              </span>
+              {wordBitCredits > 0 ? (
+                <>
+                  <span className="mt-0.5 block text-[16px] font-black text-violet-600 dark:text-violet-300">{isEn ? 'Free' : 'Gratis'}</span>
+                  <span className="mt-1 block text-[10px] font-bold text-violet-600 dark:text-violet-400">
+                    {isEn
+                      ? `${wordBitCredits} free generation${wordBitCredits !== 1 ? 's' : ''} left`
+                      : `${wordBitCredits} ${wordBitCredits !== 1 ? 'geracoes gratis restantes' : 'geracao gratis restante'}`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="mt-0.5 block text-[16px] font-black text-slate-700 dark:text-slate-200">{wordBitCost} {wordSandLabel}</span>
+                  <span className={cn('mt-1 block text-[10px] font-bold', wordSand >= wordBitCost ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}>
+                    {wordSand >= wordBitCost ? (isEn ? 'Ready to generate' : 'Pronto para gerar') : (isEn ? 'Collect more sand' : 'Junte mais areia')}
+                  </span>
+                </>
+              )}
             </div>
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
-              <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              <span className="flex items-center leading-none text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
                 {isEn ? 'Known Words' : 'Palavras Conhecidas'}
               </span>
               <span className="mt-0.5 block text-[16px] font-black text-slate-700 dark:text-slate-200">{knownWordIds.length}/{ALL_WORDS.length}</span>
@@ -1207,20 +1224,24 @@ export default function SpellbookPanel() {
             <button
               type="button"
               onClick={handleGenerateWordBit}
-              disabled={wordSand < wordBitCost}
+              disabled={wordBitCredits === 0 && wordSand < wordBitCost}
               className={cn(
-                'rounded-xl border px-4 py-2 text-[11px] font-black transition-colors md:min-w-[128px]',
-                wordSand >= wordBitCost
-                  ? 'border-cyan-400 bg-cyan-500 text-white shadow-[0_0_14px_rgba(34,211,238,0.35)] hover:bg-cyan-400'
-                  : 'border-slate-300 dark:border-slate-700 text-slate-400 opacity-50 cursor-not-allowed',
+                'flex items-center justify-center gap-1.5 rounded-xl border px-4 py-2 text-[11px] font-black transition-colors md:min-w-[128px]',
+                wordBitCredits > 0
+                  ? 'border-violet-400 bg-violet-500 text-white shadow-[0_0_14px_rgba(167,139,250,0.4)] hover:bg-violet-400'
+                  : wordSand >= wordBitCost
+                    ? 'border-cyan-400 bg-cyan-500 text-white shadow-[0_0_14px_rgba(34,211,238,0.35)] hover:bg-cyan-400'
+                    : 'border-slate-300 dark:border-slate-700 text-slate-400 opacity-50 cursor-not-allowed',
               )}
             >
+              <WordBitIcon size={13} />
               {isEn ? `Generate ${wordBitLabel}` : `Gerar ${wordBitLabel}`}
+              {wordBitCredits > 0 && <span className="text-[9px] font-bold opacity-90">({wordBitCredits})</span>}
             </button>
           </div>
 
           {/* Known words grid */}
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="mb-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">
             {knownWords.map(w => (
               (() => {
                 const bits = Math.min(wordBits[w.id] ?? 0, getWordBitRequirement(w.id))

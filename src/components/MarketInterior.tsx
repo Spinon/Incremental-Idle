@@ -5,7 +5,8 @@ import { useHeroStore } from '../store/heroStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSpellStore, getKnownWordIds } from '../store/spellStore'
 import { useUIStore } from '../store/uiStore'
-import { wordSandPrice, wordBitPrice, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
+import { wordSandPrice, wordBitPrice, wordSandOfferAmount, wordBitOfferAmount, ATTR_LABEL_PT, ATTR_LABEL_EN, getEquipmentBonuses, generateItem, generateConsumable, getItemDisplayName } from '../formulas/items'
+import { MarketSpriteIcon } from './icons/ArcaneIcons'
 import { getDerivedStats } from '../formulas/derived'
 import { WORD_MAP } from '../data/words'
 import { WORD_ICONS } from '../data/spells'
@@ -203,7 +204,7 @@ export default function MarketInterior() {
   const addConsumable  = useInventoryStore(s => s.addConsumable)
 
   const addWordSand   = useSpellStore(s => s.addWordSand)
-  const grantRandomWordBits = useSpellStore(s => s.grantRandomWordBits)
+  const grantWordBitCredits = useSpellStore(s => s.grantWordBitCredits)
   const earnedWordIds = useSpellStore(s => s.earnedWordIds)
   const heroLevel     = useHeroStore(s => s.level)
   const heroAttrs     = useHeroStore(s => s.attributes)
@@ -224,8 +225,8 @@ export default function MarketInterior() {
     if (savedOffer) return savedOffer
     // First visit: generate at the tile's level (items scale with tile difficulty)
     // Fisher-Yates pick — sort(() => Math.random() - 0.5) is a biased shuffle
-    const sandAmount = Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6)
-    const bitAmount = Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90)))
+    const sandAmount = wordSandOfferAmount(tileLevel, tilesPlaced)
+    const bitAmount = wordBitOfferAmount(tileLevel, tilesPlaced)
 
     return {
       consumables: [generateConsumable(tileLevel), generateConsumable(tileLevel)],
@@ -243,13 +244,13 @@ export default function MarketInterior() {
 
   const wordSandOffers: WordSandOffer[] = offer.wordSand ?? [{
     id: `ws_${marketKey}`,
-    amount: Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6),
-    price: wordSandPrice(Math.round(45 + tileLevel * 9 + Math.min(tilesPlaced, 120) * 0.6), tileLevel),
+    amount: wordSandOfferAmount(tileLevel, tilesPlaced),
+    price: wordSandPrice(wordSandOfferAmount(tileLevel, tilesPlaced), tileLevel),
   }]
   const wordBitOffers: WordBitOffer[] = offer.wordBits ?? [{
     id: `wb_${marketKey}`,
-    amount: Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90))),
-    price: wordBitPrice(Math.max(1, Math.min(5, Math.floor(1 + tileLevel / 18 + tilesPlaced / 90))), tileLevel),
+    amount: wordBitOfferAmount(tileLevel, tilesPlaced),
+    price: wordBitPrice(wordBitOfferAmount(tileLevel, tilesPlaced), tileLevel),
   }]
   const wordOffers: WordOffer[] = []
   // Track what was bought from this persisted market tile.
@@ -334,7 +335,7 @@ export default function MarketInterior() {
     pauseSceneAuto()
     if (bought.has(wo.id)) return
     if (!spendGold(eff(wo.price))) return
-    grantRandomWordBits(wo.amount)
+    grantWordBitCredits(wo.amount)
     markBought(wo.id)
   }
 
@@ -555,7 +556,7 @@ export default function MarketInterior() {
                         isBought ? 'border-green-800/40 opacity-60' : 'border-cyan-500/40',
                       )}
                     >
-                      <span className="text-xl font-black text-cyan-300 shrink-0">WS</span>
+                      <MarketSpriteIcon name="wordSand" className="shrink-0" size={36} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[12px] font-bold text-cyan-300">+{wo.amount} WS</span>
@@ -603,23 +604,23 @@ export default function MarketInterior() {
                         isBought ? 'border-green-800/40 opacity-60' : 'border-violet-500/40',
                       )}
                     >
-                      <span className="text-xl font-black text-violet-300 shrink-0">WB</span>
+                      <MarketSpriteIcon name="wordBit" className="shrink-0" size={36} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[12px] font-bold text-violet-300">+{wo.amount} WB</span>
                           <span className="text-[8px] font-semibold uppercase tracking-widest text-violet-500/80">
-                            {isEn ? 'word progress' : 'progresso de palavra'}
+                            {isEn ? 'free generations' : 'geracoes gratis'}
                           </span>
                         </div>
                         <div className="text-[10px] text-indigo-400/60 mt-0.5">
                           {isEn
-                            ? 'Grants random word bits immediately; completed words are learned.'
-                            : 'Concede pedacos de palavra aleatorios imediatamente; palavras completas sao aprendidas.'}
+                            ? `Grants ${wo.amount} free use${wo.amount !== 1 ? 's' : ''} of the Generate Word Bit button (no Word Sand spent).`
+                            : `Concede ${wo.amount} uso${wo.amount !== 1 ? 's' : ''} gratis do botao Gerar Pedaco de Palavra (sem gastar Areia de Palavra).`}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[11px] text-yellow-500 font-semibold tabular-nums">
-                          â¬¡ {eff(wo.price)}
+                          ⬡ {eff(wo.price)}
                           {eff(wo.price) < wo.price && <span className="text-[9px] text-emerald-400 ml-0.5 line-through opacity-60">{wo.price}</span>}
                         </span>
                         <button
