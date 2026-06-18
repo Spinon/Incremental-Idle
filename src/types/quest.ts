@@ -66,7 +66,7 @@ export interface QuestRewards {
   gold: number
   /** Areia de Palavra / Word Sand. */
   wordSand?: number
-  /** Pedaços de Palavra / Word Bits — progress toward random words. */
+  /** Pedaços de Palavra / Word Bits — free generation credits. */
   wordBits?: number
   /** Pre-rolled equipment granted on completion. */
   items?: Item[]

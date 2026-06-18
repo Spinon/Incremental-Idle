@@ -380,13 +380,13 @@ function createQuestFromTile(tileLevel: number): void {
 }
 
 export function generateContent(level: number, tilesPlaced = 0, biome: Biome = 'forest'): TileContent {
+  // Two-step roll:
+  // 1) 5% chance that a tile receives any notable content.
+  // 2) Weighted content roll. Treasure is the fallback bucket.
+  if (Math.random() >= 0.05) return { type: 'empty' }
+
   const r = Math.random()
-  if (r < 0.008) return { type: 'quest' }
-  if (r < 0.016) return { type: 'market' }
-  if (r < 0.024) return { type: 'tileMarket' }
-  if (r < 0.030) return { type: 'blueTower' }
-  if (r < 0.055) return { type: 'treasure' }
-  if (r < 0.10) {
+  if (r < 0.25) {
     return {
       type: 'monster',
       monsterLevel: level,
@@ -394,7 +394,12 @@ export function generateContent(level: number, tilesPlaced = 0, biome: Biome = '
       monsterRarity: pickMonsterRarity(tilesPlaced),
     }
   }
-  return { type: 'empty' }
+  if (r < 0.40) return { type: 'quest' }
+  if (r < 0.50) return { type: 'market' }
+  if (r < 0.57) return { type: 'tileMarket' }
+  if (r < 0.62) return { type: 'blueTower' }
+  if (r < 0.65) return makeRescueContent(level, tilesPlaced)
+  return { type: 'treasure' }
 }
 
 let _uid = 0
@@ -681,6 +686,7 @@ interface MapStore {
   saveMarketOffer(key: string, offer: MarketOffer): void
   saveTileMarketOffer(key: string, offer: TileMarketOffer): void
   addDeckTile(tile: MapTile): void
+  clearSightedCells(): number
   setDestination(x: number, y: number): void
   setAutoExplore(v: 'manual' | 'move' | 'full'): void
   toggleRiskMode(): void
@@ -784,6 +790,14 @@ export const useMapStore = create<MapStore>()(
           content: { type: 'empty' },
         })
       }),
+      clearSightedCells: () => {
+        let removed = 0
+        set((st) => {
+          removed = Object.keys(st.sightedCells).length
+          st.sightedCells = {}
+        })
+        return removed
+      },
       normalizePlacedTileLevel: (x, y, heroLevel): boolean => {
         let changed = false
         set((st) => {
@@ -1147,9 +1161,6 @@ export const useMapStore = create<MapStore>()(
           }
         } else {
           content = generateContent(tileLevel, st.tilesPlaced, tile.biome)
-        }
-        if (!bounty && !sighted && content.type === 'empty' && Math.random() < 0.01) {
-          content = makeRescueContent(tileLevel, st.tilesPlaced)
         }
         delete st.sightedCells[key]
 

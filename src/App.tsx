@@ -185,6 +185,7 @@ function GameRoot() {
   const syncFromHero = useBattleStore((s) => s.syncFromHero)
   const setSpeed     = useBattleStore((s) => s.setSpeed)
   const scene        = useMapStore((s) => s.scene)
+  const clearSightedCells = useMapStore((s) => s.clearSightedCells)
   const equipment    = useInventoryStore((s) => s.equipment)
   const weaponProgress = useInventoryStore((s) => s.weaponProgress)
   const equippedWeapons = useInventoryStore((s) => s.equippedWeapons)
@@ -207,6 +208,16 @@ function GameRoot() {
   useEffect(() => {
     ensureStarterNpcs(heroLevel)
   }, [ensureStarterNpcs, heroLevel])
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('clearSightedCells') !== '1') return
+
+    const removed = clearSightedCells()
+    url.searchParams.delete('clearSightedCells')
+    url.searchParams.set('sightedCellsCleared', String(removed))
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [clearSightedCells])
 
   useEffect(() => {
     if (startupInitialized.current || gamePausedForSync) return

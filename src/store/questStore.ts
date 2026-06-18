@@ -56,7 +56,7 @@ export const useQuestStore = create<QuestStore>()(
           useHeroStore.getState().gainXp(r.xp)
           useHeroStore.getState().earnGold(r.gold)
           if (r.wordSand) useSpellStore.getState().addWordSand(r.wordSand)
-          if (r.wordBits) useSpellStore.getState().grantRandomWordBits(r.wordBits)
+          if (r.wordBits) useSpellStore.getState().grantWordBitCredits(r.wordBits)
           for (const item of r.items ?? []) useInventoryStore.getState().addItem(item)
           for (const c of r.consumables ?? []) useInventoryStore.getState().addConsumable(c)
           requestCriticalCloudSave()

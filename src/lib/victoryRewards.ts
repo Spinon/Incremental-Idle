@@ -117,7 +117,7 @@ export function grantVictoryRewards(derived: DerivedStats): void {
   if (dropChance && Math.random() < dropChance) {
     if (monsterRarity === 'epic' || monsterRarity === 'unique') {
       const amount = WORD_BIT_DROP_AMOUNT[monsterRarity] ?? 1
-      useSpellStore.getState().grantRandomWordBits(amount)
+      useSpellStore.getState().grantWordBitCredits(amount)
 
       useNotifStore.getState().push({
         title: 'Pedaço de palavra!',
