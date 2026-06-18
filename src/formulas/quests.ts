@@ -119,7 +119,7 @@ function rollQuestRewards(tileLevel: number, difficulty: QuestDifficulty, bounty
 
   // Areia de Palavra — always granted.
   const sandMult = SAND_MULT[difficulty] * (bounty ? 1.5 : 1)
-  rewards.wordSand = Math.max(1, Math.round((8 + lvl * 2.5) * sandMult * rewardVariance()))
+  rewards.wordSand = Math.max(1, Math.round((11 + lvl * 3) * sandMult * rewardVariance()))
 
   // Pedaços de Palavra — medium quests and up.
   const bits = WORD_BITS[difficulty] + (bounty ? 1 : 0)

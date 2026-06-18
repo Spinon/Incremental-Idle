@@ -108,7 +108,7 @@ function MiniManaBar({ current, max, label, color = 'bg-blue-500' }: { current: 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-function MiniAutoBar({ kind }: { kind: 'home' | 'market' | 'tower' }) {
+function MiniAutoBar({ kind }: { kind: 'home' | 'market' | 'tower' | 'redTower' }) {
   const sceneAuto = useUIStore(s => s.sceneAuto)
   const lang = useSettingsStore(s => s.lang)
   const blueTowerAutoTarget = useMapStore(s => s.blueTowerAutoTarget)
@@ -118,10 +118,10 @@ function MiniAutoBar({ kind }: { kind: 'home' | 'market' | 'tower' }) {
 
   const pct = Math.max(0, Math.min(100, (sceneAuto.elapsedMs / sceneAuto.durationMs) * 100))
   const sec = Math.ceil(Math.max(0, (sceneAuto.durationMs - sceneAuto.elapsedMs) / 1000))
-  const fill = kind === 'tower' ? 'bg-sky-500/80' : kind === 'market' ? 'bg-indigo-500/80' : 'bg-red-500/80'
+  const fill = kind === 'tower' ? 'bg-sky-500/80' : kind === 'redTower' ? 'bg-red-500/80' : kind === 'market' ? 'bg-indigo-500/80' : 'bg-red-500/80'
   const text = sceneAuto.paused
     ? (isEn ? 'Auto paused' : 'Auto pausado')
-    : kind === 'tower'
+    : kind === 'tower' || kind === 'redTower'
       ? blueTowerAutoTarget
         ? (isEn ? `Teleporting in ${sec}s` : `Teleportando em ${sec}s`)
         : (isEn ? `Leaving in ${sec}s` : `Saindo em ${sec}s`)
@@ -435,6 +435,59 @@ export default function MiniBattlePlayer() {
           </button>
           <MiniAutoBar kind="tower" />
         </>
+      )
+    }
+
+    if (scene === 'redTower') {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={openBattleTabAndPause}
+            className="w-full text-left px-3 pt-3 pb-2 bg-[linear-gradient(160deg,#2b0707_0%,#5f1111_55%,#120404_100%)] hover:brightness-110 transition"
+            title={isEn ? 'Open red tower' : 'Abrir torre vermelha'}
+          >
+            <div className="h-16 rounded-lg border border-red-600/40 bg-red-950/40 px-3 py-2 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg border border-red-400/30 bg-red-900/50 flex items-center justify-center text-xl">
+                T
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black text-red-100 leading-none">
+                  {isEn ? 'Red Tower' : 'Torre Vermelha'}
+                </p>
+                <p className="text-[9px] text-red-300/70 mt-1 leading-none">
+                  {isEn ? 'Open tower interior' : 'Abrir interior da torre'}
+                </p>
+              </div>
+            </div>
+          </button>
+          <MiniAutoBar kind="redTower" />
+        </>
+      )
+    }
+
+    if (scene === 'redTowerVictory') {
+      return (
+        <button
+          type="button"
+          onClick={openBattleTabAndPause}
+          className="w-full text-left px-3 pt-3 pb-3 bg-[linear-gradient(160deg,#2a2108_0%,#76520a_55%,#120d04_100%)] hover:brightness-110 transition"
+          title={isEn ? 'Open red tower victory' : 'Abrir vitoria da torre vermelha'}
+        >
+          <div className="h-16 rounded-lg border border-yellow-500/40 bg-yellow-950/40 px-3 py-2 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg border border-yellow-300/40 bg-yellow-900/50 flex items-center justify-center text-xl">
+              ★
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-black text-yellow-100 leading-none">
+                {isEn ? 'Tower conquered' : 'Torre conquistada'}
+              </p>
+              <p className="text-[9px] text-yellow-300/70 mt-1 leading-none">
+                {isEn ? 'Open reward summary' : 'Abrir resumo das recompensas'}
+              </p>
+            </div>
+          </div>
+        </button>
       )
     }
 

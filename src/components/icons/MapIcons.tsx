@@ -123,3 +123,38 @@ export function BlueTowerIcon({ size = 24, className }: IconProps) {
     </svg>
   )
 }
+
+export function RedTowerIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <path d="M7 21V8l2-3h6l2 3v13H7Z" fill="#7f1d1d" stroke="#f87171" strokeWidth="1" />
+      <path d="M9 8h6M10 5V3h4v2" stroke="#fecaca" strokeWidth="1.2" strokeLinecap="round" />
+      <rect x="10" y="10" width="1.8" height="3" rx="0.5" fill="#fca5a5" />
+      <rect x="12.2" y="10" width="1.8" height="3" rx="0.5" fill="#fca5a5" />
+      <rect x="10" y="15" width="1.8" height="3" rx="0.5" fill="#ef4444" />
+      <rect x="12.2" y="15" width="1.8" height="3" rx="0.5" fill="#ef4444" />
+      <path d="M5 21h14" stroke="#fecaca" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M6.2 6.8c1.6-2 3.3-3 5.8-3s4.2 1 5.8 3" stroke="#ef4444" strokeWidth="1" opacity="0.7" />
+    </svg>
+  )
+}
+
+export function WallIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <rect x="3" y="5" width="18" height="15" rx="1.5" fill="#111827" stroke="#4b5563" strokeWidth="1" />
+      <path d="M3 10h18M3 15h18M8 5v5M15 5v5M6 10v5M13 10v5M19 10v5M9 15v5M16 15v5" stroke="#6b7280" strokeWidth="1" strokeLinecap="round" />
+      <path d="M5 7h3M12 12h4M6 17h5" stroke="#9ca3af" strokeWidth="0.8" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  )
+}
+
+export function BossStarIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <path d="M12 2.8l2.4 5.2 5.6.7-4.1 3.9 1 5.6-4.9-2.7-4.9 2.7 1-5.6L4 8.7l5.6-.7L12 2.8Z" fill="#facc15" stroke="#92400e" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M12 6.2l1.2 2.6 2.8.4-2 1.9.5 2.8-2.5-1.4-2.5 1.4.5-2.8-2-1.9 2.8-.4L12 6.2Z" fill="#fef3c7" opacity="0.75" />
+      <circle cx="12" cy="12" r="2.1" fill="#b45309" opacity="0.85" />
+    </svg>
+  )
+}

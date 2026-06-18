@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import type { MapTile, PlacedTile, TileContent } from '../../types/map'
 import { gridKey, getVisionRadius, DIR_DELTA, DIR_OPPOSITE, DIRS } from '../../store/mapStore'
 import MapTileCell, { type Visibility } from './MapTileCell'
-import { MonsterIcon, TreasureIcon, MarketIcon, TileMarketIcon, QuestIcon, BlueTowerIcon } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, TileMarketIcon, QuestIcon, BlueTowerIcon, RedTowerIcon, WallIcon, BossStarIcon } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 import type { QuestMapMarker, QuestDifficulty } from '../../types/quest'
 import type { PartyExplorerMarker } from '../../types/party'
@@ -60,6 +60,9 @@ function ghostBg(content: TileContent): string {
   if (content.type === 'tileMarket') return 'bg-sky-950/25'
   if (content.type === 'quest')    return 'bg-emerald-950/25'
   if (content.type === 'blueTower') return 'bg-sky-950/25'
+  if (content.type === 'redTower') return 'bg-red-950/30'
+  if (content.type === 'dungeonObstacle') return 'bg-slate-950/45'
+  if (content.type === 'dungeonEvent') return 'bg-yellow-950/45'
   if (content.type === 'npcRescue') return 'bg-purple-950/30'
   return ''
 }
@@ -241,6 +244,10 @@ export default function MapViewport({
       const { dx, dy } = DIR_DELTA[dir]
       const neighbor = grid[gridKey(gx + dx, gy + dy)]
       if (!neighbor) continue
+      if (neighbor.content.type === 'dungeonObstacle') {
+        if (draggedTile.connections.includes(dir)) return 'invalid'
+        continue
+      }
 
       hasNeighbor = true
       const neighborFacesUs = neighbor.connections.includes(DIR_OPPOSITE[dir])
@@ -279,7 +286,8 @@ export default function MapViewport({
           ? 'clear'
           : rawVis
 
-      const sight = (!tile && vis !== 'fog') ? (sightedCells[gridKey(gx, gy)] ?? null) : null
+      const previewContent = sightedCells[gridKey(gx, gy)] ?? null
+      const sight = (!tile && (vis !== 'fog' || previewContent?.type === 'dungeonEvent')) ? previewContent : null
       const placement = placementState(gx, gy)
 
       // Valid drop target: empty cell, dragging a tile, AND at least one placed
@@ -288,6 +296,7 @@ export default function MapViewport({
       // placeTile — this is just the highlight heuristic.
       const isAdj = !tile && draggingId !== null && (DIRS).some(d => {
         const neighbor = grid[gridKey(gx + DIR_DELTA[d].dx, gy + DIR_DELTA[d].dy)]
+        if (neighbor?.content.type === 'dungeonObstacle') return false
         return neighbor?.connections.includes(DIR_OPPOSITE[d])
       })
 
@@ -411,6 +420,9 @@ export default function MapViewport({
                   {sight.type === 'tileMarket' && <TileMarketIcon size={previewIconSize} />}
                   {sight.type === 'quest'    && <QuestIcon    size={previewIconSize} />}
                   {sight.type === 'blueTower' && <BlueTowerIcon size={previewIconSize} />}
+                  {sight.type === 'redTower' && <RedTowerIcon size={previewIconSize} />}
+                  {sight.type === 'dungeonObstacle' && <WallIcon size={previewIconSize} />}
+                  {sight.type === 'dungeonEvent' && <BossStarIcon size={previewIconSize} />}
                   {sight.type === 'npcRescue' && <MonsterIcon size={previewIconSize} />}
                 </div>
               )}

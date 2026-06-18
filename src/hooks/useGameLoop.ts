@@ -21,6 +21,7 @@ import { getHeroDerived } from '../lib/heroDerived'
 import { grantVictoryRewards } from '../lib/victoryRewards'
 import { getBaseSpeed, getMaxDeck } from '../formulas/derived'
 import { usePartyStore } from '../store/partyStore'
+import { useUIStore } from '../store/uiStore'
 import { WEAPON_MATERIAL_LABELS } from '../formulas/weapons'
 import type { Phase } from '../store/battleStore'
 
@@ -95,6 +96,16 @@ function resolveInteriorSimulation({ offline }: SimulationContext): boolean {
     return true
   }
 
+  if (scene === 'redTower' || scene === 'redTowerVictory') {
+    useMapStore.getState().returnFromRedTower()
+    return true
+  }
+
+  if (scene === 'redTowerBlocked') {
+    useMapStore.getState().completeRedTowerDungeon(false)
+    return true
+  }
+
   if (scene === 'home') {
     // Same condition as HouseInterior's auto-restart: only after defeat or
     // stuck. A hero sent home manually stays home, like online.
@@ -102,6 +113,7 @@ function resolveInteriorSimulation({ offline }: SimulationContext): boolean {
     if (!map.defeatPending && !map.stuckPending) return false
     useBattleStore.getState().reset()
     map.resetMap(useHeroStore.getState().level)
+    usePartyStore.getState().resetExplorerPositions({ x: 0, y: 0 })
     useMapStore.getState().leaveScene()
     return true
   }
@@ -282,6 +294,15 @@ export function useGameLoop(paused = false) {
       const maxDeck   = getMaxDeck(derived.vision)
       const heroLevel = useHeroStore.getState().level
       useMapStore.getState().tickMap(deltaMs, derived.moveSpeed, maxDeck, derived.vision, heroLevel)
+      {
+        const map = useMapStore.getState()
+        const currentTile = map.grid[`${map.playerPos.x},${map.playerPos.y}`]
+        const standingOnDungeonEvent = currentTile?.content.type === 'dungeonEvent'
+        if (map.dungeonRun && map.scene === 'map' && !standingOnDungeonEvent && map.deck.length >= maxDeck && !map.canAutoPlace()) {
+          map.beginRedTowerDungeonFailure()
+          useUIStore.getState().setActiveTab('battle')
+        }
+      }
 
       // Drain treasure XP and monster gold
       const xp = useMapStore.getState().drainXp()

@@ -67,7 +67,7 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
   }
 
   if (Math.random() < 0.65) {
-    loot.wordSand = Math.round((8 + chest.level * 2.8) * value * (0.8 + Math.random() * 0.7))
+    loot.wordSand = Math.round((12 + chest.level * 3.4) * value * (0.8 + Math.random() * 0.7))
   }
 
   const extraRolls = chest.rarity === 'unique' ? 3 : chest.rarity === 'set' ? 2 : chest.rarity === 'epic' ? 2 : chest.rarity === 'rare' ? 1 : 0
@@ -76,7 +76,7 @@ export function rollChestLoot(chest: TreasureChest): ChestLoot {
     if (r < 0.36) loot.gold += Math.round((8 + chest.level * 4) * value)
     else if (r < 0.54) loot.items.push(generateItem(chest.level))
     else if (r < 0.72) loot.consumables.push(generateConsumable(chest.level))
-    else if (r < 0.88) loot.wordSand += Math.round((5 + chest.level * 1.8) * value)
+    else if (r < 0.88) loot.wordSand += Math.round((8 + chest.level * 2.2) * value)
     else {
       loot.materials.push(pickWeaponMaterialDrop(chest.level))
     }

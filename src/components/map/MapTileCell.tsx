@@ -1,7 +1,7 @@
 import type { PlacedTile } from '../../types/map'
 import { estimateMonster } from '../../formulas/monsters'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS } from '../../data/monsters'
-import { MonsterIcon, TreasureIcon, MarketIcon, TileMarketIcon, QuestIcon, BlueTowerIcon, PlayerMarker } from '../icons/MapIcons'
+import { MonsterIcon, TreasureIcon, MarketIcon, TileMarketIcon, QuestIcon, BlueTowerIcon, RedTowerIcon, WallIcon, BossStarIcon, PlayerMarker } from '../icons/MapIcons'
 import { cn } from '../../lib/utils'
 
 export type Visibility = 'clear' | 'penumbra' | 'fog'
@@ -33,7 +33,10 @@ function tileBg(content: PlacedTile['content'], explored: boolean): string {
   if (content.type === 'treasure') return explored ? '#100f08' : '#14130a'
   if (content.type === 'quest')    return explored ? '#06180f' : '#082515'
   if (content.type === 'blueTower') return explored ? '#06192d' : '#07111f'
+  if (content.type === 'redTower') return explored ? '#1a0808' : '#260909'
   if (content.type === 'npcRescue') return explored ? '#13091f' : '#1b0b2e'
+  if (content.type === 'dungeonObstacle') return '#080b10'
+  if (content.type === 'dungeonEvent') return explored ? '#1a1508' : '#2a2108'
   return explored ? '#0b160b' : '#0d1a0d'
 }
 
@@ -45,7 +48,10 @@ function nodeColor(content: PlacedTile['content']): string {
   if (content.type === 'treasure') return '#5a5035'
   if (content.type === 'quest')    return '#24734e'
   if (content.type === 'blueTower') return '#1e4c78'
+  if (content.type === 'redTower') return '#a83b3b'
   if (content.type === 'npcRescue') return '#6d3aa0'
+  if (content.type === 'dungeonObstacle') return '#374151'
+  if (content.type === 'dungeonEvent') return '#facc15'
   return '#4a4035'
 }
 
@@ -65,7 +71,10 @@ function levelBadgeBg(content: PlacedTile['content']): string {
   if (content.type === 'treasure') return 'rgba(26, 24, 8, 0.62)'
   if (content.type === 'quest')    return 'rgba(5, 35, 18, 0.68)'
   if (content.type === 'blueTower') return 'rgba(5, 18, 40, 0.68)'
+  if (content.type === 'redTower') return 'rgba(45, 8, 8, 0.72)'
   if (content.type === 'npcRescue') return 'rgba(35, 12, 58, 0.7)'
+  if (content.type === 'dungeonObstacle') return 'rgba(8, 11, 16, 0.8)'
+  if (content.type === 'dungeonEvent') return 'rgba(70, 50, 8, 0.76)'
   return 'rgba(10, 26, 10, 0.62)'
 }
 
@@ -88,6 +97,13 @@ function buildTitle(tile: PlacedTile): string {
   if (tile.content.type === 'market')   return `${base} — Mercado`
   if (tile.content.type === 'tileMarket') return `${base} — Mercado de Tiles`
   if (tile.content.type === 'blueTower') return `${base} — Torre Azul`
+  if (tile.content.type === 'redTower') {
+    return tile.explored
+      ? `${base} - Uma torre vermelha, ela perdeu sua aura.`
+      : `${base} - Uma torre vermelha, tem uma aura sinistra.`
+  }
+  if (tile.content.type === 'dungeonObstacle') return `${base} - Parede`
+  if (tile.content.type === 'dungeonEvent') return `${base} - Evento de dungeon`
   if (tile.content.type === 'npcRescue') {
     const lvl      = tile.content.monsterLevel ?? tile.level + 3
     const template = FOREST_MONSTER_MAP.get(tile.content.monsterType ?? '') ?? FOREST_MONSTERS[0]
@@ -114,12 +130,12 @@ export default function MapTileCell({
   const showContentIcon =
     visibility === 'clear' &&
     content.type !== 'empty' &&
-    (!tile.explored || content.type === 'market' || content.type === 'tileMarket' || content.type === 'quest' || content.type === 'blueTower' || content.type === 'npcRescue')
+    (!tile.explored || content.type === 'market' || content.type === 'tileMarket' || content.type === 'quest' || content.type === 'blueTower' || content.type === 'redTower' || content.type === 'npcRescue' || content.type === 'dungeonObstacle' || content.type === 'dungeonEvent')
 
   // Icon opacity: explored service tiles are dimmed; active towers keep their glow.
   const iconOpacity = tile.explored && content.type !== 'blueTower' ? 0.45 : 1
   const contentIconSize = Math.max(9, Math.min(14, Math.floor(tileSize * 0.28)))
-  const centeredContentIcon = content.type === 'blueTower'
+  const centeredContentIcon = content.type === 'blueTower' || content.type === 'dungeonObstacle'
   const effectiveIconSize = centeredContentIcon
     ? Math.max(15, Math.min(24, Math.floor(tileSize * 0.46)))
     : contentIconSize
@@ -136,21 +152,23 @@ export default function MapTileCell({
       )}
     >
       {/* Paths + junction node */}
-      <svg viewBox="0 0 52 52" className="absolute inset-0 z-20 w-full h-full pointer-events-none">
-        {tile.connections.includes('N') && (
-          <rect x="21" y="0"  width="10" height="26" rx="2" fill={pipe} />
-        )}
-        {tile.connections.includes('S') && (
-          <rect x="21" y="26" width="10" height="26" rx="2" fill={pipe} />
-        )}
-        {tile.connections.includes('E') && (
-          <rect x="26" y="21" width="26" height="10" rx="2" fill={pipe} />
-        )}
-        {tile.connections.includes('W') && (
-          <rect x="0"  y="21" width="26" height="10" rx="2" fill={pipe} />
-        )}
-        <circle cx="26" cy="26" r="6" fill={node} />
-      </svg>
+      {content.type !== 'dungeonObstacle' && (
+        <svg viewBox="0 0 52 52" className="absolute inset-0 z-20 w-full h-full pointer-events-none">
+          {tile.connections.includes('N') && (
+            <rect x="21" y="0"  width="10" height="26" rx="2" fill={pipe} />
+          )}
+          {tile.connections.includes('S') && (
+            <rect x="21" y="26" width="10" height="26" rx="2" fill={pipe} />
+          )}
+          {tile.connections.includes('E') && (
+            <rect x="26" y="21" width="26" height="10" rx="2" fill={pipe} />
+          )}
+          {tile.connections.includes('W') && (
+            <rect x="0"  y="21" width="26" height="10" rx="2" fill={pipe} />
+          )}
+          <circle cx="26" cy="26" r="6" fill={node} />
+        </svg>
+      )}
 
       {/* Content icon — top-right badge */}
       {showContentIcon && (
@@ -171,12 +189,15 @@ export default function MapTileCell({
           {content.type === 'tileMarket' && <TileMarketIcon size={effectiveIconSize} />}
           {content.type === 'quest'    && <QuestIcon    size={effectiveIconSize} />}
           {content.type === 'blueTower' && <BlueTowerIcon size={effectiveIconSize} />}
+          {content.type === 'redTower' && <RedTowerIcon size={effectiveIconSize} />}
+          {content.type === 'dungeonObstacle' && <WallIcon size={Math.max(17, Math.min(30, Math.floor(tileSize * 0.58)))} />}
+          {content.type === 'dungeonEvent' && <BossStarIcon size={effectiveIconSize} />}
           {content.type === 'npcRescue' && <MonsterIcon size={effectiveIconSize} />}
         </div>
       )}
 
       {/* Level badge — bottom-left */}
-      {visibility === 'clear' && (
+      {visibility === 'clear' && content.type !== 'dungeonObstacle' && (
         <div
           className="absolute bottom-0.5 left-0.5 z-30 rounded px-1"
           style={{
@@ -198,6 +219,10 @@ export default function MapTileCell({
                   ? '#34d399'
                 : content.type === 'blueTower'
                   ? '#60a5fa'
+                : content.type === 'redTower'
+                  ? '#f87171'
+                : content.type === 'dungeonEvent'
+                  ? '#facc15'
                 : content.type === 'npcRescue'
                   ? '#c084fc'
                 : levelColor(tile.level, heroLevel),
@@ -238,4 +263,3 @@ export default function MapTileCell({
     </div>
   )
 }
-

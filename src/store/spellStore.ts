@@ -63,7 +63,7 @@ export function getSpellCreationCost(spell: Spell, knownSpellCount = 0): number 
 }
 
 export function getWordSandPerSecond(level: number, inteligencia: number, sabedoria: number): number {
-  return 0.04 + Math.max(1, level) * 0.012 + Math.max(0, inteligencia) * 0.018 + Math.max(0, sabedoria) * 0.026
+  return 0.06 + Math.max(1, level) * 0.013 + Math.max(0, inteligencia) * 0.02 + Math.max(0, sabedoria) * 0.028
 }
 
 interface SpellStore {

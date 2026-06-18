@@ -659,7 +659,7 @@ function NearbyPanel({ grid, playerPos, visRadius, heroLevel, tilesPlaced, selec
     // Collect from placed grid tiles. Every non-service tile can lead to a
     // battle; monster lairs that are still unexplored are the enraged variant.
     for (const [, tile] of Object.entries(grid)) {
-      if (tile.content.type === 'market' || tile.content.type === 'tileMarket' || tile.content.type === 'quest' || tile.content.type === 'blueTower') continue
+      if (tile.content.type === 'market' || tile.content.type === 'tileMarket' || tile.content.type === 'quest' || tile.content.type === 'blueTower' || tile.content.type === 'redTower' || tile.content.type === 'dungeonObstacle') continue
       const dist = Math.max(Math.abs(tile.x - playerPos.x), Math.abs(tile.y - playerPos.y))
       if (dist > revealRange) continue
       const isBounty = tile.content.type === 'monster' && !!tile.content.bountyQuestId
@@ -841,6 +841,8 @@ function ActiveTileInfoPanel({
     !content                   ? (isEn ? 'Unknown' : 'Desconhecido') :
     content.type === 'market'  ? (isEn ? 'Market' : 'Mercado') :
     content.type === 'tileMarket' ? (isEn ? 'Tile Market' : 'Mercado de Tiles') :
+    content.type === 'redTower' ? (isEn ? 'Red Tower' : 'Torre Vermelha') :
+    content.type === 'dungeonEvent' ? (isEn ? 'Dungeon Event' : 'Evento de Dungeon') :
     content.type === 'npcRescue' ? (isEn ? 'Predator Rescue' : 'Resgate Predator') :
     content.type === 'monster' && content.bountyQuestId ? (isEn ? 'Bounty Target' : 'Alvo de missão') :
     content.type === 'monster' ? (isEn ? 'Monster Lair' : 'Covil') :
@@ -853,13 +855,14 @@ function ActiveTileInfoPanel({
     isBlocked                  ? 'text-slate-400' :
     content?.type === 'market' ? 'text-indigo-400' :
     content?.type === 'tileMarket' ? 'text-sky-400' :
+    content?.type === 'redTower' || content?.type === 'dungeonEvent' ? 'text-red-400' :
     content?.type === 'npcRescue' ? 'text-purple-400' :
     content?.type === 'monster'? 'text-red-400' :
     content?.type === 'treasure'? 'text-yellow-400' :
     content?.type === 'blueTower'? 'text-sky-400' :
     content?.type === 'quest'  ? 'text-emerald-400' : 'text-slate-400'
 
-  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'tileMarket' && content.type !== 'quest' && content.type !== 'blueTower'
+  const enemyInfo = tile && content && content.type !== 'market' && content.type !== 'tileMarket' && content.type !== 'quest' && content.type !== 'blueTower' && content.type !== 'redTower' && content.type !== 'dungeonObstacle'
     ? (() => {
         const baseLevel = content.monsterLevel ?? tile.level
         const bounty = content.type === 'monster' && !!content.bountyQuestId
@@ -980,6 +983,16 @@ function ActiveTileInfoPanel({
         </div>
       )}
 
+      {content?.type === 'redTower' && (
+        <div className="text-[11px] text-red-400/80">
+          {!tile
+            ? (isEn ? 'A red tower in the distance.' : 'Uma torre vermelha à distância.')
+            : explored
+              ? (isEn ? 'A red tower, its aura has faded.' : 'Uma torre vermelha, ela perdeu sua aura.')
+              : (isEn ? 'A red tower with a sinister aura.' : 'Uma torre vermelha, tem uma aura sinistra.')}
+        </div>
+      )}
+
       {enemyInfo && (
         <div className="flex flex-wrap gap-3 text-[11px] text-slate-400">
           <span>{enemyInfo.template.emoji} {monsterName(enemyInfo.template, isEn)} <span className="text-red-400 font-semibold">Nv.{enemyInfo.level}</span></span>
@@ -1025,6 +1038,8 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
   const headerLabel =
     content.type === 'market'   ? (isEn ? 'Market' : 'Mercado') :
     content.type === 'tileMarket' ? (isEn ? 'Tile Market' : 'Mercado de Tiles') :
+    content.type === 'redTower' ? (isEn ? 'Red Tower' : 'Torre Vermelha') :
+    content.type === 'dungeonEvent' ? (isEn ? 'Dungeon Event' : 'Evento de Dungeon') :
     content.type === 'monster'  ? (isEn ? 'Monster Lair' : 'Covil') :
     content.type === 'treasure' ? (isEn ? 'Treasure' : 'Tesouro') :
     content.type === 'blueTower'? (isEn ? 'Blue Tower' : 'Torre Azul') :
@@ -1033,6 +1048,7 @@ export function TileInfoPanel({ tile, onClose, tilesPlaced = 0 }: { tile: Placed
   const headerColor =
     content.type === 'market'   ? 'text-indigo-400' :
     content.type === 'tileMarket' ? 'text-sky-400' :
+    content.type === 'redTower' || content.type === 'dungeonEvent' ? 'text-red-400' :
     content.type === 'monster'  ? 'text-red-400' :
     content.type === 'treasure' ? 'text-yellow-400' :
     content.type === 'blueTower'? 'text-sky-400' : 'text-slate-400'

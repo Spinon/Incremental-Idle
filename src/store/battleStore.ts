@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { buildMonster, pickMonsterRarity } from '../formulas/monsters'
+import { SPELL_ICONS, SPELL_MAP } from '../data/spells'
 import { FOREST_MONSTER_MAP, FOREST_MONSTERS, FOREST_RANDOM_MONSTERS } from '../data/monsters'
 import { useInventoryStore } from './inventoryStore'
 import { useSpellStore } from './spellStore'
@@ -13,6 +14,7 @@ import {
   isTurnSkipper,
 } from '../formulas/statusEffects'
 import type { MonsterRarity } from '../types/monster'
+import type { SpecialVictoryScript } from '../types/map'
 import type { ElementType } from '../types/element'
 import {
   elementalModifier,
@@ -60,7 +62,10 @@ export interface Unit {
   resVital:   number
   rarity?: MonsterRarity
   monsterType?: string
-  monsterVariant?: 'golden' | 'predator'
+  monsterVariant?: 'golden' | 'predator' | 'boss'
+  bossSpellIds?: string[]
+  bossSpellIndex?: number
+  specialVictoryScript?: SpecialVictoryScript
   /** True for the first-encounter boss version of a monster tile
    *  (spawned at tile.level + random 1–5 above normal). */
   enraged: boolean
@@ -132,7 +137,9 @@ export interface StartBattleOptions {
   questName?: string
   questNameEn?: string
   questNpc?: boolean
-  monsterVariant?: 'golden' | 'predator' | null
+  monsterVariant?: 'golden' | 'predator' | 'boss' | null
+  bossSpellIds?: string[]
+  specialVictoryScript?: SpecialVictoryScript
 }
 
 interface HeroSync {
@@ -156,7 +163,7 @@ interface BattleStore {
   nextEnemyBaseLevel: number
   nextEnemyType: string
   nextEnemyRarity:  MonsterRarity
-  nextEnemyVariant: 'golden' | 'predator' | null
+  nextEnemyVariant: 'golden' | 'predator' | 'boss' | null
   nextTilesPlaced:  number
   /**
    * True when the current enemy is the "enraged" first-encounter boss
@@ -357,7 +364,7 @@ export const useBattleStore = create<BattleStore>()(
     setSkipAnim: (v) => set((st) => { st.skipAnim = v }),
     setPhase:    (p) => set((st) => { st.phase    = p }),
 
-    startBattle: ({ level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc, monsterVariant }) => {
+    startBattle: ({ level, monsterType, monsterRarity, tilesPlaced, enraged, baseLevel, questId, questName, questNameEn, questNpc, monsterVariant, bossSpellIds, specialVictoryScript }) => {
       syncBattlePlayerFromStores()
       set((st) => {
       const resolvedTilesPlaced = tilesPlaced ?? st.nextTilesPlaced
@@ -383,6 +390,9 @@ export const useBattleStore = create<BattleStore>()(
       st.enemy        = buildMonster(template, level, resolvedRarity, resolvedTilesPlaced)
       st.enemy.enraged = isEnraged
       st.enemy.monsterVariant = monsterVariant ?? undefined
+      st.enemy.bossSpellIds = bossSpellIds
+      st.enemy.bossSpellIndex = 0
+      st.enemy.specialVictoryScript = specialVictoryScript
       if (monsterVariant === 'golden') {
         st.enemy.name = 'Demon Dourado'
         st.enemy.namePt = 'Demon Dourado'
@@ -398,6 +408,17 @@ export const useBattleStore = create<BattleStore>()(
         st.enemy.def = Math.round(st.enemy.def * 1.12)
         st.enemy.atkSpeed = Math.round(st.enemy.atkSpeed * 1.08 * 100) / 100
         st.enemy.accuracy = Math.min(0.55, st.enemy.accuracy + 0.04)
+      }
+      if (monsterVariant === 'boss') {
+        st.enemy.name = `[BOSS] ${st.enemy.name}`
+        st.enemy.namePt = `[BOSS] ${st.enemy.namePt ?? st.enemy.name}`
+        st.enemy.nameEn = `[BOSS] ${st.enemy.nameEn ?? st.enemy.name}`
+        st.enemy.maxHp = Math.round(st.enemy.maxHp * 1.8)
+        st.enemy.hp = st.enemy.maxHp
+        st.enemy.atk = Math.round(st.enemy.atk * 1.25)
+        st.enemy.def = Math.round(st.enemy.def * 1.2)
+        st.enemy.magicDamage = Math.max(st.enemy.magicDamage, Math.round(st.enemy.atk * 0.85))
+        st.enemy.furyMax = Math.max(3, st.enemy.furyMax - 2)
       }
       if (questId) {
         st.enemy.name   = questName   ?? st.enemy.name
@@ -613,17 +634,27 @@ export const useBattleStore = create<BattleStore>()(
         st.enemy.fury += 1
         if (st.enemy.fury >= st.enemy.furyMax) {
           st.enemy.fury = 0
+          const bossSpellId = st.enemy.monsterVariant === 'boss' && st.enemy.bossSpellIds?.length
+            ? st.enemy.bossSpellIds[st.enemy.bossSpellIndex ?? 0]
+            : undefined
+          const bossSpell = bossSpellId ? SPELL_MAP.get(bossSpellId) : undefined
+          if (bossSpell && st.enemy.bossSpellIds) {
+            st.enemy.bossSpellIndex = ((st.enemy.bossSpellIndex ?? 0) + 1) % st.enemy.bossSpellIds.length
+          }
           const el  = st.enemy.element ?? 'umbra'
           const mod = elementalModifier(
             el, st.player.weakTo,
             st.player.resIgnea, st.player.resGlacial, st.player.resSombria, st.player.resVital,
           )
-          const furyDmg = Math.max(1, Math.round(st.enemy.magicDamage * 2.2 * mod))
+          const spellBase = bossSpell?.effect.type === 'damage'
+            ? (bossSpell.effect.base ?? 0) + (bossSpell.effect.scaling ?? 1) * st.enemy.magicDamage
+            : st.enemy.magicDamage * 2.2
+          const furyDmg = Math.max(1, Math.round(spellBase * mod))
           const pHp = Math.max(0, st.player.hp - furyDmg)
           st.player.hp = pHp
           st.log.unshift({
             attacker: st.enemy.name, defender: st.player.name, dmg: furyDmg,
-            spell: { name: 'Fúria', nameEn: 'Fury', icon: '🔥', effectType: 'damage', value: furyDmg },
+            spell: { name: bossSpell?.name ?? 'Furia', nameEn: bossSpell?.name ?? 'Fury', icon: bossSpell ? (SPELL_ICONS[bossSpell.id] ?? '*') : '*', effectType: 'damage', value: furyDmg },
           })
           if (pHp === 0) { st.winner = 'enemy'; st.phase = 'over' }
         }

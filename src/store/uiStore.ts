@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export type AppTab = 'battle' | 'map' | 'party' | 'equips' | 'spells' | 'consumables' | 'quests'
-export type SceneAutoKind = 'home' | 'market' | 'tower'
+export type SceneAutoKind = 'home' | 'market' | 'tower' | 'redTower'
 
 export interface AppTabDef {
   id: AppTab

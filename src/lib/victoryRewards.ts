@@ -1,4 +1,5 @@
 import { generateItem, getItemDisplayName } from '../formulas/items'
+import { pickWeaponMaterialDrop } from '../formulas/weapons'
 import { useBattleStore } from '../store/battleStore'
 import { useHeroStore } from '../store/heroStore'
 import { useInventoryStore } from '../store/inventoryStore'
@@ -8,6 +9,7 @@ import { useQuestStore } from '../store/questStore'
 import { useSpellStore } from '../store/spellStore'
 import type { MonsterRarity } from '../types/monster'
 import type { DerivedStats } from '../types/hero'
+import type { SpecialVictoryScript } from '../types/map'
 
 const ARCANE_DROP_CHANCE: Partial<Record<MonsterRarity, number>> = {
   rare: 0.08,
@@ -33,6 +35,54 @@ const RARITY_LABEL_EN: Record<string, string> = {
   epic: 'Epic', set: 'Set', unique: 'Unique',
 }
 
+type VictoryScriptHandler = (derived: DerivedStats) => boolean
+
+const VICTORY_SCRIPT_HANDLERS: Record<SpecialVictoryScript, VictoryScriptHandler> = {
+  redTowerDungeonSuccess: (derived) => {
+    const gainXp = useHeroStore.getState().gainXp
+    const earnGold = useHeroStore.getState().earnGold
+    const defeatedEnemy = useBattleStore.getState().enemy
+    const level = Math.max(1, defeatedEnemy.level)
+    const gold = Math.round((220 + level * 55) * derived.goldMultiplier)
+    const xp = Math.round((defeatedEnemy.maxHp * 1.4 + level * 35))
+    const item = generateItem(level + 8)
+    const material = pickWeaponMaterialDrop(level)
+    const wordSand = Math.round(160 + level * 16)
+
+    earnGold(gold)
+    gainXp(xp, derived.xpBonus)
+    useInventoryStore.getState().addItem(item)
+    useInventoryStore.getState().addWeaponMaterial(material.tier, Math.max(1, material.count))
+    useSpellStore.getState().addWordSand(wordSand)
+    useMapStore.getState().completeRedTowerDungeon(true, {
+      gold,
+      xp,
+      wordSand,
+      itemName: getItemDisplayName(item, false),
+      itemNameEn: getItemDisplayName(item, true),
+      itemRarity: item.rarity,
+      materialTier: material.tier,
+      materialCount: Math.max(1, material.count),
+    })
+
+    useNotifStore.getState().push({
+      title: 'Boss derrotado!',
+      titleEn: 'Boss defeated!',
+      body: `+${gold} ouro, +${wordSand} AP, item e Aco de Forja T${material.tier}`,
+      bodyEn: `+${gold} gold, +${wordSand} WS, item and Forge Steel T${material.tier}`,
+      rarity: item.rarity,
+      scrollTo: 'equips',
+      actions: [{ label: 'Ver Inventario', labelEn: 'View Inventory', kind: 'scroll', payload: 'equips' }],
+    })
+    return true
+  },
+}
+
+function runVictoryScript(script: SpecialVictoryScript | undefined, derived: DerivedStats): boolean {
+  if (!script) return false
+  return VICTORY_SCRIPT_HANDLERS[script]?.(derived) ?? false
+}
+
 /**
  * Everything the player earns when a battle ends in victory:
  * treasure-chest claim, quest kill hooks, tile/monster XP, weapon XP,
@@ -41,6 +91,8 @@ const RARITY_LABEL_EN: Record<string, string> = {
 export function grantVictoryRewards(derived: DerivedStats): void {
   const gainXp = useHeroStore.getState().gainXp
   const defeatedEnemy = useBattleStore.getState().enemy
+
+  if (runVictoryScript(defeatedEnemy.specialVictoryScript, derived)) return
 
   if (defeatedEnemy.monsterVariant === 'golden') {
     const pos = useMapStore.getState().playerPos

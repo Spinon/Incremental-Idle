@@ -8,14 +8,44 @@ import { pickMonsterRarity } from '../formulas/monsters'
 import { generateQuest } from '../formulas/quests'
 import { createTreasureChest } from '../formulas/chests'
 import { generateNpc } from '../formulas/npcs'
+import { ALL_SPELLS } from '../data/spells'
 import type { BountyTileEntry } from '../formulas/quests'
 import type { MonsterRarity } from '../types/monster'
-import type { Biome, Direction, MapTile, PlacedTile, TileContent, TileMarketOffer } from '../types/map'
+import type { Biome, Direction, MapTile, PlacedTile, RedTowerVictoryRewards, SpecialEncounter, TileContent, TileMarketOffer } from '../types/map'
 import type { MarketOffer, TreasureChest } from '../types/item'
 import type { WeaponMaterialDrop } from '../types/weapon'
 import type { PartyNpc } from '../types/party'
 import { SAVE_KEYS, SAVE_SCHEMA_VERSION, gameStorage, mergeSave, migrateSave } from './save'
 import type { QuestObjectiveBounty } from '../types/quest'
+
+type MapScene = 'map' | 'home' | 'market' | 'tileMarket' | 'tower' | 'redTower' | 'redTowerVictory' | 'redTowerBlocked'
+
+interface MapSnapshot {
+  grid: Record<string, PlacedTile>
+  playerPos: { x: number; y: number }
+  destination: { x: number; y: number } | null
+  sightedCells: Record<string, TileContent>
+  blueTowerBossPending: Record<string, boolean>
+  blueTowerAutoTarget: { x: number; y: number } | null
+  blueTowerEntryFrom: { x: number; y: number } | null
+  interiorEntryFrom: { x: number; y: number } | null
+  scene: MapScene
+  stuckPending: boolean
+  marketOffers: Record<string, MarketOffer>
+  tileMarketOffers: Record<string, TileMarketOffer>
+  bountyTiles: Record<string, BountyTileEntry>
+}
+
+interface DungeonRun {
+  active: boolean
+  origin: { x: number; y: number }
+  originKey: string
+  bossKey: string
+  bossLevel: number
+  bossMonsterType: string
+  bossSpellIds: string[]
+  snapshot: MapSnapshot
+}
 
 export const DIR_OPPOSITE: Record<Direction, Direction> = { N: 'S', S: 'N', E: 'W', W: 'E' }
 export const DIR_DELTA: Record<Direction, { dx: number; dy: number }> = {
@@ -68,13 +98,13 @@ function connectedExits(grid: Record<string, PlacedTile>, current: Point): Point
   return exits
 }
 
-function chooseTowerExit(grid: Record<string, PlacedTile>, current: Point, entryFrom: Point | null, target: Point | null): Point | null {
+function chooseInteriorExit(grid: Record<string, PlacedTile>, current: Point, entryFrom: Point | null, target: Point | null): Point | null {
   const exits = connectedExits(grid, current)
   if (exits.length === 0) return null
 
   const withoutEntry = exits.filter(exit => !samePoint(exit, entryFrom))
   const candidates = withoutEntry.length > 0 ? withoutEntry : exits
-  if (!target) return candidates[0]
+  if (!target || samePoint(target, current)) return candidates[0]
 
   return candidates.reduce((best, exit) => (
     chebyshevDistance(exit, target) < chebyshevDistance(best, target) ? exit : best
@@ -125,8 +155,10 @@ interface TileEnemyQueue {
   targetName?: string
   targetNameEn?: string
   isNpc?: boolean
-  variant?: 'golden' | 'predator'
+  variant?: 'golden' | 'predator' | 'boss'
   rescueNpc?: PartyNpc
+  bossSpellIds?: string[]
+  specialVictoryScript?: SpecialEncounter['victoryScript']
 }
 
 interface TileEntryResult {
@@ -134,7 +166,8 @@ interface TileEntryResult {
   questTileLevel: number | null
 }
 
-type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingNpcRecruit' | 'pendingXp' | 'pendingWeaponMaterials' | 'pendingChests' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene'>
+type TileEntryState = Pick<MapStore, 'pendingGold' | 'pendingMonsterXp' | 'pendingNpcRecruit' | 'pendingXp' | 'pendingWeaponMaterials' | 'pendingChests' | 'tilesPlaced' | 'bountyTiles' | 'blueTowerBossPending' | 'scene' | 'dungeonRun'>
+type SpecialSpaceHandler = (st: TileEntryState, tile: PlacedTile) => TileEntryResult | null
 
 function pickPredatorRarity(tilesPlaced = 0): MonsterRarity {
   const unlocked: MonsterRarity[] = ['uncommon']
@@ -151,15 +184,136 @@ function pickPredatorRarity(tilesPlaced = 0): MonsterRarity {
   return unlocked[0]
 }
 
-function makeRescueContent(tileLevel: number, tilesPlaced: number): TileContent {
-  const monster = pickMonsterForBiome('forest')
+function makeMonsterContent(tileLevel: number, tilesPlaced: number, biome: Biome, sighted?: TileContent): TileContent {
+  return {
+    type: 'monster',
+    monsterLevel: tileLevel,
+    monsterType: sighted?.monsterType ?? pickMonsterForBiome(biome).id,
+    monsterRarity: sighted?.monsterRarity ?? pickMonsterRarity(tilesPlaced),
+  }
+}
+
+function makeRescueContent(tileLevel: number, tilesPlaced: number, biome: Biome = 'forest', sighted?: TileContent): TileContent {
+  const monster = pickMonsterForBiome(biome)
   return {
     type: 'npcRescue',
     monsterLevel: tileLevel + 3 + Math.floor(Math.random() * 3),
-    monsterType: monster.id,
-    monsterRarity: pickPredatorRarity(tilesPlaced),
-    rescueNpc: generateNpc(`npc_rescue_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, tileLevel + 3),
+    monsterType: sighted?.monsterType ?? monster.id,
+    monsterRarity: sighted?.monsterRarity ?? pickPredatorRarity(tilesPlaced),
+    rescueNpc: sighted?.rescueNpc ?? generateNpc(`npc_rescue_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, tileLevel + 3),
   }
+}
+
+function enemyFromSpecialEncounter(st: TileEntryState, tile: PlacedTile, encounter: SpecialEncounter): TileEnemyQueue {
+  const baseLevel = Math.max(1, tile.level)
+  const enemyLevel = Math.max(baseLevel + 1, encounter.monsterLevel ?? baseLevel + 1)
+  return {
+    level: enemyLevel,
+    baseLevel,
+    type: encounter.monsterType ?? tile.content.monsterType ?? pickMonsterForBiome(tile.biome).id,
+    rarity: encounter.monsterRarity ?? (tile.content.monsterRarity ?? 'unique') as MonsterRarity,
+    tilesPlaced: st.tilesPlaced,
+    enraged: false,
+    variant: encounter.variant === 'normal' ? undefined : encounter.variant,
+    bossSpellIds: encounter.bossSpellIds ? [...encounter.bossSpellIds] : undefined,
+    specialVictoryScript: encounter.victoryScript,
+  }
+}
+
+const SPECIAL_SPACE_HANDLERS: Partial<Record<TileContent['type'], SpecialSpaceHandler>> = {
+  market: (st, tile) => {
+    st.scene = 'market'
+    if (!tile.explored) tile.explored = true
+    return { enemy: null, questTileLevel: null }
+  },
+  tileMarket: (st, tile) => {
+    st.scene = 'tileMarket'
+    if (!tile.explored) tile.explored = true
+    return { enemy: null, questTileLevel: null }
+  },
+  redTower: (st) => {
+    st.scene = 'redTower'
+    return { enemy: null, questTileLevel: null }
+  },
+  quest: (_st, tile) => {
+    const questTileLevel = tile.level
+    if (!tile.explored) {
+      tile.explored = true
+      tile.content = { type: 'empty' }
+    }
+    return { enemy: null, questTileLevel }
+  },
+  blueTower: (st, tile) => {
+    if (tile.explored) {
+      st.scene = 'tower'
+      return { enemy: null, questTileLevel: null }
+    }
+
+    const tileKey = `${tile.x},${tile.y}`
+    const baseLevel = Math.max(1, tile.level)
+    const enemyLevel = baseLevel + 5
+    const tileMult = 1 + Math.floor(st.tilesPlaced / 10) * 0.05
+
+    st.blueTowerBossPending[tileKey] = true
+    st.pendingGold += Math.round((25 + enemyLevel * 10) * tileMult * (0.8 + Math.random() * 0.4))
+    st.pendingMonsterXp.push({
+      xp: Math.round((18 + enemyLevel * 5) * tileMult * (0.8 + Math.random() * 0.4)),
+      monsterLevel: enemyLevel,
+    })
+
+    return {
+      enemy: {
+        level: enemyLevel,
+        baseLevel,
+        type: 'demon',
+        rarity: 'unique',
+        tilesPlaced: st.tilesPlaced,
+        enraged: true,
+      },
+      questTileLevel: null,
+    }
+  },
+  dungeonEvent: (st, tile) => {
+    const tileKey = `${tile.x},${tile.y}`
+    const shouldRetryDungeonBoss = !!st.dungeonRun && st.dungeonRun.bossKey === tileKey
+    if (tile.explored && !shouldRetryDungeonBoss) return { enemy: null, questTileLevel: null }
+    tile.explored = true
+    return {
+      enemy: enemyFromSpecialEncounter(st, tile, tile.content.specialEncounter ?? {
+        variant: 'boss',
+        monsterType: tile.content.monsterType,
+        monsterLevel: tile.content.monsterLevel,
+        monsterRarity: (tile.content.monsterRarity ?? 'unique') as MonsterRarity,
+        bossSpellIds: tile.content.dungeonBossSpellIds,
+        victoryScript: 'redTowerDungeonSuccess',
+      }),
+      questTileLevel: null,
+    }
+  },
+  npcRescue: (st, tile) => {
+    if (tile.explored) return { enemy: null, questTileLevel: null }
+
+    const baseLevel = Math.max(1, tile.level)
+    const enemyLevel = Math.max(baseLevel + 3, tile.content.monsterLevel ?? baseLevel + 3)
+    st.pendingNpcRecruit = tile.content.rescueNpc ?? null
+    tile.explored = true
+
+    return {
+      enemy: tile.content.specialEncounter
+        ? enemyFromSpecialEncounter(st, tile, tile.content.specialEncounter)
+        : {
+            level: enemyLevel,
+            baseLevel,
+            type: tile.content.monsterType ?? pickMonsterForBiome(tile.biome).id,
+            rarity: (tile.content.monsterRarity ?? 'uncommon') as MonsterRarity,
+            tilesPlaced: st.tilesPlaced,
+            enraged: false,
+            variant: 'predator',
+            rescueNpc: tile.content.rescueNpc,
+          },
+      questTileLevel: null,
+    }
+  },
 }
 
 function contentFromBounty(bounty: BountyTileEntry): TileContent {
@@ -229,70 +383,16 @@ function processTileEntry(st: TileEntryState, tile: PlacedTile): TileEntryResult
   const bounty  = st.bountyTiles[tileKey] ?? bountyFromTileContent(tile)
   let questTileLevel: number | null = null
 
-  if (!bounty && (tile.content.type === 'market' || tile.content.type === 'tileMarket')) {
-    st.scene = tile.content.type
-    if (!tile.explored) tile.explored = true
-    return { enemy: null, questTileLevel: null }
+  if (!bounty) {
+    const specialResult = SPECIAL_SPACE_HANDLERS[tile.content.type]?.(st, tile)
+    if (specialResult) return specialResult
   }
 
-  // Quest board tile: grant the quest, then resolve the normal tile encounter.
-  if (!bounty && tile.content.type === 'quest') {
-    questTileLevel = tile.level
-    if (!tile.explored) {
-      tile.explored = true
-      tile.content  = { type: 'empty' }
-    }
-  }
-
-  if (!bounty && tile.content.type === 'blueTower') {
-    if (tile.explored) {
-      st.scene = 'tower'
-      return { enemy: null, questTileLevel: null }
-    }
-
-    const baseLevel  = Math.max(1, tile.level)
-    const enemyLevel = baseLevel + 5
-    const tileMult   = 1 + Math.floor(st.tilesPlaced / 10) * 0.05
-
-    st.blueTowerBossPending[tileKey] = true
-    st.pendingGold += Math.round((25 + enemyLevel * 10) * tileMult * (0.8 + Math.random() * 0.4))
-    st.pendingMonsterXp.push({
-      xp:           Math.round((18 + enemyLevel * 5) * tileMult * (0.8 + Math.random() * 0.4)),
-      monsterLevel: enemyLevel,
-    })
-
-    return {
-      enemy: {
-        level:       enemyLevel,
-        baseLevel,
-        type:        'demon',
-        rarity:      'unique',
-        tilesPlaced: st.tilesPlaced,
-        enraged:     true,
-      },
-      questTileLevel: null,
-    }
-  }
-
-  if (!bounty && tile.content.type === 'npcRescue') {
+  if (!bounty && tile.content.specialEncounter) {
     if (tile.explored) return { enemy: null, questTileLevel: null }
-
-    const baseLevel = Math.max(1, tile.level)
-    const enemyLevel = Math.max(baseLevel + 3, tile.content.monsterLevel ?? baseLevel + 3)
-    st.pendingNpcRecruit = tile.content.rescueNpc ?? null
-    if (!tile.explored) tile.explored = true
-
+    tile.explored = true
     return {
-      enemy: {
-        level: enemyLevel,
-        baseLevel,
-        type: tile.content.monsterType ?? pickMonsterForBiome(tile.biome).id,
-        rarity: (tile.content.monsterRarity ?? 'uncommon') as MonsterRarity,
-        tilesPlaced: st.tilesPlaced,
-        enraged: false,
-        variant: 'predator',
-        rescueNpc: tile.content.rescueNpc,
-      },
+      enemy: enemyFromSpecialEncounter(st, tile, tile.content.specialEncounter),
       questTileLevel: null,
     }
   }
@@ -366,6 +466,8 @@ function startTileBattle(enemy: TileEnemyQueue | null): void {
     questNameEn:    enemy.targetNameEn,
     questNpc:       enemy.isNpc,
     monsterVariant: enemy.variant,
+    bossSpellIds:   enemy.bossSpellIds,
+    specialVictoryScript: enemy.specialVictoryScript,
   })
 }
 
@@ -379,26 +481,69 @@ function createQuestFromTile(tileLevel: number): void {
   useQuestStore.getState().addQuest(quest)
 }
 
+export const PREDATOR_RESCUE_MIN_TILES = 200
+
+interface SpecialGridSpaceRule {
+  type: TileContent['type']
+  weight: number
+  minTilesPlaced?: number
+  create(level: number, tilesPlaced: number, biome: Biome): TileContent
+}
+
+const SPECIAL_GRID_SPACE_RULES: SpecialGridSpaceRule[] = [
+  {
+    type: 'monster',
+    weight: 25,
+    create: (level, tilesPlaced, biome) => makeMonsterContent(level, tilesPlaced, biome),
+  },
+  { type: 'quest', weight: 15, create: () => ({ type: 'quest' }) },
+  { type: 'market', weight: 10, create: () => ({ type: 'market' }) },
+  { type: 'tileMarket', weight: 7, create: () => ({ type: 'tileMarket' }) },
+  { type: 'blueTower', weight: 5, create: () => ({ type: 'blueTower' }) },
+  { type: 'redTower', weight: 4, create: () => ({ type: 'redTower' }) },
+  {
+    type: 'npcRescue',
+    weight: 3,
+    minTilesPlaced: PREDATOR_RESCUE_MIN_TILES,
+    create: (level, tilesPlaced, biome) => makeRescueContent(level, tilesPlaced, biome),
+  },
+  { type: 'treasure', weight: 35, create: () => ({ type: 'treasure' }) },
+]
+
+function specialGridSpaceRuleAvailable(rule: SpecialGridSpaceRule, tilesPlaced: number): boolean {
+  return rule.minTilesPlaced === undefined || tilesPlaced >= rule.minTilesPlaced
+}
+
+function isSpecialGridSpaceTypeAvailable(type: TileContent['type'], tilesPlaced: number): boolean {
+  const rule = SPECIAL_GRID_SPACE_RULES.find(entry => entry.type === type)
+  return !rule || specialGridSpaceRuleAvailable(rule, tilesPlaced)
+}
+
+function contentFromSightedCell(sighted: TileContent, tilesPlaced: number): TileContent | null {
+  if (!isSpecialGridSpaceTypeAvailable(sighted.type, tilesPlaced)) return null
+  return { ...sighted }
+}
+
+function isInteriorContentType(type: TileContent['type']): boolean {
+  return type === 'market'
+    || type === 'tileMarket'
+    || type === 'quest'
+    || type === 'redTower'
+}
+
 export function generateContent(level: number, tilesPlaced = 0, biome: Biome = 'forest'): TileContent {
   // Two-step roll:
   // 1) 5% chance that a tile receives any notable content.
-  // 2) Weighted content roll. Treasure is the fallback bucket.
+  // 2) Weighted content roll, filtered by any tile-count conditions.
   if (Math.random() >= 0.05) return { type: 'empty' }
 
-  const r = Math.random()
-  if (r < 0.25) {
-    return {
-      type: 'monster',
-      monsterLevel: level,
-      monsterType:   pickMonsterForBiome(biome).id,
-      monsterRarity: pickMonsterRarity(tilesPlaced),
-    }
+  const availableRules = SPECIAL_GRID_SPACE_RULES.filter(rule => specialGridSpaceRuleAvailable(rule, tilesPlaced))
+  const totalWeight = availableRules.reduce((sum, rule) => sum + rule.weight, 0)
+  let roll = Math.random() * totalWeight
+  for (const rule of availableRules) {
+    roll -= rule.weight
+    if (roll <= 0) return rule.create(level, tilesPlaced, biome)
   }
-  if (r < 0.40) return { type: 'quest' }
-  if (r < 0.50) return { type: 'market' }
-  if (r < 0.57) return { type: 'tileMarket' }
-  if (r < 0.62) return { type: 'blueTower' }
-  if (r < 0.65) return makeRescueContent(level, tilesPlaced)
   return { type: 'treasure' }
 }
 
@@ -414,6 +559,7 @@ export function generateTile(level: number): MapTile {
     connections,
     biome: 'forest',
     level,
+    // Deck tiles are just path pieces; grid content is rolled by generateContent().
     content: { type: 'empty' },
   }
 }
@@ -450,6 +596,133 @@ export function generateTileMarketOffer(level: number, count = 4): TileMarketOff
     return { ...tile, price: tileMarketPrice(tile) }
   })
   return { tiles }
+}
+
+function cloneSnapshot<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function pickDungeonBossSpells(tileLevel: number): string[] {
+  const rarityCap = tileLevel >= 35 ? 4 : tileLevel >= 24 ? 3 : tileLevel >= 12 ? 2 : tileLevel >= 6 ? 1 : 0
+  const rank: Record<string, number> = { common: 0, uncommon: 1, rare: 2, epic: 3, unique: 4 }
+  const pool = ALL_SPELLS.filter(spell => spell.effect.type === 'damage' && rank[spell.rarity] <= rarityCap)
+  const shuffled = shuffle(pool.length > 0 ? pool : ALL_SPELLS.filter(spell => spell.effect.type === 'damage'))
+  return shuffled.slice(0, 3).map(spell => spell.id)
+}
+
+function makeDungeonTile(id: string, x: number, y: number, level: number, content: TileContent, connections: Direction[] = []): PlacedTile {
+  return {
+    id,
+    x,
+    y,
+    connections,
+    biome: 'forest',
+    level,
+    content,
+    explored: content.type === 'dungeonObstacle',
+  }
+}
+
+function makeDungeonRun(
+  snapshot: MapSnapshot,
+  origin: { x: number; y: number },
+  tileLevel: number,
+  heroLevel: number,
+): { run: DungeonRun; grid: Record<string, PlacedTile>; sightedCells: Record<string, TileContent> } {
+  const size = 10
+  const entrance = { x: 1, y: 1 }
+  const farCells = [
+    { x: size - 2, y: size - 2 },
+    { x: size - 2, y: 1 },
+    { x: 1, y: size - 2 },
+  ]
+  const boss = farCells[Math.floor(Math.random() * farCells.length)]
+  const bossKey = gridKey(boss.x, boss.y)
+  const bossLevel = Math.max(1, heroLevel + 1 + Math.floor(Math.random() * 3))
+  const bossMonsterType = pickMonsterForBiome('forest').id
+  const bossSpellIds = pickDungeonBossSpells(tileLevel)
+
+  const grid: Record<string, PlacedTile> = {
+    [gridKey(entrance.x, entrance.y)]: makeDungeonTile('dungeon_entrance', entrance.x, entrance.y, Math.max(1, tileLevel), { type: 'empty' }, ['N', 'S', 'E', 'W']),
+  }
+
+  for (let x = -1; x <= size; x++) {
+    for (const y of [-1, size]) {
+      const key = gridKey(x, y)
+      grid[key] = makeDungeonTile(`dungeon_wall_${key}`, x, y, tileLevel, { type: 'dungeonObstacle' })
+    }
+  }
+  for (let y = 0; y < size; y++) {
+    for (const x of [-1, size]) {
+      const key = gridKey(x, y)
+      grid[key] = makeDungeonTile(`dungeon_wall_${key}`, x, y, tileLevel, { type: 'dungeonObstacle' })
+    }
+  }
+
+  const reserved = new Set<string>([gridKey(entrance.x, entrance.y), bossKey])
+  for (const point of [entrance, boss]) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = point.x + dx
+        const y = point.y + dy
+        if (x >= 0 && y >= 0 && x < size && y < size) reserved.add(gridKey(x, y))
+      }
+    }
+  }
+  const pathXStep = boss.x >= entrance.x ? 1 : -1
+  for (let x = entrance.x; x !== boss.x + pathXStep; x += pathXStep) reserved.add(gridKey(x, entrance.y))
+  const pathYStep = boss.y >= entrance.y ? 1 : -1
+  for (let y = entrance.y; y !== boss.y + pathYStep; y += pathYStep) reserved.add(gridKey(boss.x, y))
+
+  const obstacleKeys = new Set<string>()
+  const candidates: string[] = []
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const key = gridKey(x, y)
+      if (!reserved.has(key)) candidates.push(key)
+    }
+  }
+  for (const key of shuffle(candidates).slice(0, Math.round(size * size * 0.1))) {
+    obstacleKeys.add(key)
+  }
+  for (const key of obstacleKeys) {
+    const [x, y] = key.split(',').map(Number)
+    grid[key] = makeDungeonTile(`dungeon_obstacle_${key}`, x, y, tileLevel, { type: 'dungeonObstacle' })
+  }
+
+  const sightedCells: Record<string, TileContent> = {
+    [bossKey]: {
+      type: 'dungeonEvent',
+      monsterLevel: bossLevel,
+      monsterType: bossMonsterType,
+      monsterRarity: 'unique',
+      dungeonBossSpellIds: bossSpellIds,
+      dungeonOriginKey: gridKey(origin.x, origin.y),
+      specialEncounter: {
+        variant: 'boss',
+        monsterLevel: bossLevel,
+        monsterType: bossMonsterType,
+        monsterRarity: 'unique',
+        bossSpellIds,
+        victoryScript: 'redTowerDungeonSuccess',
+      },
+    },
+  }
+
+  return {
+    run: {
+      active: true,
+      origin,
+      originKey: gridKey(origin.x, origin.y),
+      bossKey,
+      bossLevel,
+      bossMonsterType,
+      bossSpellIds,
+      snapshot,
+    },
+    grid,
+    sightedCells,
+  }
 }
 
 const INITIAL_TILE: PlacedTile = {
@@ -548,7 +821,7 @@ function findTeleportCandidates(
 
     if (steps > 0) {
       const isBlueTower = tile.content.type === 'blueTower'
-      const isInterior = tile.content.type === 'market' || tile.content.type === 'tileMarket' || tile.content.type === 'quest'
+      const isInterior = isInteriorContentType(tile.content.type)
       if (target === 'blueTower' ? isBlueTower : !isInterior) {
         results.push({ x, y })
       }
@@ -577,6 +850,7 @@ function findTeleportCandidates(
 function findValidPlacements(
   grid: Record<string, PlacedTile>,
   deck: MapTile[],
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number },
 ): { tileId: string; x: number; y: number }[] {
   const results: { tileId: string; x: number; y: number }[] = []
 
@@ -591,6 +865,7 @@ function findValidPlacements(
       const { dx, dy } = DIR_DELTA[dir]
       const nx = gridTile.x + dx
       const ny = gridTile.y + dy
+      if (bounds && (nx < bounds.minX || ny < bounds.minY || nx > bounds.maxX || ny > bounds.maxY)) continue
       const key = gridKey(nx, ny)
       if (grid[key] || slotKeys.has(key)) continue
       slotKeys.add(key)
@@ -603,6 +878,7 @@ function findValidPlacements(
     const neighborFaces: (boolean | null)[] = DIRS.map((d) => {
       const { dx, dy } = DIR_DELTA[d]
       const neighbor = grid[gridKey(slot.x + dx, slot.y + dy)]
+      if (neighbor?.content.type === 'dungeonObstacle') return false
       return neighbor ? neighbor.connections.includes(DIR_OPPOSITE[d]) : null
     })
 
@@ -641,13 +917,16 @@ interface MapStore {
   blueTowerBossPending: Record<string, boolean>
   blueTowerAutoTarget: { x: number; y: number } | null
   blueTowerEntryFrom: { x: number; y: number } | null
+  interiorEntryFrom: { x: number; y: number } | null
   /**
    * 'manual'   — player controls everything (no automation)
    * 'move'     — auto-pathfinding to unexplored tiles (original Auto behaviour)
    * 'full'     — auto-pathfinding + auto-tile-placement + auto-restart when stuck
    */
   autoExplore: 'manual' | 'move' | 'full'
-  scene: 'map' | 'home' | 'market' | 'tileMarket' | 'tower'
+  scene: MapScene
+  dungeonRun: DungeonRun | null
+  redTowerVictoryRewards: RedTowerVictoryRewards | null
   tilesPlaced: number
   defeatPending: boolean
   /**
@@ -705,6 +984,10 @@ interface MapStore {
   goHome(): void
   leaveScene(): void
   exitMarket(): void
+  returnFromRedTower(): void
+  enterRedTowerDungeon(heroLevel: number): boolean
+  beginRedTowerDungeonFailure(): void
+  completeRedTowerDungeon(success: boolean, rewards?: RedTowerVictoryRewards): void
   exitBlueTower(): void
   autoExitBlueTower(): void
   holdBlueTower(): void
@@ -765,8 +1048,11 @@ export const useMapStore = create<MapStore>()(
       blueTowerBossPending: {},
       blueTowerAutoTarget: null,
       blueTowerEntryFrom: null,
+      interiorEntryFrom: null,
       autoExplore: 'move' as 'manual' | 'move' | 'full',
-      scene: 'map' as 'map' | 'home' | 'market' | 'tileMarket' | 'tower',
+      scene: 'map' as MapScene,
+      dungeonRun: null,
+      redTowerVictoryRewards: null,
       tilesPlaced: 0,
       defeatPending: false,
       stuckPending: false,
@@ -819,20 +1105,124 @@ export const useMapStore = create<MapStore>()(
         st.stuckPending = false
         st.blueTowerAutoTarget = null
         st.blueTowerEntryFrom = null
+        st.interiorEntryFrom = null
+        st.redTowerVictoryRewards = null
       }),
+      returnFromRedTower: () => {
+        let movedToX: number | null = null
+        let movedToY: number | null = null
+        let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
+        set((st) => {
+          reconcileActiveBounties(st)
+          const target = st.destination
+          const exit = chooseInteriorExit(st.grid, st.playerPos, st.interiorEntryFrom, target)
+          if (exit) {
+            st.playerPos = exit
+            movedToX = exit.x
+            movedToY = exit.y
+            const tile = st.grid[gridKey(exit.x, exit.y)]
+            if (tile) tileResult = processTileEntry(st, tile)
+          }
+          st.scene = 'map'
+          st.destination = target && !samePoint(target, st.playerPos) ? target : null
+          st.interiorEntryFrom = null
+          st.redTowerVictoryRewards = null
+        })
+        startTileBattle(tileResult.enemy)
+        if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
+        if (movedToX !== null && movedToY !== null) useQuestStore.getState().onPlayerMove(movedToX, movedToY)
+      },
+      enterRedTowerDungeon: (heroLevel): boolean => {
+        let entered = false
+        let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
+        set((st) => {
+          const origin = { ...st.playerPos }
+          const key = gridKey(origin.x, origin.y)
+          const tower = st.grid[key]
+          if (!tower || tower.content.type !== 'redTower' || tower.explored || st.dungeonRun) return
+
+          const snapshot: MapSnapshot = {
+            grid: cloneSnapshot(st.grid),
+            playerPos: { ...st.playerPos },
+            destination: st.destination ? { ...st.destination } : null,
+            sightedCells: cloneSnapshot(st.sightedCells),
+            blueTowerBossPending: cloneSnapshot(st.blueTowerBossPending),
+            blueTowerAutoTarget: st.blueTowerAutoTarget ? { ...st.blueTowerAutoTarget } : null,
+            blueTowerEntryFrom: st.blueTowerEntryFrom ? { ...st.blueTowerEntryFrom } : null,
+            interiorEntryFrom: st.interiorEntryFrom ? { ...st.interiorEntryFrom } : null,
+            scene: 'map',
+            stuckPending: st.stuckPending,
+            marketOffers: cloneSnapshot(st.marketOffers),
+            tileMarketOffers: cloneSnapshot(st.tileMarketOffers),
+            bountyTiles: cloneSnapshot(st.bountyTiles),
+          }
+          const dungeon = makeDungeonRun(snapshot, origin, tower.level, heroLevel)
+          st.dungeonRun = dungeon.run
+          st.grid = dungeon.grid
+          st.sightedCells = dungeon.sightedCells
+          st.playerPos = { x: 1, y: 1 }
+          st.destination = null
+          st.scene = 'map'
+          st.blueTowerBossPending = {}
+          st.blueTowerAutoTarget = null
+          st.blueTowerEntryFrom = null
+          st.interiorEntryFrom = null
+          st.bountyTiles = {}
+          st.stuckPending = false
+          const entranceTile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
+          if (entranceTile) tileResult = processTileEntry(st, entranceTile)
+          entered = true
+        })
+        if (entered) {
+          startTileBattle(tileResult.enemy)
+          if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
+        }
+        return entered
+      },
+      beginRedTowerDungeonFailure: () => set((st) => {
+        if (!st.dungeonRun || st.scene !== 'map') return
+        st.destination = null
+        st.scene = 'redTowerBlocked'
+      }),
+      completeRedTowerDungeon: (success, rewards): void => {
+        set((st) => {
+          const run = st.dungeonRun
+          if (!run) return
+          const snapshot = run.snapshot
+          st.grid = cloneSnapshot(snapshot.grid)
+          const tower = st.grid[run.originKey]
+          if (tower?.content.type === 'redTower') tower.explored = true
+          st.playerPos = { ...run.origin }
+          st.destination = null
+          st.sightedCells = cloneSnapshot(snapshot.sightedCells)
+          st.blueTowerBossPending = cloneSnapshot(snapshot.blueTowerBossPending)
+          st.blueTowerAutoTarget = snapshot.blueTowerAutoTarget ? { ...snapshot.blueTowerAutoTarget } : null
+          st.blueTowerEntryFrom = snapshot.blueTowerEntryFrom ? { ...snapshot.blueTowerEntryFrom } : null
+          st.interiorEntryFrom = snapshot.interiorEntryFrom ? { ...snapshot.interiorEntryFrom } : null
+          st.marketOffers = cloneSnapshot(snapshot.marketOffers)
+          st.tileMarketOffers = cloneSnapshot(snapshot.tileMarketOffers)
+          st.bountyTiles = cloneSnapshot(snapshot.bountyTiles)
+          st.scene = success ? 'redTowerVictory' : 'redTower'
+          st.redTowerVictoryRewards = success ? rewards ?? null : null
+          st.stuckPending = false
+          if (!success) st.destination = null
+          st.dungeonRun = null
+        })
+      },
 
       tryAutoPlace: (maxTileLevel?: number): boolean => {
         // No reconcileActiveBounties here: placeTile reconciles inside its own
         // set(), and placement validity only reads connections, which bounties
         // never change.
-        const { grid, deck } = get()
+        const { grid, deck, dungeonRun } = get()
+        const bounds = dungeonRun ? { minX: 0, minY: 0, maxX: 9, maxY: 9 } : undefined
         // Only consider tiles within the hero's reachable level — tiles above
         // the cap would be invisible to findNearestUnexplored, making the hero
         // stand still with "no destination" after placing them.
         const eligible = maxTileLevel !== undefined
           ? deck.filter(t => t.level <= maxTileLevel)
           : deck
-        const placements = findValidPlacements(grid, eligible)
+        const placements = findValidPlacements(grid, eligible, bounds)
         if (placements.length === 0) return false
         const choice = placements[Math.floor(Math.random() * placements.length)]
         get().placeTile(choice.tileId, choice.x, choice.y)
@@ -840,8 +1230,9 @@ export const useMapStore = create<MapStore>()(
       },
 
       canAutoPlace: (): boolean => {
-        const { grid, deck } = get()
-        return findValidPlacements(grid, deck).length > 0
+        const { grid, deck, dungeonRun } = get()
+        const bounds = dungeonRun ? { minX: 0, minY: 0, maxX: 9, maxY: 9 } : undefined
+        return findValidPlacements(grid, deck, bounds).length > 0
       },
 
       handleStuck: () => set((st) => {
@@ -897,7 +1288,17 @@ export const useMapStore = create<MapStore>()(
         set((st) => {
           const pos  = st.playerPos
           const tile = st.grid[gridKey(pos.x, pos.y)]
-
+          const dest = st.destination
+          const chosenExit = tile
+            ? chooseInteriorExit(st.grid, pos, st.interiorEntryFrom, dest)
+            : null
+          if (chosenExit) {
+            st.playerPos = chosenExit
+            if (!dest || samePoint(dest, pos) || samePoint(dest, chosenExit)) st.destination = null
+          }
+          st.scene = 'map'
+          st.interiorEntryFrom = null
+          /*
           const exits: { x: number; y: number }[] = []
           if (tile) {
             for (const dir of tile.connections) {
@@ -932,6 +1333,7 @@ export const useMapStore = create<MapStore>()(
           }
 
           st.scene = 'map'
+          */
         })
         // intentionally no battle start here; market->map transition handles the landing tile
       },
@@ -942,7 +1344,7 @@ export const useMapStore = create<MapStore>()(
         let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
         set((st) => {
           reconcileActiveBounties(st)
-          const exit = chooseTowerExit(st.grid, st.playerPos, st.blueTowerEntryFrom, null)
+          const exit = chooseInteriorExit(st.grid, st.playerPos, st.blueTowerEntryFrom, null)
           if (exit) {
             st.playerPos = exit
             st.destination = null
@@ -954,6 +1356,7 @@ export const useMapStore = create<MapStore>()(
           if (st.scene === 'tower') st.scene = 'map'
           st.blueTowerAutoTarget = null
           st.blueTowerEntryFrom = null
+          st.interiorEntryFrom = null
         })
         startTileBattle(tileResult.enemy)
         if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
@@ -967,6 +1370,7 @@ export const useMapStore = create<MapStore>()(
         st.destination = null
         st.blueTowerAutoTarget = null
         st.blueTowerEntryFrom = null
+        st.interiorEntryFrom = null
       }),
 
       autoExitBlueTower: () => {
@@ -1001,11 +1405,12 @@ export const useMapStore = create<MapStore>()(
               if (tile) tileResult = processTileEntry(st, tile)
               st.blueTowerAutoTarget = null
               st.blueTowerEntryFrom = null
+              st.interiorEntryFrom = null
               return
             }
           }
 
-          const exit = chooseTowerExit(st.grid, current, st.blueTowerEntryFrom, target ?? null)
+          const exit = chooseInteriorExit(st.grid, current, st.blueTowerEntryFrom, target ?? null)
           if (exit) {
             st.playerPos = exit
             st.destination = target ?? null
@@ -1017,6 +1422,7 @@ export const useMapStore = create<MapStore>()(
           if (st.scene === 'tower') st.scene = 'map'
           st.blueTowerAutoTarget = null
           st.blueTowerEntryFrom = null
+          st.interiorEntryFrom = null
         })
         startTileBattle(tileResult.enemy)
         if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
@@ -1107,6 +1513,7 @@ export const useMapStore = create<MapStore>()(
         set((st) => {
         reconcileActiveBounties(st)
         const key = gridKey(x, y)
+        if (st.dungeonRun && (x < 0 || y < 0 || x >= 10 || y >= 10)) return
         if (st.grid[key]) return
         const idx = st.deck.findIndex(t => t.id === tileId)
         if (idx === -1) return
@@ -1118,6 +1525,11 @@ export const useMapStore = create<MapStore>()(
           const { dx, dy } = DIR_DELTA[dir]
           const neighbor = st.grid[gridKey(x + dx, y + dy)]
           if (!neighbor) continue
+          if (neighbor.content.type === 'dungeonObstacle') {
+            if (tile.connections.includes(dir)) conflict = true
+            if (conflict) break
+            continue
+          }
           const neighborFacesUs = neighbor.connections.includes(DIR_OPPOSITE[dir])
           const weFaceNeighbor  = tile.connections.includes(dir)
           // A neighbor exists on this side — both directions must agree:
@@ -1128,39 +1540,16 @@ export const useMapStore = create<MapStore>()(
         }
         if (conflict || matchCount === 0) return
 
-        // Preserve the content TYPE shown in the fog (monster/treasure/market) so
-        // what the player saw in the preview matches what they get — but recalculate
-        // any level-dependent values from tileLevel so
-        // the difficulty is always consistent with the tile's badge.
+        // Grid content belongs to the fog preview. Placing a deck tile only
+        // activates that pre-existing content; it never rolls special content.
         const bounty = st.bountyTiles[key]
         const tileLevel = bounty ? Math.max(tile.level, bounty.targetLevel) : tile.level
         const sighted   = st.sightedCells[key]
         let content: TileContent
         if (bounty) {
           content = contentFromBounty(bounty)
-        } else if (sighted) {
-          if (sighted.type === 'monster') {
-            content = {
-              type: 'monster',
-              monsterLevel:  tileLevel,
-              monsterType:   sighted.monsterType   ?? pickMonsterForBiome(tile.biome).id,
-              monsterRarity: sighted.monsterRarity ?? pickMonsterRarity(st.tilesPlaced),
-            }
-          } else if (sighted.type === 'treasure') {
-            content = { type: 'treasure' }
-          } else if (sighted.type === 'npcRescue') {
-            content = {
-              type: 'npcRescue',
-              monsterLevel: tileLevel + 3 + Math.floor(Math.random() * 3),
-              monsterType: sighted.monsterType ?? pickMonsterForBiome(tile.biome).id,
-              monsterRarity: sighted.monsterRarity ?? pickPredatorRarity(st.tilesPlaced),
-              rescueNpc: sighted.rescueNpc ?? generateNpc(`npc_rescue_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, tileLevel + 3),
-            }
-          } else {
-            content = { type: sighted.type } as TileContent   // market, blue tower or empty — level-independent
-          }
         } else {
-          content = generateContent(tileLevel, st.tilesPlaced, tile.biome)
+          content = (sighted ? contentFromSightedCell(sighted, st.tilesPlaced) : null) ?? { type: 'empty' }
         }
         delete st.sightedCells[key]
 
@@ -1247,9 +1636,14 @@ export const useMapStore = create<MapStore>()(
             if (tile) {
               if (tile.content.type === 'market' || tile.content.type === 'tileMarket') {
                 st.scene = tile.content.type
+                st.interiorEntryFrom = previous
                 if (!tile.explored) tile.explored = true
+              } else if (tile.content.type === 'redTower') {
+                st.interiorEntryFrom = previous
+                tileResult = processTileEntry(st, tile)
               } else if (tile.content.type === 'blueTower') {
                 st.blueTowerEntryFrom = previous
+                st.interiorEntryFrom = previous
                 st.blueTowerAutoTarget = samePoint(destinationBeforeStep, next) ? null : destinationBeforeStep
                 tileResult = processTileEntry(st, tile)
               } else {
@@ -1287,6 +1681,9 @@ export const useMapStore = create<MapStore>()(
         st.blueTowerBossPending = {}
         st.blueTowerAutoTarget = null
         st.blueTowerEntryFrom = null
+        st.interiorEntryFrom = null
+        st.dungeonRun        = null
+        st.redTowerVictoryRewards = null
         st.scene              = 'map'
         st.tilesPlaced        = 0
         st.defeatPending      = false
@@ -1318,11 +1715,41 @@ export const useMapStore = create<MapStore>()(
         const newCells: [string, TileContent][] = []
         for (let dy = -revealRange; dy <= revealRange; dy++) {
           for (let dx = -revealRange; dx <= revealRange; dx++) {
-            const key = gridKey(px + dx, py + dy)
+            const x = px + dx
+            const y = py + dy
+            if (base.dungeonRun && (x < 0 || y < 0 || x >= 10 || y >= 10)) continue
+            const key = gridKey(x, y)
             if (base.grid[key] || base.sightedCells[key]) continue
+            if (base.dungeonRun) {
+              newCells.push([key, { type: 'empty' }])
+              continue
+            }
             // Fog content also hero-relative so previewed areas feel appropriate
             const lvl = heroRelativeLevel(heroLevel)
             newCells.push([key, generateContent(lvl, base.tilesPlaced, 'forest')])
+          }
+        }
+        if (import.meta.env.DEV && !base.dungeonRun) {
+          const hasRedTower =
+            Object.values(base.grid).some(tile => tile.content.type === 'redTower') ||
+            Object.values(base.sightedCells).some(content => content.type === 'redTower') ||
+            newCells.some(([, content]) => content.type === 'redTower')
+          if (!hasRedTower) {
+            let forced: [string, TileContent] | null = null
+            for (let radius = 2; radius <= revealRange && !forced; radius++) {
+              for (let dy = -radius; dy <= radius && !forced; dy++) {
+                for (let dx = -radius; dx <= radius && !forced; dx++) {
+                  if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue
+                  const key = gridKey(px + dx, py + dy)
+                  if (!base.grid[key]) forced = [key, { type: 'redTower' }]
+                }
+              }
+            }
+            if (forced) {
+              const existing = newCells.findIndex(([key]) => key === forced![0])
+              if (existing >= 0) newCells[existing] = forced
+              else newCells.push(forced)
+            }
           }
         }
 

@@ -12,7 +12,7 @@ interface Props {
   monsterType?: string
   monsterRarity?: MonsterRarity
   enraged?: boolean
-  monsterVariant?: 'golden' | 'predator'
+  monsterVariant?: 'golden' | 'predator' | 'boss'
   attacking?: boolean
   attackDurationMs?: number
 }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useMapStore } from '../store/mapStore'
 import { useHeroStore } from '../store/heroStore'
 import { useBattleStore } from '../store/battleStore'
+import { usePartyStore } from '../store/partyStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useUIStore } from '../store/uiStore'
 import { FOREST_MONSTER_MAP, monsterName } from '../data/monsters'
@@ -19,6 +20,7 @@ export default function HouseInterior() {
   const heroName       = useHeroStore(s => s.name)
   const heroLevel      = useHeroStore(s => s.level)
   const resetBattle    = useBattleStore(s => s.reset)
+  const resetExplorerPositions = usePartyStore(s => s.resetExplorerPositions)
   const defeatSnapshot = useBattleStore(s => s.defeatSnapshot)
   const lang           = useSettingsStore(s => s.lang)
   const sceneAuto      = useUIStore(s => s.sceneAuto)
@@ -57,6 +59,7 @@ export default function HouseInterior() {
   function startJourney() {
     resetBattle()
     resetMap(heroLevel)
+    resetExplorerPositions({ x: 0, y: 0 })
     leaveScene()
   }
 

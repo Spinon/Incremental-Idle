@@ -26,6 +26,8 @@ export default function StickyBar() {
   const skipBattle  = useBattleStore(s => s.skipBattle)
   const activeTab    = useUIStore(s => s.activeTab)
   const setActiveTab = useUIStore(s => s.setActiveTab)
+  const showMiniPlayer = useUIStore(s => s.showMiniPlayer)
+  const toggleMiniPlayer = useUIStore(s => s.toggleMiniPlayer)
 
   const stamina           = useHeroStore(s => s.stamina)
   const attrs             = useHeroStore(s => s.attributes)
@@ -168,6 +170,21 @@ export default function StickyBar() {
               />
             </div>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleMiniPlayer}
+          title={showMiniPlayer ? (isEn ? 'Close mini player' : 'Fechar mini player') : (isEn ? 'Open mini player' : 'Abrir mini player')}
+          aria-pressed={showMiniPlayer}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-md border text-xs font-black transition-all',
+            showMiniPlayer
+              ? 'border-indigo-400 bg-indigo-600 text-white shadow'
+              : 'border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
+          )}
+        >
+          ▣
         </button>
 
         <div className="w-px h-4 bg-slate-300 dark:bg-slate-700" />

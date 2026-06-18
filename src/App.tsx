@@ -7,6 +7,9 @@ import HouseInterior from './components/HouseInterior'
 import MarketInterior from './components/MarketInterior'
 import TileMarketInterior from './components/TileMarketInterior'
 import TowerInterior from './components/TowerInterior'
+import RedTowerInterior from './components/RedTowerInterior'
+import RedTowerVictory from './components/RedTowerVictory'
+import RedTowerBlockedTransition from './components/RedTowerBlockedTransition'
 import HeroPanel from './components/HeroPanel'
 import SettingsMenu from './components/SettingsMenu'
 import MapSection from './components/map/MapSection'
@@ -259,7 +262,7 @@ function GameRoot() {
   // the mini player when the user is currently looking at another tab.
   useEffect(() => {
     if (gamePausedForSync) return
-    if (scene === 'home' || scene === 'market' || scene === 'tileMarket' || scene === 'tower') {
+    if (scene === 'home' || scene === 'market' || scene === 'tileMarket' || scene === 'tower' || scene === 'redTower' || scene === 'redTowerVictory' || scene === 'redTowerBlocked') {
       setShowMini(activeTab !== 'battle')
     }
   }, [activeTab, gamePausedForSync, scene, setShowMini])
@@ -356,6 +359,9 @@ function GameRoot() {
                scene === 'market' ? <MarketInterior /> :
                scene === 'tileMarket' ? <TileMarketInterior /> :
                scene === 'tower'  ? <TowerInterior /> :
+               scene === 'redTower' ? <RedTowerInterior /> :
+               scene === 'redTowerVictory' ? <RedTowerVictory /> :
+               scene === 'redTowerBlocked' ? <RedTowerBlockedTransition /> :
                                     <BattleArena paused={gamePausedForSync} />}
             </div>
             <aside className="min-w-0">

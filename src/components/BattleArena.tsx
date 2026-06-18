@@ -509,6 +509,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
     enemyRarityLabel,
     store.enemy.monsterVariant === 'golden' ? (isEn ? 'Golden' : 'Dourado') : null,
     store.enemy.monsterVariant === 'predator' ? (isEn ? 'Predator' : 'Predador') : null,
+    store.enemy.monsterVariant === 'boss' ? 'BOSS' : null,
     store.enemy.enraged ? (isEn ? 'Enraged' : 'Furioso') : null,
   ].filter(Boolean).join(' · ')
   const heroModifierText = isEn ? 'Adventurer' : 'Aventureiro'

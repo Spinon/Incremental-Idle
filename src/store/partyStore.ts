@@ -34,6 +34,7 @@ interface PartyStore {
   setSlotMode(slotId: string, mode: PartyMemberMode): void
   removeFromSlot(slotId: string): void
   ensureStarterNpcs(playerLevel: number): void
+  resetExplorerPositions(pos?: { x: number; y: number }): void
   getFollowAttributeBonus(playerLevel: number): Attributes
   getActiveFollowers(): PartyNpc[]
   simulateExplorersAfterPlayerVictory(): void
@@ -252,6 +253,17 @@ export const usePartyStore = create<PartyStore>()(
           if (!st.knownNpcs.some(npc => npc.id === id)) st.knownNpcs.push(generateNpc(id, playerLevel))
         }
         if (st.slots.length === 0) st.slots = starterSlots()
+      }),
+
+      resetExplorerPositions: (pos) => set((st) => {
+        const target = pos ?? useMapStore.getState().playerPos
+        for (const slot of st.slots) {
+          if (slot.mode !== 'explore' || !slot.memberId) continue
+          const npc = st.knownNpcs.find(n => n.id === slot.memberId)
+          if (!npc) continue
+          npc.explorerPos = { ...target }
+          npc.lastRewardText = null
+        }
       }),
 
       getFollowAttributeBonus: (playerLevel) => {
