@@ -43,6 +43,7 @@ const MINI_PLAYER_MIN_WIDTH = 190
 const MINI_PLAYER_MAX_WIDTH = 360
 const MINI_PLAYER_SAFE_HEIGHT = 270
 const MINI_PLAYER_EDGE_GAP = 20
+const ATTACK_MS = 2000
 
 function clampMiniWidth(width: number): number {
   if (typeof window === 'undefined') return MINI_PLAYER_DEFAULT_WIDTH
@@ -151,6 +152,7 @@ export default function MiniBattlePlayer() {
   const winner   = useBattleStore(s => s.winner)
   const attacker = useBattleStore(s => s.attacker)
   const log      = useBattleStore(s => s.log)
+  const battleSpeed = useBattleStore(s => s.speed)
 
   const heroConfig = useHeroStore(s => s.heroConfig)
   const heroLevel = useHeroStore(s => s.level)
@@ -502,6 +504,8 @@ export default function MiniBattlePlayer() {
   const enemyName   = isEn ? (enemy.nameEn ?? enemy.name) : (enemy.namePt ?? enemy.name)
   const enemyLabel  = `${enemyName}  ${isEn ? 'Lv.' : 'Nv.'}${enemy.level}`
   const enemyResourceLabel = isEn ? 'FURY' : 'FURIA'
+  const animationSpeed = Math.max(0.1, battleSpeed)
+  const attackDurationMs = ATTACK_MS / animationSpeed
   const enemyVisual = enemyTemplate && MONSTER_PIXEL_SPRITES[enemyTemplate.id]
     ? (
       <MonsterSprite
@@ -509,7 +513,9 @@ export default function MiniBattlePlayer() {
         rarity={enemy.rarity}
         enraged={enemy.enraged}
         variant={enemy.monsterVariant}
-        size={44}
+        size={48}
+        attacking={phase === 'attacking' && attacker === 'enemy'}
+        attackDurationMs={attackDurationMs}
       />
     )
     : (
@@ -580,7 +586,12 @@ export default function MiniBattlePlayer() {
                 className={cn('leading-none rounded-md transition hover:brightness-125 active:scale-95 focus:outline-none focus:ring-1 focus:ring-slate-400/60', playerHitKey > 0 && 'anim-flash')}
                 style={playerHitKey > 0 ? { animationDuration: '280ms' } : undefined}
               >
-                <HeroSprite config={heroConfig} size={38} attacking={phase === 'attacking' && attacker === 'player'} />
+                <HeroSprite
+                  config={heroConfig}
+                  size={38}
+                  attacking={phase === 'attacking' && attacker === 'player'}
+                  attackDurationMs={attackDurationMs}
+                />
               </button>
             </div>
 

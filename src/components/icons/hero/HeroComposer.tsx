@@ -39,6 +39,7 @@ export function HeroSprite({
   const [frame, setFrame] = useState(IDLE_FRAME)
   const prevAttacking = useRef(false)
   const timerRef = useRef<number | null>(null)
+  const delayRef = useRef<number | null>(null)
 
   // Play the full swing once on the RISING EDGE of `attacking`, then return to
   // idle. A one-shot (rather than tracking the boolean) keeps the whole swing
@@ -50,21 +51,35 @@ export function HeroSprite({
     if (!rising) return
 
     if (timerRef.current !== null) window.clearInterval(timerRef.current)
+    if (delayRef.current !== null) window.clearTimeout(delayRef.current)
+    timerRef.current = null
+    delayRef.current = null
+
     let idx = 0
     setFrame(ATTACK_SEQUENCE[0])
-    const frameMs = Math.min(50, Math.max(22, Math.round((attackDurationMs ?? 480) / ATTACK_SEQUENCE.length)))
-    timerRef.current = window.setInterval(() => {
-      idx += 1
-      if (idx >= ATTACK_SEQUENCE.length) {
-        if (timerRef.current !== null) { window.clearInterval(timerRef.current); timerRef.current = null }
-        setFrame(IDLE_FRAME)
-        return
-      }
-      setFrame(ATTACK_SEQUENCE[idx])
-    }, frameMs)
+    const totalMs = attackDurationMs ?? 480
+    const frameMs = Math.min(50, Math.max(22, Math.round(totalMs / ATTACK_SEQUENCE.length)))
+    const midpointDelayMs = Math.max(0, Math.round(totalMs * 0.5))
+    const frameOffset = Math.floor(FRAME_COUNT / 2) + 2
+    const startDelayMs = Math.max(0, midpointDelayMs - frameMs * frameOffset)
+
+    delayRef.current = window.setTimeout(() => {
+      timerRef.current = window.setInterval(() => {
+        idx += 1
+        if (idx >= ATTACK_SEQUENCE.length) {
+          if (timerRef.current !== null) { window.clearInterval(timerRef.current); timerRef.current = null }
+          setFrame(IDLE_FRAME)
+          return
+        }
+        setFrame(ATTACK_SEQUENCE[idx])
+      }, frameMs)
+    }, startDelayMs)
   }, [attacking, attackDurationMs])
 
-  useEffect(() => () => { if (timerRef.current !== null) window.clearInterval(timerRef.current) }, [])
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearInterval(timerRef.current)
+    if (delayRef.current !== null) window.clearTimeout(delayRef.current)
+  }, [])
 
   const frameSize = Math.round(size * FRAME_ZOOM)
 

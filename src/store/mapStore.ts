@@ -220,6 +220,24 @@ function enemyFromSpecialEncounter(st: TileEntryState, tile: PlacedTile, encount
   }
 }
 
+function prepareInteriorLanding(
+  st: Pick<MapStore, 'interiorEntryFrom' | 'blueTowerEntryFrom' | 'blueTowerAutoTarget'>,
+  tile: PlacedTile,
+  from: Point,
+  target: Point | null = null,
+): void {
+  if (tile.content.type === 'market' || tile.content.type === 'tileMarket' || tile.content.type === 'redTower') {
+    st.interiorEntryFrom = { ...from }
+    return
+  }
+
+  if (tile.content.type === 'blueTower') {
+    st.interiorEntryFrom = { ...from }
+    st.blueTowerEntryFrom = { ...from }
+    st.blueTowerAutoTarget = target && !samePoint(target, tile) ? { ...target } : null
+  }
+}
+
 const SPECIAL_SPACE_HANDLERS: Partial<Record<TileContent['type'], SpecialSpaceHandler>> = {
   market: (st, tile) => {
     st.scene = 'market'
@@ -1114,18 +1132,22 @@ export const useMapStore = create<MapStore>()(
         let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
         set((st) => {
           reconcileActiveBounties(st)
+          const origin = { ...st.playerPos }
           const target = st.destination
           const exit = chooseInteriorExit(st.grid, st.playerPos, st.interiorEntryFrom, target)
+          st.scene = 'map'
           if (exit) {
             st.playerPos = exit
             movedToX = exit.x
             movedToY = exit.y
             const tile = st.grid[gridKey(exit.x, exit.y)]
-            if (tile) tileResult = processTileEntry(st, tile)
+            if (tile) {
+              prepareInteriorLanding(st, tile, origin, target)
+              tileResult = processTileEntry(st, tile)
+            }
           }
-          st.scene = 'map'
           st.destination = target && !samePoint(target, st.playerPos) ? target : null
-          st.interiorEntryFrom = null
+          if (st.scene === 'map') st.interiorEntryFrom = null
           st.redTowerVictoryRewards = null
         })
         startTileBattle(tileResult.enemy)
@@ -1273,7 +1295,10 @@ export const useMapStore = create<MapStore>()(
           reconcileActiveBounties(st)
           const tile = st.grid[gridKey(st.playerPos.x, st.playerPos.y)]
           if (!tile) return
+          const entryFrom = st.interiorEntryFrom ? { ...st.interiorEntryFrom } : null
+          if (entryFrom) prepareInteriorLanding(st, tile, entryFrom, st.destination)
           result = processTileEntry(st, tile)
+          if (st.scene === 'map') st.interiorEntryFrom = null
         })
 
         startTileBattle(result.enemy)
@@ -1294,10 +1319,10 @@ export const useMapStore = create<MapStore>()(
             : null
           if (chosenExit) {
             st.playerPos = chosenExit
+            st.interiorEntryFrom = { ...pos }
             if (!dest || samePoint(dest, pos) || samePoint(dest, chosenExit)) st.destination = null
           }
           st.scene = 'map'
-          st.interiorEntryFrom = null
           /*
           const exits: { x: number; y: number }[] = []
           if (tile) {
@@ -1344,19 +1369,24 @@ export const useMapStore = create<MapStore>()(
         let tileResult: TileEntryResult = { enemy: null, questTileLevel: null }
         set((st) => {
           reconcileActiveBounties(st)
+          const origin = { ...st.playerPos }
           const exit = chooseInteriorExit(st.grid, st.playerPos, st.blueTowerEntryFrom, null)
+          st.scene = 'map'
           if (exit) {
             st.playerPos = exit
             st.destination = null
             movedToX = exit.x
             movedToY = exit.y
             const tile = st.grid[gridKey(exit.x, exit.y)]
-            if (tile) tileResult = processTileEntry(st, tile)
+            if (tile) {
+              prepareInteriorLanding(st, tile, origin, null)
+              tileResult = processTileEntry(st, tile)
+            }
           }
-          if (st.scene === 'tower') st.scene = 'map'
-          st.blueTowerAutoTarget = null
-          st.blueTowerEntryFrom = null
-          st.interiorEntryFrom = null
+          const sceneAfter = st.scene as MapScene
+          st.blueTowerAutoTarget = sceneAfter === 'tower' ? st.blueTowerAutoTarget : null
+          if (sceneAfter !== 'tower') st.blueTowerEntryFrom = null
+          if (sceneAfter === 'map') st.interiorEntryFrom = null
         })
         startTileBattle(tileResult.enemy)
         if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
@@ -1381,6 +1411,7 @@ export const useMapStore = create<MapStore>()(
           reconcileActiveBounties(st)
           const current = st.playerPos
           const target = st.blueTowerAutoTarget ?? st.destination
+          const origin = { ...current }
           let bestTower: PlacedTile | null = null
           let bestTowerDist = Infinity
 
@@ -1417,12 +1448,23 @@ export const useMapStore = create<MapStore>()(
             movedToX = exit.x
             movedToY = exit.y
             const tile = st.grid[gridKey(exit.x, exit.y)]
-            if (tile) tileResult = processTileEntry(st, tile)
+            if (tile) {
+              prepareInteriorLanding(st, tile, origin, target ?? null)
+              tileResult = processTileEntry(st, tile)
+            }
           }
-          if (st.scene === 'tower') st.scene = 'map'
-          st.blueTowerAutoTarget = null
-          st.blueTowerEntryFrom = null
-          st.interiorEntryFrom = null
+          const sceneAfter = st.scene as MapScene
+          if (sceneAfter === 'tower' && !samePoint(st.playerPos, origin)) {
+            st.blueTowerAutoTarget = null
+          } else if (sceneAfter === 'tower') {
+            st.scene = 'map'
+            st.blueTowerAutoTarget = null
+            st.blueTowerEntryFrom = null
+          } else {
+            st.blueTowerAutoTarget = null
+            st.blueTowerEntryFrom = null
+          }
+          if (st.scene === 'map') st.interiorEntryFrom = null
         })
         startTileBattle(tileResult.enemy)
         if (tileResult.questTileLevel !== null) createQuestFromTile(tileResult.questTileLevel)
@@ -1729,30 +1771,6 @@ export const useMapStore = create<MapStore>()(
             newCells.push([key, generateContent(lvl, base.tilesPlaced, 'forest')])
           }
         }
-        if (import.meta.env.DEV && !base.dungeonRun) {
-          const hasRedTower =
-            Object.values(base.grid).some(tile => tile.content.type === 'redTower') ||
-            Object.values(base.sightedCells).some(content => content.type === 'redTower') ||
-            newCells.some(([, content]) => content.type === 'redTower')
-          if (!hasRedTower) {
-            let forced: [string, TileContent] | null = null
-            for (let radius = 2; radius <= revealRange && !forced; radius++) {
-              for (let dy = -radius; dy <= radius && !forced; dy++) {
-                for (let dx = -radius; dx <= radius && !forced; dx++) {
-                  if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue
-                  const key = gridKey(px + dx, py + dy)
-                  if (!base.grid[key]) forced = [key, { type: 'redTower' }]
-                }
-              }
-            }
-            if (forced) {
-              const existing = newCells.findIndex(([key]) => key === forced![0])
-              if (existing >= 0) newCells[existing] = forced
-              else newCells.push(forced)
-            }
-          }
-        }
-
         set((st) => {
           if (needPrune) {
             // Keep radius (30) is well beyond the reveal range, so pruned

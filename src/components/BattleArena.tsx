@@ -168,7 +168,7 @@ const FOREST_ARENA_FRAME_MS = 210
 const ARENA_PANEL_TOP = 'clamp(0.5rem, 3vw, 2.5rem)'
 const FOREST_GROUND_Y = 278
 const PLAYER_SPRITE_SIZE = 114
-const ENEMY_SPRITE_SIZE = 100
+const ENEMY_SPRITE_SIZE = 110
 const ENEMY_GROUND_OFFSET = 8
 const PARTY_SPRITE_SIZE = 68
 const PARTY_GROUND_OFFSET = -10
@@ -968,6 +968,8 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
               monsterRarity={store.enemy.rarity}
               enraged={store.enemy.enraged}
               monsterVariant={store.enemy.monsterVariant}
+              attacking={isEnemyAttacking}
+              attackDurationMs={ATTACK_MS / animationSpeed}
             />
           </div>
         </div>

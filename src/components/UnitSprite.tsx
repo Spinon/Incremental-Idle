@@ -5,6 +5,10 @@ import { useHeroStore } from '../store/heroStore'
 import { MonsterSprite, MONSTER_PIXEL_SPRITES } from './icons/MonsterSprites'
 import type { MonsterRarity } from '../types/monster'
 
+const MONSTER_SPRITE_SIZE = 103
+const MONSTER_EMOJI_SIZE = 103
+const MONSTER_EMOJI_FONT_SIZE = 70
+
 interface Props {
   side: 'player' | 'enemy'
   isHit: boolean
@@ -28,9 +32,9 @@ function HeroSvg({ attacking, attackDurationMs }: { attacking?: boolean; attackD
 
 function EnemyEmoji({ emoji }: { emoji: string }) {
   return (
-    <div style={{ width: 94, height: 94 }} className="flex items-center justify-center">
+    <div style={{ width: MONSTER_EMOJI_SIZE, height: MONSTER_EMOJI_SIZE }} className="flex items-center justify-center">
       <span
-        style={{ fontSize: 64, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))' }}
+        style={{ fontSize: MONSTER_EMOJI_FONT_SIZE, lineHeight: 1, display: 'block', transform: 'scaleX(-1)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))' }}
         role="img"
       >
         {emoji}
@@ -44,7 +48,7 @@ export default function UnitSprite({ side, isHit, hitDuration, monsterType, mons
     if (side === 'player') return <HeroSvg attacking={attacking} attackDurationMs={attackDurationMs} />
 
     const template = monsterType ? FOREST_MONSTER_MAP.get(monsterType) : null
-    if (!template) return <MonsterSprite monsterId="goblin" size={94} />
+    if (!template) return <MonsterSprite monsterId="goblin" size={MONSTER_SPRITE_SIZE} />
 
     if (MONSTER_PIXEL_SPRITES[template.id]) {
       return (
@@ -53,7 +57,9 @@ export default function UnitSprite({ side, isHit, hitDuration, monsterType, mons
           rarity={monsterRarity}
           enraged={enraged}
           variant={monsterVariant}
-          size={94}
+          size={MONSTER_SPRITE_SIZE}
+          attacking={attacking}
+          attackDurationMs={attackDurationMs}
         />
       )
     }
