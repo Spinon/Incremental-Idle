@@ -13,13 +13,15 @@ interface Props {
   monsterRarity?: MonsterRarity
   enraged?: boolean
   monsterVariant?: 'golden' | 'predator'
+  attacking?: boolean
+  attackDurationMs?: number
 }
 
 // ─── Player sprite — reads heroConfig from store ──────────────────────────────
 
-function HeroSvg() {
+function HeroSvg({ attacking, attackDurationMs }: { attacking?: boolean; attackDurationMs?: number }) {
   const config = useHeroStore(s => s.heroConfig)
-  return <HeroSprite config={config} size={72} />
+  return <HeroSprite config={config} size={72} attacking={attacking} attackDurationMs={attackDurationMs} />
 }
 
 // ─── Emoji fallback ───────────────────────────────────────────────────────────
@@ -37,9 +39,9 @@ function EnemyEmoji({ emoji }: { emoji: string }) {
   )
 }
 
-export default function UnitSprite({ side, isHit, hitDuration, monsterType, monsterRarity, enraged, monsterVariant }: Props) {
+export default function UnitSprite({ side, isHit, hitDuration, monsterType, monsterRarity, enraged, monsterVariant, attacking, attackDurationMs }: Props) {
   function renderSprite() {
-    if (side === 'player') return <HeroSvg />
+    if (side === 'player') return <HeroSvg attacking={attacking} attackDurationMs={attackDurationMs} />
 
     const template = monsterType ? FOREST_MONSTER_MAP.get(monsterType) : null
     if (!template) return <MonsterSprite monsterId="goblin" size={94} />

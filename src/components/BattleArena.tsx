@@ -862,7 +862,7 @@ export default function BattleArena({ paused = false }: { paused?: boolean }) {
               ...(isPlayerAttacking ? { animationDuration: attackDur } : undefined),
             }}
           >
-            <UnitSprite side="player" isHit={playerHit} hitDuration={hitDur} />
+            <UnitSprite side="player" isHit={playerHit} hitDuration={hitDur} attacking={isPlayerAttacking} attackDurationMs={ATTACK_MS / animationSpeed} />
           </div>
         </div>
 

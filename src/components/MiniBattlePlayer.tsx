@@ -527,7 +527,7 @@ export default function MiniBattlePlayer() {
                 className={cn('leading-none rounded-md transition hover:brightness-125 active:scale-95 focus:outline-none focus:ring-1 focus:ring-slate-400/60', playerHitKey > 0 && 'anim-flash')}
                 style={playerHitKey > 0 ? { animationDuration: '280ms' } : undefined}
               >
-                <HeroSprite config={heroConfig} size={38} />
+                <HeroSprite config={heroConfig} size={38} attacking={phase === 'attacking' && attacker === 'player'} />
               </button>
             </div>
 
